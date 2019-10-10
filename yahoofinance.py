@@ -2,12 +2,12 @@ from datetime import datetime
 import sys
 from urllib.request import urlopen
 from bs4 import BeautifulSoup
-
+import re
 
 def getDividends(stock):
     baseUrl = "https://finance.yahoo.com/quote/"
-    dividendHistory = "/history?period1=1410994800&period2=1568761200&interval=div%7Csplit&filter=div&frequency=1d"
-    url = baseUrl + stock + dividendHistory 
+    dividendHistory = "/history?period1=583714800&period2=1570662000&interval=div%7Csplit&filter=div&frequency=1d"
+    url = baseUrl + stock + dividendHistory
 
     response = urlopen(url)
     data = response.read().decode("utf-8")
@@ -36,28 +36,29 @@ def getDividends(stock):
     return (divi)
 
 def findAndProcessTable(stats, html, inStr):
-    elements = html.find_all(string=inStr);
+    elements = html.find_all(string=re.compile(inStr));
     #print (f"No of \'{inStr}\' strings found: {len(elements)}")
     for element in elements:
         #print (element)
         statsTable = element.find_parent("table")
-        for tr in statsTable.find_all("tr"):
-            td = tr.find_all("td")
-            #print (len(td))
-            if len(td) == 2:
-                strs = td[0].stripped_strings
-                statName = ''
-                for str in strs:
-                    statName = statName + str
-                statValue = ''
-                strs = td[1].stripped_strings
-                for str in strs:
-                    statValue = statValue + str
-                    break #first one only
-                #stats.append({'statistic': statName, 'value':statValue})
-                if ('(' in statName):
-                    statName = statName.split('(')[0]
-                stats[statName] = statValue
+        if (statsTable != None):
+            for tr in statsTable.find_all("tr"):
+                td = tr.find_all("td")
+                #print (len(td))
+                if len(td) == 2:
+                    strs = td[0].stripped_strings
+                    statName = ''
+                    for str in strs:
+                        statName = statName + str
+                    statValue = ''
+                    strs = td[1].stripped_strings
+                    for str in strs:
+                        statValue = statValue + str
+                        break #first one only
+                    #stats.append({'statistic': statName, 'value':statValue})
+                    if ('(' in statName):
+                        statName = statName.split('(')[0]
+                    stats[statName] = statValue
     return (stats)
 
 def getKeyStatistics(stock):
@@ -80,6 +81,10 @@ def getKeyStatistics(stock):
     searchStr = "Revenue per share"
     stats = findAndProcessTable(stats, html, searchStr)
     epsStr= "Diluted EPS"
+    stats = findAndProcessTable(stats, html, epsStr)
+    epsStr= "Current Ratio"
+    stats = findAndProcessTable(stats, html, epsStr)
+    epsStr= "Trailing"
     stats = findAndProcessTable(stats, html, epsStr)
     return (stats)
 
