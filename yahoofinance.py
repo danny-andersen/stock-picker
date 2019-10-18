@@ -32,7 +32,7 @@ def getDividends(stock):
             for str in strs:
                 dividend = dividend + str;
                 break #first one only
-            divi.append({'date': divDate, 'dividend':dividend})
+            divi.append({'date': divDate, 'dividend':float(dividend)})
     return (divi)
 
 def findAndProcessTable(stats, html, inStr):
