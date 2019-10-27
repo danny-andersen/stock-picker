@@ -12,11 +12,7 @@ def getDividends(stock):
     response = urlopen(url)
     data = response.read().decode("utf-8")
 
-    # if len(sys.argv) != 2:
-     # sys.stderr.write("Please provide a file to parse\n")
-     # sys.exit(1)
     html = BeautifulSoup(data, "html5lib")
-    #Find start of hourly forecast
     diviTable = html.find("table", attrs = {'data-test' :"historical-prices"});
     divi = []
     for tr in diviTable.find_all("tr"):
@@ -35,6 +31,74 @@ def getDividends(stock):
             divi.append({'date': divDate, 'dividend':float(dividend)})
     return (divi)
 
+def getFreeCashFlow(stock):
+    baseUrl = "https://finance.yahoo.com/quote/"
+    cf = "/cash-flow?p="
+    url = baseUrl + stock + cf + stock
+
+    response = urlopen(url)
+    data = response.read().decode("utf-8")
+
+    html = BeautifulSoup(data, "html5lib")
+    #Find line containing dates
+    datesSpan = html.find("span", string="Breakdown")
+    datesSection = datesSpan.parent
+    datesSection = datesSection.next_sibling #skip ttm field
+    dates = []
+    while datesSection is not None:
+        dateStr = datesSection.find("span").string
+        if (dateStr != 'ttm'):
+            dates.append(datetime.strptime(dateStr, "%m/%d/%Y"))
+        datesSection = datesSection.next_sibling
+    #Find 2 lines containing fcf
+    fcfSpan = html.find_all("span", string=re.compile("^Free"), limit=2);
+    #We want the second one
+    fcfSection = fcfSpan[1].parent.parent
+    fcfSection = fcfSection.next_sibling #Advance to values
+    fcfSection = fcfSection.next_sibling #Skip first value - trailing twelve months
+    fcf = []
+    while fcfSection is not None:
+        value = fcfSection.find("span").string
+        fcf.append(value)
+        fcfSection = fcfSection.next_sibling
+    return list(zip(dates, fcf))
+
+def getBalanceSheet(stock):
+    baseUrl = "https://finance.yahoo.com/quote/"
+    cf = "/balance-sheet?p="
+    url = baseUrl + stock + cf + stock
+    response = urlopen(url)
+    data = response.read().decode("utf-8")
+    html = BeautifulSoup(data, "html5lib")
+#    fp = open("balance.html", "w")
+#    fp.write(data)
+#    fp.close()
+    div = html.find("div", attrs={"title":"Total Assets"})
+    section = div.parent
+    section = section.next_sibling #Advance to first value
+    value = section.find("span").string
+    balanceSheet = dict()
+    balanceSheet['Total Assets'] = value
+    
+    div = html.find("div", attrs={"title":"Total Current Liabilities"})
+    section = div.parent
+    section = section.next_sibling #Advance to first value
+    value = section.find("span").string
+    balanceSheet['Total current liabilities'] = value
+    
+    div = html.find("div", attrs={"title":"Total non-current liabilities"})
+    section = div.parent
+    section = section.next_sibling #Advance to first value
+    value = section.find("span").string
+    balanceSheet['Total non-current liabilities'] = value
+    
+    div = html.find("div", attrs={"title":r"Total stockholders' equity"})
+    section = div.parent
+    section = section.next_sibling #Advance to first value
+    value = section.find("span").string
+    balanceSheet['Stockholder Equity'] = value
+    return balanceSheet
+   
 def findAndProcessTable(stats, html, inStr):
     elements = html.find_all(string=re.compile(inStr));
     #print (f"No of \'{inStr}\' strings found: {len(elements)}")
@@ -70,11 +134,7 @@ def getKeyStatistics(stock):
     response = urlopen(url)
     data = response.read().decode("utf-8")
 
-    # if len(sys.argv) != 2:
-     # sys.stderr.write("Please provide a file to parse\n")
-     # sys.exit(1)
     html = BeautifulSoup(data, "html5lib")
-    #Find start of hourly forecast
     stats = {}
     ratioStr = "Return on Assets"
     stats = findAndProcessTable(stats, html, ratioStr)

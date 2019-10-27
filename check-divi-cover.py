@@ -44,7 +44,7 @@ if __name__ == "__main__":
     print (f"Forward Dividend Yield = {forwardDivi}%")
     print (f"Days to Ex-Dividend = {daysToExDiv} {exDivDate.strftime('%Y-%m-%d')}")
     print (f"Dividend cover = {diviCover:.2f}")
-    print(f"Current Raio = {currentRatio}")
+    print(f"Current Ratio = {currentRatio}")
 
 
 
