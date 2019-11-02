@@ -1,4 +1,4 @@
-from yahoofinance import getKeyStatistics, getFreeCashFlow, getBalanceSheet
+from yahoofinance import getKeyStatistics, getFreeCashFlow, getBalanceSheet, getIncomeStatement
 
 if __name__ == "__main__":
     stock="TSCO.L"
@@ -6,7 +6,10 @@ if __name__ == "__main__":
     #print (stats)
 
     #fcf = getFreeCashFlow(stock)
-   # print (fcf)
+    #print (fcf)
     
-    balance = getBalanceSheet(stock)
-    print (balance)
+    #balance = getBalanceSheet(stock)
+    #print (balance)
+
+    income = getIncomeStatement(stock)
+    print (income)

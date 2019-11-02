@@ -74,6 +74,8 @@ def getBalanceSheet(stock):
 #    fp.write(data)
 #    fp.close()
     div = html.find("div", attrs={"title":"Total Assets"})
+    if (div is None):
+        div = html.find("div", attrs={"title":"Total assets"})
     section = div.parent
     section = section.next_sibling #Advance to first value
     value = section.find("span").string
@@ -98,6 +100,47 @@ def getBalanceSheet(stock):
     value = section.find("span").string
     balanceSheet['Stockholder Equity'] = value
     return balanceSheet
+
+def getIncomeStatement(stock):
+    baseUrl = "https://finance.yahoo.com/quote/"
+    cf = "/financials?p="
+    url = baseUrl + stock + cf + stock
+    response = urlopen(url)
+    data = response.read().decode("utf-8")
+#    fp = open("income.html", "w")
+#    fp.write(data)
+#    fp.close()
+    html = BeautifulSoup(data, "html5lib")
+    income = dict()
+    div = html.find("div", attrs={"title":"Interest Expense"})
+    section = div.parent
+    section = section.next_sibling #Advance to first value
+    value = section.find("span").string
+    income['Interest expense'] = value
+    div = html.find("div", attrs={"title":"Operating Income or Loss"})
+    section = div.parent
+    section = section.next_sibling #Advance to first value
+    value = section.find("span").string
+    income['Operating Profit'] = value
+    return income
+
+def getCashFlow(stock):
+    baseUrl = "https://finance.yahoo.com/quote/"
+    cf = "/cash-flow?p="
+    url = baseUrl + stock + cf + stock
+    response = urlopen(url)
+    data = response.read().decode("utf-8")
+#    fp = open("income.html", "w")
+#    fp.write(data)
+#    fp.close()
+    html = BeautifulSoup(data, "html5lib")
+    div = html.find("div", attrs={"title":"Dividends Paid"})
+    section = div.parent
+    section = section.next_sibling #Advance to first value
+    value = section.find("span").string
+    cash = dict()
+    cash['Dividends paid'] = value
+    return cash
    
 def findAndProcessTable(stats, html, inStr):
     elements = html.find_all(string=re.compile(inStr));
@@ -136,6 +179,8 @@ def getKeyStatistics(stock):
 
     html = BeautifulSoup(data, "html5lib")
     stats = {}
+    ratioStr = "Market Cap"
+    stats = findAndProcessTable(stats, html, ratioStr)
     ratioStr = "Return on Assets"
     stats = findAndProcessTable(stats, html, ratioStr)
     searchStr = "Revenue per share"
