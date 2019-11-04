@@ -41,7 +41,7 @@ def getFreeCashFlow(stock):
 
     html = BeautifulSoup(data, "html5lib")
     #Find line containing dates
-    datesSpan = html.find("span", string="Breakdown")
+    datesSpan = html.find("span", string=re.compile("Breakdown", re.IGNORECASE))
     datesSection = datesSpan.parent
     datesSection = datesSection.next_sibling #skip ttm field
     dates = []
@@ -63,6 +63,18 @@ def getFreeCashFlow(stock):
         fcfSection = fcfSection.next_sibling
     return list(zip(dates, fcf))
 
+def getTableValue(html, title):
+    div = html.find("div", attrs={"title":re.compile(title, re.IGNORECASE)})
+    value = None
+    if (div is not None):
+        section = div.parent
+        section = section.next_sibling #Advance to first value
+        if (section is not None):
+            span = section.find("span")
+            if (span is not None):
+                value = span.string
+    return value
+  
 def getBalanceSheet(stock):
     baseUrl = "https://finance.yahoo.com/quote/"
     cf = "/balance-sheet?p="
@@ -73,13 +85,19 @@ def getBalanceSheet(stock):
 #    fp = open("balance.html", "w")
 #    fp.write(data)
 #    fp.close()
-    div = html.find("div", attrs={"title":"Total Assets"})
-    if (div is None):
-        div = html.find("div", attrs={"title":"Total assets"})
-    section = div.parent
-    section = section.next_sibling #Advance to first value
-    value = section.find("span").string
     balanceSheet = dict()
+
+    value = getTableValue(html, "Total Current Assets")
+#    if (value is None):
+#        value = getBalanceSheetValue(html, "Total Current assets")
+#    if (value is None):
+#        value = getBalanceSheetValue(html, "Total current assets")
+    balanceSheet['Total Current Assets'] = value
+
+    value = getTableValue(html, "Net property, plant and equipment")
+    balanceSheet['Total Plant'] = value
+
+    value = getTableValue(html, "Total Assets")
     balanceSheet['Total Assets'] = value
     
     div = html.find("div", attrs={"title":"Total Current Liabilities"})
@@ -134,11 +152,8 @@ def getCashFlow(stock):
 #    fp.write(data)
 #    fp.close()
     html = BeautifulSoup(data, "html5lib")
-    div = html.find("div", attrs={"title":"Dividends Paid"})
-    section = div.parent
-    section = section.next_sibling #Advance to first value
-    value = section.find("span").string
     cash = dict()
+    value = getTableValue(html, "Dividends Paid")
     cash['Dividends paid'] = value
     return cash
    
@@ -164,7 +179,7 @@ def findAndProcessTable(stats, html, inStr):
                         break #first one only
                     #stats.append({'statistic': statName, 'value':statValue})
                     if ('(' in statName):
-                        statName = statName.split('(')[0]
+                        statName = statName.split('(')[0].strip()
                     stats[statName] = statValue
     return (stats)
 
