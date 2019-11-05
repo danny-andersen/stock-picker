@@ -4,13 +4,11 @@ Created on Sat Nov  2 10:23:05 2019
 
 @author: S243372
 """
-import locale
+
 import numpy as np
 from sklearn.linear_model import LinearRegression
 from sklearn.preprocessing import PolynomialFeatures
 from statistics import mean
-
-locale.setlocale( locale.LC_ALL, 'en_US.UTF-8' ) 
 
 def calcRMSE(x, cfarray, fitIntercept=True):
     y = np.array(cfarray)
@@ -50,7 +48,6 @@ def calculateDCF(fcf, wacc, numOfYears=10):
     cfarray = []
     yr = []
     for (d, cf) in sortedfcf:
-         cf = locale.atoi(cf) 
          cfarray.append(cf)
          yr.append(d.date().year)
          #n += 1

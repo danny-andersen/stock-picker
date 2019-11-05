@@ -3,6 +3,9 @@ import sys
 from urllib.request import urlopen
 from bs4 import BeautifulSoup
 import re
+import locale
+
+locale.setlocale( locale.LC_ALL, 'en_US.UTF-8' ) 
 
 def getDividends(stock):
     baseUrl = "https://finance.yahoo.com/quote/"
@@ -59,7 +62,7 @@ def getFreeCashFlow(stock):
     fcf = []
     while fcfSection is not None:
         value = fcfSection.find("span").string
-        fcf.append(value)
+        fcf.append(locale.atoi(value)*1000)
         fcfSection = fcfSection.next_sibling
     return list(zip(dates, fcf))
 
