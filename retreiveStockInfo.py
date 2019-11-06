@@ -29,10 +29,11 @@ def normaliseValue(value, min, max):
         score = (value - min) / (max - min)
     return score
 
-def getStockInfo(apiKey, stock):
+def getStockInfo(apiKey, stock, showResults=False):
     #stock="MTC.L" 
     #stock="TSCO.L" 
     stock="MKS.L" 
+    metrics = dict()
     dividends = getDividends(stock)
     #Determine this years dividend, average and max dividend
     now = datetime.now();
@@ -64,6 +65,14 @@ def getStockInfo(apiKey, stock):
     else:
         diviCover = 0
     currentRatio = convertToValue(stats['Current Ratio'])
+    
+    metrics['forwardYield'] = forwardYield
+    metrics['avgDividend'] = avgDividend
+    metrics['exDivDate'] = exDivDate
+    metrics['daysSinceExDiv'] = daysSinceExDiv
+    metrics['eps'] = eps
+    metrics['diviCover'] = diviCover
+    metrics['currentRatio'] = currentRatio
     
     prices = getLatestDailyPrices(apiKey, stock)
     dailyPrices = prices['dailyPrices']
@@ -99,11 +108,17 @@ def getStockInfo(apiKey, stock):
     #Use to calculate DCF from FCF
     fcf = getFreeCashFlow(stock)
     (dcf, error, fcfForecastSlope) = calculateDCF(fcf, wacc, 5)
+    metrics['discountedCashFlow'] = dcf
+    metrics['dcfError'] = error
+    metrics['fcfForecastSlope'] = fcfForecastSlope
     #Intrinsic value = plant equipment + current assets + 10 year DCF
     currentAssets = locale.atoi(balanceSheet['Total Current Assets']) * 1000
     assetValue = locale.atoi(balanceSheet['Total Plant']) * 1000 + currentAssets #Does not include intangibles + goodwill
+    metrics['assetValue'] = assetValue
     intrinsicValue = assetValue + dcf
+    metrics['intrinsicValue'] = intrinsicValue
     intrinsicValueRange = dcf*error
+    metrics['intrinsicValueRange'] = intrinsicValueRange
     lowerSharePriceValue = (intrinsicValue - intrinsicValueRange) / noOfShares
     upperSharePriceValue = (intrinsicValue + intrinsicValueRange)/ noOfShares
     assetSharePriceValue = assetValue / noOfShares
@@ -111,6 +126,13 @@ def getStockInfo(apiKey, stock):
     netAssetValuePrice = shareholderFunds / noOfShares #NAV = Total assets - total liabilities (which is shareholder funds)
     evSharePrice = enterpriseValue / noOfShares
     currentYield = 100*thisYearDividend/currentPrice
+    metrics['lowerSharePriceValue'] = lowerSharePriceValue
+    metrics['upperSharePriceValue'] = upperSharePriceValue
+    metrics['assetSharePriceValue'] = assetSharePriceValue
+    metrics['enterpriseValue'] = enterpriseValue
+    metrics['netAssetValuePrice'] = netAssetValuePrice
+    metrics['evSharePrice'] = evSharePrice
+    metrics['currentYield'] = currentYield
 
     #Determine score between 0 - 1
     score = 0
@@ -125,32 +147,42 @@ def getStockInfo(apiKey, stock):
     if (assetSharePriceValue > currentPrice): score += 1
     if (lowerSharePriceValue > currentPrice): score += 1
     scorePerc = 100 * score / 9
+    metrics['incomeScorePerc'] = incomeScorePerc
+    metrics['scorePerc'] = scorePerc
     
-    print (f"This year dividend: {thisYearDividend}, Max Dividend: {maxDividend:.2f}, Avg Dividend: {avgDividend:.2f}")
-    print (f"Days since Ex-Dividend = {daysSinceExDiv} {exDivDate.strftime('%Y-%m-%d')}")
-
-    print (f"WACC % = {wacc:.2f}")
-    print (f"5 year DCF = {dcf/1000000000:.3f}B (Forecast FCF error: {error*100:.1f}%)")
-    print (f"Market Cap value = {marketCap/1000000000:.3f}B")
-    print (f"Intrinsic value = {intrinsicValue/1000000000:.3f}B +/- {intrinsicValueRange/1000000000:0.2f}B")
-    print (f"Asset value = {assetValue/1000000000:.3f}B")
-    print (f"Enterprise value = {enterpriseValue/1000000000:.3f}B")
-
-    print (f"Dividend cover = {diviCover:.2f}")
-    print(f"Current Ratio = {currentRatio}")
-    print(f"Interest Cover= {interestCover:0.2f}")
-    print(f"Cash flow trend: {'Up' if fcfForecastSlope > 0 else 'Down'}")
-
-    print (f"Current share price: {currentPrice:0.2f}")
-    print (f"Share price DCF value range: {lowerSharePriceValue:0.2f} - {upperSharePriceValue:0.2f}")    
-    print (f"Share price Fixed asset value : {assetSharePriceValue:0.2f}")
-    print (f"Share price net asset value : {netAssetValuePrice:0.2f}")
-    print (f"Share price Enterprise value (to buy org): {evSharePrice:0.2f}")
-    print (f"Current Year Yield = {currentYield:.2f}%")
-    print (f"Forward Dividend Yield = {forwardYield}%")
-
-    print (f"Share income Score: {incomeScorePerc:0.2f}%")
-    print (f"Share overall Score: {score:.2f}/9 - {scorePerc:0.2f}%")
-
-    info = {'balanceSheet': balanceSheet}
+    if (showResults):
+        print (f"This year dividend: {thisYearDividend}, Max Dividend: {maxDividend:.2f}, Avg Dividend: {avgDividend:.2f}")
+        print (f"Days since Ex-Dividend = {daysSinceExDiv} {exDivDate.strftime('%Y-%m-%d')}")
+    
+        print (f"WACC % = {wacc:.2f}")
+        print (f"5 year DCF = {dcf/1000000000:.3f}B (Forecast FCF error: {error*100:.1f}%)")
+        print (f"Market Cap value = {marketCap/1000000000:.3f}B")
+        print (f"Intrinsic value = {intrinsicValue/1000000000:.3f}B +/- {intrinsicValueRange/1000000000:0.2f}B")
+        print (f"Asset value = {assetValue/1000000000:.3f}B")
+        print (f"Enterprise value = {enterpriseValue/1000000000:.3f}B")
+    
+        print (f"Dividend cover = {diviCover:.2f}")
+        print(f"Current Ratio = {currentRatio}")
+        print(f"Interest Cover= {interestCover:0.2f}")
+        print(f"Cash flow trend: {'Up' if fcfForecastSlope > 0 else 'Down'}")
+    
+        print (f"Current share price: {currentPrice:0.2f}")
+        print (f"Share price DCF value range: {lowerSharePriceValue:0.2f} - {upperSharePriceValue:0.2f}")    
+        print (f"Share price Fixed asset value : {assetSharePriceValue:0.2f}")
+        print (f"Share price net asset value : {netAssetValuePrice:0.2f}")
+        print (f"Share price Enterprise value (to buy org): {evSharePrice:0.2f}")
+        print (f"Current Year Yield = {currentYield:.2f}%")
+        print (f"Forward Dividend Yield = {forwardYield}%")
+    
+        print (f"Share income Score: {incomeScorePerc:0.2f}%")
+        print (f"Share overall Score: {score:.2f}/9 - {scorePerc:0.2f}%")
+    
+    info = {'balanceSheet': balanceSheet,
+            'incomeStatement': incomeStatement,
+            'cashFlow': cashFlow,
+            'freeCashFlow': fcf,
+            'dailyPrices': dailyPrices,
+            'stats': stats,
+            'metrics' : metrics,
+            }
     return info
