@@ -29,10 +29,10 @@ def normaliseValue(value, min, max):
         score = (value - min) / (max - min)
     return score
 
-if __name__ == "__main__":
-
+def getStockInfo(apiKey, stock):
     #stock="MTC.L" 
-    stock="TSCO.L" 
+    #stock="TSCO.L" 
+    stock="MKS.L" 
     dividends = getDividends(stock)
     #Determine this years dividend, average and max dividend
     now = datetime.now();
@@ -65,9 +65,6 @@ if __name__ == "__main__":
         diviCover = 0
     currentRatio = convertToValue(stats['Current Ratio'])
     
-    keyFile = "alphaAdvantage.apikey"
-    f = open(keyFile)
-    apiKey = f.readline().strip('\n');
     prices = getLatestDailyPrices(apiKey, stock)
     dailyPrices = prices['dailyPrices']
     dailyPrices.sort(key=lambda x:x['date'], reverse=True)
@@ -81,6 +78,7 @@ if __name__ == "__main__":
     cashFlow = getCashFlow(stock)
     
     totalDebt = locale.atoi(balanceSheet['Total non-current liabilities']) * 1000
+    shareholderFunds = locale.atoi(balanceSheet['Stockholder Equity']) * 1000 ##THIS IS THE WRONG STATISTIC - should be market cap
     totalEquity = locale.atoi(balanceSheet['Stockholder Equity']) * 1000 ##THIS IS THE WRONG STATISTIC - should be market cap
     totalCapital = totalDebt + totalEquity
     cf = cashFlow['Dividends paid']
@@ -103,47 +101,56 @@ if __name__ == "__main__":
     (dcf, error, fcfForecastSlope) = calculateDCF(fcf, wacc, 5)
     #Intrinsic value = plant equipment + current assets + 10 year DCF
     currentAssets = locale.atoi(balanceSheet['Total Current Assets']) * 1000
-    fixedAssetValue = locale.atoi(balanceSheet['Total Plant']) * 1000 + currentAssets
-    intrinsicValue = fixedAssetValue + dcf
+    assetValue = locale.atoi(balanceSheet['Total Plant']) * 1000 + currentAssets #Does not include intangibles + goodwill
+    intrinsicValue = assetValue + dcf
     intrinsicValueRange = dcf*error
     lowerSharePriceValue = (intrinsicValue - intrinsicValueRange) / noOfShares
     upperSharePriceValue = (intrinsicValue + intrinsicValueRange)/ noOfShares
-    assetSharePriceValue = fixedAssetValue / noOfShares
+    assetSharePriceValue = assetValue / noOfShares
     enterpriseValue = (marketCap + totalDebt - currentAssets) #Price to buy the organisation
+    netAssetValuePrice = shareholderFunds / noOfShares #NAV = Total assets - total liabilities (which is shareholder funds)
     evSharePrice = enterpriseValue / noOfShares
     currentYield = 100*thisYearDividend/currentPrice
 
     #Determine score between 0 - 1
     score = 0
-    score += normaliseValue(diviCover, 0, 1.2)
+    score += normaliseValue(diviCover, 0, 1.5)
     score += normaliseValue(interestCover, 0, 1.2)
     score += normaliseValue(currentRatio, 0, 1.2)
     score += normaliseValue(fcfForecastSlope, 0, 1)
+    score += normaliseValue(currentYield, 2.5, 4)
+    score += normaliseValue(forwardYield, 2.5, 4)
+    incomeScorePerc = 100 * score / 6
+    if (netAssetValuePrice > currentPrice): score += 1
     if (assetSharePriceValue > currentPrice): score += 1
     if (lowerSharePriceValue > currentPrice): score += 1
-    score += normaliseValue(currentYield, 2, 5)
-    score += normaliseValue(forwardYield, 2, 5)
-    scorePerc = 100 * score / 8
+    scorePerc = 100 * score / 9
     
     print (f"This year dividend: {thisYearDividend}, Max Dividend: {maxDividend:.2f}, Avg Dividend: {avgDividend:.2f}")
-    print (f"Current Year Yield = {currentYield:.2f}%")
-    print (f"Forward Dividend Yield = {forwardYield}%")
-    print (f"Days to Ex-Dividend = {daysSinceExDiv} {exDivDate.strftime('%Y-%m-%d')}")
-    print (f"Dividend cover = {diviCover:.2f}")
-    print(f"Current Ratio = {currentRatio}")
-    print(f"Interest Cover= {interestCover}")
-    print(f"Cash flow trend: {'Up' if fcfForecastSlope > 0 else 'Down'}")
+    print (f"Days since Ex-Dividend = {daysSinceExDiv} {exDivDate.strftime('%Y-%m-%d')}")
 
     print (f"WACC % = {wacc:.2f}")
-    print (f"5 year DCF = {dcf/1000000:.3f}B (Forecast FCF error: {error*100:.1f}%)")
+    print (f"5 year DCF = {dcf/1000000000:.3f}B (Forecast FCF error: {error*100:.1f}%)")
     print (f"Market Cap value = {marketCap/1000000000:.3f}B")
     print (f"Intrinsic value = {intrinsicValue/1000000000:.3f}B +/- {intrinsicValueRange/1000000000:0.2f}B")
-    print (f"Asset value = {fixedAssetValue/1000000000:.3f}B")
+    print (f"Asset value = {assetValue/1000000000:.3f}B")
     print (f"Enterprise value = {enterpriseValue/1000000000:.3f}B")
+
+    print (f"Dividend cover = {diviCover:.2f}")
+    print(f"Current Ratio = {currentRatio}")
+    print(f"Interest Cover= {interestCover:0.2f}")
+    print(f"Cash flow trend: {'Up' if fcfForecastSlope > 0 else 'Down'}")
 
     print (f"Current share price: {currentPrice:0.2f}")
     print (f"Share price DCF value range: {lowerSharePriceValue:0.2f} - {upperSharePriceValue:0.2f}")    
     print (f"Share price Fixed asset value : {assetSharePriceValue:0.2f}")
+    print (f"Share price net asset value : {netAssetValuePrice:0.2f}")
     print (f"Share price Enterprise value (to buy org): {evSharePrice:0.2f}")
+    print (f"Current Year Yield = {currentYield:.2f}%")
+    print (f"Forward Dividend Yield = {forwardYield}%")
 
-    print (f"Share overall Score: {score:.2f}/8 - {scorePerc:0.2f}%")
+    print (f"Share income Score: {incomeScorePerc:0.2f}%")
+    print (f"Share overall Score: {score:.2f}/9 - {scorePerc:0.2f}%")
+
+    info = {'balanceSheet': balanceSheet}
+    return info
