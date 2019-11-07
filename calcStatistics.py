@@ -15,7 +15,7 @@ def calcRMSE(x, cfarray, fitIntercept=True):
     model = LinearRegression(fitIntercept).fit(x,y)
     #Determine accuracy
     cfcheck = model.predict(x)
-    print( cfarray, cfcheck)
+    #print( cfarray, cfcheck)
     #Determine root mean squared error as %
     rmse = sum(((cfarray - cfcheck)/cfarray)**2/(4))**0.5
     return (model, rmse)
@@ -66,7 +66,7 @@ def calculateDCF(fcf, wacc, numOfYears=10):
             xp = transformer.transform(xp)
         cfPred = model.predict(xp)
     else:
-        print(f"Linear regression prediction of cash flow error > 20% {rmse*100:0.2f}")
+        #print(f"Linear regression prediction of cash flow error > 20% {rmse*100:0.2f}")
         #Use average fcf
         cfAvg = mean(cfarray)
         cfPred = []

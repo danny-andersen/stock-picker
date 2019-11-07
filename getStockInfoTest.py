@@ -1,9 +1,38 @@
 from retreiveStockInfo import getStockInfo
+from processStock import processStockStats
+from scoreStock import calcScore
 
 keyFile = "alphaAdvantage.apikey"
 f = open(keyFile)
 apiKey = f.readline().strip('\n');
 stock = 'TSCO.L'
 info = getStockInfo(apiKey, stock, True)
+metrics = processStockStats(info)
+scores = calcScore(metrics)
 
-print (f"Stock: {stock} Income rating: {info['metrics']['incomeScorePerc']:0.1f}% Overall rating: {info['metrics']['scorePerc']:0.1f}%")
+print (f"This year dividend: {metrics['thisYearDividend']}, Max Dividend: {metrics['maxDividend']:.2f}, Avg Dividend: {metrics['avgDividend']:.2f}")
+print (f"Days since Ex-Dividend = {metrics['daysSinceExDiv']} {metrics['exDivDate'].strftime('%Y-%m-%d')}")
+
+print (f"WACC % = {metrics['wacc']:.2f}")
+print (f"5 year DCF = {metrics['dcf']/1000000000:.3f}B (Forecast FCF error: {metrics['dcfError']*100:.1f}%)")
+print (f"Market Cap value = {metrics['marketCap']/1000000000:.3f}B")
+print (f"Intrinsic value = {metrics['intrinsicValue']/1000000000:.3f}B +/- {metrics['intrinsicValueRange']/1000000000:0.2f}B")
+print (f"Asset value = {metrics['assetValue']/1000000000:.3f}B")
+print (f"Enterprise value = {metrics['enterpriseValue']/1000000000:.3f}B")
+
+print (f"Dividend cover = {metrics['diviCover']:.2f}")
+print(f"Current Ratio = {metrics['currentRatio']}")
+print(f"Interest Cover= {metrics['interestCover']:0.2f}")
+print(f"Cash flow trend: {'Up' if metrics['fcfForecastSlope ']> 0 else 'Down'}")
+
+print (f"Current share price: {metrics['currentPrice']:0.2f}")
+print (f"Share price DCF value range: {metrics['lowerSharePriceValue']:0.2f} - {metrics['upperSharePriceValue']:0.2f}")    
+print (f"Share price Fixed asset value : {metrics['assetSharePriceValue']:0.2f}")
+print (f"Share price net asset value : {metrics['netAssetValuePrice']:0.2f}")
+print (f"Share price Enterprise value (to buy org): {metrics['evSharePrice']:0.2f}")
+print (f"Current Year Yield = {metrics['currentYield']:.2f}%")
+print (f"Forward Dividend Yield = {metrics['forwardYield']}%")
+
+print (f"Share income Score: {scores['incomeScorePerc']:0.2f}%")
+print (f"Share overall Score: {scores['scorePerc']:0.2f}%")
+
