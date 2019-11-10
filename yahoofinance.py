@@ -1,11 +1,27 @@
 from datetime import datetime
-import sys
 from urllib.request import urlopen
 from bs4 import BeautifulSoup
 import re
 import locale
 
 locale.setlocale( locale.LC_ALL, 'en_US.UTF-8' ) 
+
+def convertToValue(valStr):
+    multiplier = 1
+    value = 0
+    if (valStr is not None):
+        if ('M' in valStr):
+            multiplier = 1000
+            valStr = valStr.strip('M')
+        if ('B' in valStr):
+            multiplier = 1000000
+            valStr = valStr.strip('B')
+        if (valStr == 'N/A' or valStr == '-'):
+            value = 0
+        else:
+            value = locale.atof(valStr) * 1000
+    return value * multiplier
+
 
 def getDividends(stock):
     baseUrl = "https://finance.yahoo.com/quote/"
@@ -76,7 +92,7 @@ def getTableValue(html, title):
             span = section.find("span")
             if (span is not None):
                 value = span.string
-    return value
+    return convertToValue(value)
   
 def getBalanceSheet(stock):
     baseUrl = "https://finance.yahoo.com/quote/"
@@ -102,23 +118,17 @@ def getBalanceSheet(stock):
 
     value = getTableValue(html, "Total Assets")
     balanceSheet['Total Assets'] = value
+
+    value = getTableValue(html, "Interest expense")
+    balanceSheet['Interest expense'] = value
     
-    div = html.find("div", attrs={"title":"Total Current Liabilities"})
-    section = div.parent
-    section = section.next_sibling #Advance to first value
-    value = section.find("span").string
+    value = getTableValue(html, "Total Current Liabilities")
     balanceSheet['Total current liabilities'] = value
     
-    div = html.find("div", attrs={"title":"Total non-current liabilities"})
-    section = div.parent
-    section = section.next_sibling #Advance to first value
-    value = section.find("span").string
+    value = getTableValue(html, "Total non-current liabilities")
     balanceSheet['Total non-current liabilities'] = value
     
-    div = html.find("div", attrs={"title":r"Total stockholders' equity"})
-    section = div.parent
-    section = section.next_sibling #Advance to first value
-    value = section.find("span").string
+    value = getTableValue(html, "Total stockholders' equity")
     balanceSheet['Stockholder Equity'] = value
     return balanceSheet
 
@@ -133,15 +143,17 @@ def getIncomeStatement(stock):
 #    fp.close()
     html = BeautifulSoup(data, "html5lib")
     income = dict()
-    div = html.find("div", attrs={"title":"Interest Expense"})
-    section = div.parent
-    section = section.next_sibling #Advance to first value
-    value = section.find("span").string
-    income['Interest expense'] = value
-    div = html.find("div", attrs={"title":"Operating Income or Loss"})
-    section = div.parent
-    section = section.next_sibling #Advance to first value
-    value = section.find("span").string
+    income['Total revenue'] = getTableValue(html, "Total revenue")
+    income['Cost of revenue'] = getTableValue(html, "Cost of revenue")
+    income['Central overhead'] = getTableValue(html, "Selling general and administrative")
+    income['Operating profit'] = getTableValue(html, "Operating income or loss")
+    income['Interest expense'] = getTableValue(html, "Interest Expense")
+
+#    div = html.find("div", attrs={"title":"Operating Income or Loss"})
+#    section = div.parent
+#    section = section.next_sibling #Advance to first value
+#    value = section.find("span").string
+    value = getTableValue(html, "Operating Income or Loss")
     income['Operating Profit'] = value
     return income
 
@@ -160,9 +172,10 @@ def getCashFlow(stock):
     cash['Dividends paid'] = value
     return cash
    
-def findAndProcessTable(stats, html, inStr):
-    elements = html.find_all(string=re.compile(inStr));
+def findAndProcessTable(html, inStr):
+    elements = html.find_all(string=re.compile(inStr,  re.IGNORECASE));
     #print (f"No of \'{inStr}\' strings found: {len(elements)}")
+    statValue = ''
     for element in elements:
         #print (element)
         statsTable = element.find_parent("table")
@@ -175,16 +188,17 @@ def findAndProcessTable(stats, html, inStr):
                     statName = ''
                     for str in strs:
                         statName = statName + str
-                    statValue = ''
+                    value = ''
                     strs = td[1].stripped_strings
                     for str in strs:
-                        statValue = statValue + str
+                        value = value + str
                         break #first one only
-                    #stats.append({'statistic': statName, 'value':statValue})
                     if ('(' in statName):
                         statName = statName.split('(')[0].strip()
-                    stats[statName] = statValue
-    return (stats)
+                    if (inStr in statName):
+                        statValue = value
+                        break
+    return (statValue)
 
 def getKeyStatistics(stock):
     baseUrl = "https://finance.yahoo.com/quote/"
@@ -197,17 +211,19 @@ def getKeyStatistics(stock):
 
     html = BeautifulSoup(data, "html5lib")
     stats = {}
-    ratioStr = "Market Cap"
-    stats = findAndProcessTable(stats, html, ratioStr)
-    ratioStr = "Return on Assets"
-    stats = findAndProcessTable(stats, html, ratioStr)
+    searchStr = "Market Cap"
+    stats[searchStr] = convertToValue(findAndProcessTable(html, searchStr))
+    searchStr = "Return on Assets"
+    stats[searchStr] = findAndProcessTable(html, searchStr)
     searchStr = "Revenue per share"
-    stats = findAndProcessTable(stats, html, searchStr)
-    epsStr= "Diluted EPS"
-    stats = findAndProcessTable(stats, html, epsStr)
-    epsStr= "Current Ratio"
-    stats = findAndProcessTable(stats, html, epsStr)
-    epsStr= "Trailing"
-    stats = findAndProcessTable(stats, html, epsStr)
+    stats[searchStr] = findAndProcessTable(html, searchStr)
+    searchStr= "Diluted EPS"
+    stats[searchStr] = locale.atof(findAndProcessTable(html, searchStr))
+    searchStr= "Current Ratio"
+    stats[searchStr] = locale.atof(findAndProcessTable( html, searchStr))
+    searchStr= "Ex-Dividend Date"
+    stats[searchStr] = findAndProcessTable(html, searchStr)
+    searchStr= "Forward Annual Dividend Yield"
+    stats[searchStr] = findAndProcessTable(html, searchStr)
     return (stats)
 

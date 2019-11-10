@@ -19,7 +19,10 @@ def calcScore(metrics):
     score += normaliseValue(metrics['forwardYield'], 2.5, 4)
     incomeScorePerc = 100 * score / 6
     currentPrice = metrics['currentPrice']
-    if (metrics['netAssetValuePrice'] > currentPrice): score += 1
+    if (metrics['breakUpPrice'] > currentPrice): 
+        score += 1
+    elif (metrics['breakUpPrice'] < 0):
+        score -= 1 # penalise stock that has negative break up value, i.e. net asset value less intangibles
     if (metrics['assetSharePriceValue'] > currentPrice): score += 1
     if (metrics['lowerSharePriceValue'] > currentPrice): score += 1
     scorePerc = 100 * score / 9

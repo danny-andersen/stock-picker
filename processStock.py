@@ -4,20 +4,6 @@ import locale
 
 locale.setlocale( locale.LC_ALL, 'en_US.UTF-8' ) 
 
-def convertToValue(valStr):
-    multiplier = 1
-    if ('M' in valStr):
-        multiplier = 1000000
-        valStr = valStr.strip('M')
-    if ('B' in valStr):
-        multiplier = 1000000000
-        valStr = valStr.strip('B')
-    if (valStr == 'N/A' or valStr == '-'):
-        value = 0
-    else:
-        value = locale.atof(valStr)
-    return value * multiplier
-
 def processStockStats(info):
     now = datetime.now();
     metrics = dict()
@@ -42,18 +28,20 @@ def processStockStats(info):
     avgDividend = avgDividend / len(years)
     
     stats = info['stats']
-    exDivDate = datetime.strptime(stats['Ex-Dividend Date4'], "%b %d, %Y")
+    exDivDate = datetime.strptime(stats['Ex-Dividend Date'], "%b %d, %Y")
     daysSinceExDiv = -(exDivDate - now).days
-    forwardYield = convertToValue(stats['Forward Annual Dividend Yield4'].split('%')[0])
-    eps = convertToValue(stats['Diluted EPS']) / 100
+    forwardYield = locale.atof(stats['Forward Annual Dividend Yield'].split('%')[0])
+    eps = stats['Diluted EPS'] / 100
     if (thisYearDividend != 0):
         diviCover = eps / thisYearDividend
     else:
         diviCover = 0
-    currentRatio = convertToValue(stats['Current Ratio'])
+    currentRatio = stats['Current Ratio']
     
-    metrics['forwardYield'] = forwardYield
+    metrics['thisYearDividend'] = thisYearDividend
+    metrics['maxDividend'] = maxDividend
     metrics['avgDividend'] = avgDividend
+    metrics['forwardYield'] = forwardYield
     metrics['exDivDate'] = exDivDate
     metrics['daysSinceExDiv'] = daysSinceExDiv
     metrics['eps'] = eps
@@ -65,28 +53,31 @@ def processStockStats(info):
     metrics['currentPrice'] = currentPrice
     
     balanceSheet = info['balanceSheet']
-    totalDebt = locale.atoi(balanceSheet['Total non-current liabilities']) * 1000
-    shareholderFunds = locale.atoi(balanceSheet['Stockholder Equity']) * 1000 ##THIS IS THE WRONG STATISTIC - should be market cap
-    totalEquity = locale.atoi(balanceSheet['Stockholder Equity']) * 1000 ##THIS IS THE WRONG STATISTIC - should be market cap
+    totalDebt = balanceSheet['Total non-current liabilities']
+    totalEquity = balanceSheet['Stockholder Equity'] ##THIS IS THE WRONG STATISTIC - should be market cap
     totalCapital = totalDebt + totalEquity
     
     cashFlow = info['cashFlow']
-    cf = cashFlow['Dividends paid']
-    if (cf is None):
-        costOfEquity = 0
-    else:
-        costOfEquity = -locale.atoi(cf) * 1000
+    costOfEquity = cashFlow['Dividends paid']
+#    if (cf is None):
+#        costOfEquity = 0
+#    else:
+#        costOfEquity = -locale.atoi(cf) * 1000
     costOfEquityPerc = 100.0 * costOfEquity / totalEquity #Going to assume 0% dividend growth
     
     incomeStatement = info['incomeStatement']
-    costOfDebt = locale.atoi(incomeStatement['Interest expense']) * 1000
+    costOfDebt = incomeStatement['Interest expense']
     costOfDebtPerc = 100.0 * costOfDebt / totalDebt
     wacc = (costOfEquityPerc * totalEquity / totalCapital) + (costOfDebtPerc * totalDebt / totalCapital)
+    metrics['wacc'] = wacc
 
-    operatingProfit = locale.atoi(incomeStatement['Operating Profit']) * 1000
+    operatingProfit = incomeStatement['Operating Profit']
+    metrics['operatingProfit'] = operatingProfit
     metrics['interestCover'] = operatingProfit / costOfDebt
-    marketCap = convertToValue(stats['Market Cap'])
+    marketCap = stats['Market Cap']
     noOfShares = marketCap / currentPrice
+    metrics['marketCap'] = marketCap
+    metrics['noOfShares'] = noOfShares
     
     #Use to calculate DCF from FCF
     fcf = info['freeCashFlow']
@@ -95,10 +86,11 @@ def processStockStats(info):
     metrics['dcfError'] = error
     metrics['fcfForecastSlope'] = fcfForecastSlope
     #Intrinsic value = plant equipment + current assets + 10 year DCF
-    currentAssets = locale.atoi(balanceSheet['Total Current Assets']) * 1000
-    assetValue = locale.atoi(balanceSheet['Total Plant']) * 1000 + currentAssets #Does not include intangibles + goodwill
-    metrics['assetValue'] = assetValue
-    intrinsicValue = assetValue + dcf
+    currentAssets = balanceSheet['Total Current Assets']
+    assetValue = balanceSheet['Total Plant'] + currentAssets #Does not include intangibles + goodwill
+    breakUpValue = assetValue - totalDebt - balanceSheet['Total current liabilities']
+    metrics['breakUpValue'] = breakUpValue
+    intrinsicValue = breakUpValue + dcf
     metrics['intrinsicValue'] = intrinsicValue
     intrinsicValueRange = dcf*error
     metrics['intrinsicValueRange'] = intrinsicValueRange
@@ -106,16 +98,22 @@ def processStockStats(info):
     upperSharePriceValue = (intrinsicValue + intrinsicValueRange)/ noOfShares
     assetSharePriceValue = assetValue / noOfShares
     enterpriseValue = (marketCap + totalDebt - currentAssets) #Price to buy the organisation
-    netAssetValuePrice = shareholderFunds / noOfShares #NAV = Total assets - total liabilities (which is shareholder funds)
+    shareholderFunds = balanceSheet['Stockholder Equity']
+    metrics['netAssetValue'] = shareholderFunds
     evSharePrice = enterpriseValue / noOfShares
     currentYield = 100*thisYearDividend/currentPrice
     metrics['lowerSharePriceValue'] = lowerSharePriceValue
     metrics['upperSharePriceValue'] = upperSharePriceValue
     metrics['assetSharePriceValue'] = assetSharePriceValue
     metrics['enterpriseValue'] = enterpriseValue
-    metrics['netAssetValuePrice'] = netAssetValuePrice
+    metrics['breakUpPrice'] = breakUpValue / noOfShares # Tangible assets - total liabilities
+    metrics['netAssetValuePrice'] = shareholderFunds / noOfShares #Balance sheet NAV = Total assets - total liabilities (which is shareholder funds)
     metrics['evSharePrice'] = evSharePrice
     metrics['currentYield'] = currentYield
+    tr = incomeStatement['Total revenue']
+    metrics['grossProfitPerc'] = 100 * (tr - incomeStatement['Cost of revenue']) / tr
+    metrics['operatingProfitPerc'] = 100 * incomeStatement['Operating profit'] / tr
+    metrics['overheadPerc'] = 100 * incomeStatement['Central overhead'] / tr
 
     return metrics
     
