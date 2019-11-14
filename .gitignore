@@ -125,3 +125,6 @@ dmypy.json
 
 #Any apikeys
 *.apikey
+
+stocklist.txt
+

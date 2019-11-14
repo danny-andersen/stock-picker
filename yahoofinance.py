@@ -222,7 +222,8 @@ def getKeyStatistics(stock):
     searchStr= "Current Ratio"
     stats[searchStr] = locale.atof(findAndProcessTable( html, searchStr))
     searchStr= "Ex-Dividend Date"
-    stats[searchStr] = findAndProcessTable(html, searchStr)
+    divDate = findAndProcessTable(html, searchStr)
+    stats[searchStr] = datetime.strptime(divDate, "%b %d, %Y")
     searchStr= "Forward Annual Dividend Yield"
     stats[searchStr] = findAndProcessTable(html, searchStr)
     return (stats)

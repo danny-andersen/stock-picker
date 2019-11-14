@@ -28,7 +28,7 @@ def processStockStats(info):
     avgDividend = avgDividend / len(years)
     
     stats = info['stats']
-    exDivDate = datetime.strptime(stats['Ex-Dividend Date'], "%b %d, %Y")
+    exDivDate = stats['Ex-Dividend Date']
     daysSinceExDiv = -(exDivDate - now).days
     forwardYield = locale.atof(stats['Forward Annual Dividend Yield'].split('%')[0])
     eps = stats['Diluted EPS'] / 100

@@ -1,13 +1,20 @@
 from retreiveStockInfo import getStockInfo
 from processStock import processStockStats
 from scoreStock import calcScore
+from saveRetreiveFiles import getStockInfoSaved, saveStockInfo, saveStockMetrics
 
 keyFile = "alphaAdvantage.apikey"
 f = open(keyFile)
 apiKey = f.readline().strip('\n');
-stock = 'MKS.L'
-info = getStockInfo(apiKey, stock, True)
+stock = 'TSCO.L'
+
+#Read info from file 
+info = getStockInfoSaved(stock, True)
+if (info is None):
+    info = getStockInfo(apiKey, stock, True)
+    saveStockInfo(stock, info, True)
 metrics = processStockStats(info)
+saveStockMetrics(stock, metrics)
 scores = calcScore(metrics)
 
 print (f"This year dividend: {metrics['thisYearDividend']}, Max Dividend: {metrics['maxDividend']:.2f}, Avg Dividend: {metrics['avgDividend']:.2f}")
@@ -39,3 +46,4 @@ print (f"Forward Dividend Yield = {metrics['forwardYield']}%")
 print (f"Share income Score: {scores['incomeScorePerc']:0.2f}%")
 print (f"Share overall Score: {scores['scorePerc']:0.2f}%")
 
+#TODO Save Metrics
