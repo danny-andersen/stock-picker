@@ -4,7 +4,7 @@ import locale
 
 locale.setlocale( locale.LC_ALL, 'en_US.UTF-8' ) 
 
-def processStockStats(info):
+def processStockStats(info, dailyPrices):
     now = datetime.now();
     metrics = dict()
     #Determine this years dividend, average and max dividend
@@ -48,8 +48,11 @@ def processStockStats(info):
     metrics['diviCover'] = diviCover
     metrics['currentRatio'] = currentRatio
 
-    dailyPrices = info['dailyPrices']
-    currentPrice = ((dailyPrices[0]['high'] + dailyPrices[0]['low'])/2)/100
+    priceDatesSorted = sorted(dailyPrices)
+    latestPriceDate = priceDatesSorted[len(priceDatesSorted)-1]
+    (low, high) = dailyPrices[latestPriceDate]
+    #Use the average of the last price range we have
+    currentPrice = ((high + low)/2)/100
     metrics['currentPrice'] = currentPrice
     
     balanceSheet = info['balanceSheet']

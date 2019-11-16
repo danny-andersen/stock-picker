@@ -5,10 +5,6 @@ from hdfs import InsecureClient
 from dateutil.parser import parse
 import re
 
-baseDir = 'C:\\Data\\stockdata\\'
-hdfsInfoBaseDir = '/data/stockdata/'
-hdfsUrl = 'hdfs://host:port'
-
 def myconverter(o):
     if isinstance(o, datetime):
         return o.__str__()
@@ -25,7 +21,7 @@ def datetime_parser(value):
         for index, row in enumerate(value):
             value[index] = datetime_parser(row)
     elif isinstance(value, str) and value:
-        print (value)
+        #print (value)
         if re.match('^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}', value):
             try:
                 value = parse(value)
@@ -47,43 +43,66 @@ def saveLocal(fileName, content):
     fp.write(infoJson)
     fp.close()
     
-def retreiveHdfs(fileName):
+def retreiveHdfs(client, fileName):
     jsonContent = None
-    client = InsecureClient(hdfsUrl, user='hdfs')
-    if client.status(fileName != None):
+    if (client.status(fileName, strict=False) != None):
         with client.read(fileName, encoding='utf-8') as reader:
           jsonContent = json.load(reader, object_hook=datetime_parser)
     return jsonContent
 
-def saveHdfs(fileName, content):
-    client = InsecureClient(hdfsUrl, user='hdfs')
+def saveHdfs(client, fileName, content):
+    if (client.status(fileName, strict=False) != None):
+        #File is being replaced - need to delete first
+        client.delete(fileName)
     with client.write(fileName, encoding='utf-8') as writer:
-      json.dump(content, writer)
+      json.dump(content, writer, default=myconverter)
 
-def getStockInfoSaved(stock, local=True):
-    #Load from HFDS file
-    info = None
+def getStock(storeConfig, stock, name, local):
+    (config, hdfsClient) = storeConfig
+    content = None
     if (local):
-        fileName = baseDir + "info\\" + stock + '.json'
-        info = retreiveLocal(fileName)
+        baseDir = config['baseDir']
+        fileName = baseDir + name + "\\" + stock + '.json'
+        content = retreiveLocal(fileName)
     else: #load from HDFS
-        stockFile = hdfsInfoBaseDir + 'info/' + stock + '.json'
-        info = retreiveHdfs(stockFile)
-    return info
+        hdfsBaseDir = config['hdfsBaseDir']
+        stockFile = hdfsBaseDir + name + '/' + stock + '.json'
+        content = retreiveHdfs(hdfsClient, stockFile)
+    return content
+
+def saveStock(storeConfig, stock, name, content, local):
+    (config, hdfsClient) = storeConfig
+    if (local):
+        baseDir = config['baseDir']
+        fileName = baseDir + name + "\\" + stock + '.json' 
+        saveLocal(fileName, content)
+    else: #load from HDFS
+        hdfsBaseDir = config['hdfsBaseDir']
+        fileName = hdfsBaseDir + name + '/' + stock + '.json' 
+        saveHdfs(hdfsClient, fileName, content)
     
-def saveStockInfo(stock, info, local=True):
-    if (local):
-        fileName = baseDir + "info\\" + stock + '.json' 
-        saveLocal(fileName, info)
-    else: #load from HDFS
-         fileName = hdfsInfoBaseDir + 'info/' + stock
-         saveHdfs(fileName, info)
+def getStockInfoSaved(config, stock, local=True):
+    return getStock(config, stock, 'info', local)
 
-def saveStockMetrics(stock, metrics, local=True):
-    if (local):
-        fileName = baseDir + "metrics\\" + stock + '.json' 
-        saveLocal(fileName, metrics)
-    else: #load from HDFS
-         fileName = hdfsInfoBaseDir + 'metric/' + stock
-         saveHdfs(fileName, metrics)
+def getStockPricesSaved(config, stock, local=True):
+    stockPrices = getStock(config, stock, 'prices', local)
+    #Convert key from str to int, and value from list to tuple
+    munged = stockPrices['dailyPrices']
+    unmunged = dict()
+    for k,v in munged.items():
+        unmunged[int(k)] = (v[0], v[1])
+    stockPrices['dailyPrices'] = unmunged
+    return stockPrices
+
+def getStockMetricsSaved(storeConfig, stock, local=True):
+    return getStock(storeConfig, stock, 'metrics', local)
+
+def saveStockInfo(config, stock, info, local=True):
+    saveStock(config, stock, 'info', info, local)
+
+def saveStockMetrics(config, stock, metrics, local=True):
+    saveStock(config, stock, 'metrics', metrics, local)
+    
+def saveStockPrices(config, stock, stockPrices, local=True):
+    saveStock(config, stock, 'prices', stockPrices, local)
     

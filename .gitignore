@@ -123,8 +123,8 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
-#Any apikeys
-*.apikey
+#Any local config
+*.ini
 
 stocklist.txt
 

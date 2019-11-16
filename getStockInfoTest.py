@@ -10,8 +10,9 @@ stock = 'TSCO.L'
 
 #Read info from file 
 info = getStockInfoSaved(stock, True)
-if (info is None):
-    info = getStockInfo(apiKey, stock, True)
+version = 1.0
+if (info is None or info['metadata']['version'] < version):
+    info = getStockInfo(apiKey, version, stock, True)
     saveStockInfo(stock, info, True)
 metrics = processStockStats(info)
 saveStockMetrics(stock, metrics)
@@ -23,7 +24,7 @@ print (f"Days since Ex-Dividend = {metrics['daysSinceExDiv']} {metrics['exDivDat
 print (f"WACC % = {metrics['wacc']:.2f}")
 print (f"5 year DCF = {metrics['discountedCashFlow']/1000000000:.3f}B (Forecast FCF error: {metrics['dcfError']*100:.1f}%)")
 print (f"Market Cap value = {metrics['marketCap']/1000000000:.3f}B")
-print (f"Intrinsic value = {metrics['intrinsicValue']/1000000000:.3f}B +/- {metrics['intrinsicValueRange']/1000000000:0.2f}B")
+print (f"Intrinsic value (breakup + DCF) = {metrics['intrinsicValue']/1000000000:.3f}B +/- {metrics['intrinsicValueRange']/1000000000:0.2f}B")
 print (f"Net Asset value = {metrics['netAssetValue']/1000000000:.3f}B")
 print (f"Break up value = {metrics['breakUpValue']/1000000000:.3f}B")
 print (f"Enterprise value = {metrics['enterpriseValue']/1000000000:.3f}B")
