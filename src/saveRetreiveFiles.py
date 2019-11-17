@@ -58,51 +58,54 @@ def saveHdfs(client, fileName, content):
       json.dump(content, writer, default=myconverter)
 
 def getStock(storeConfig, stock, name, local):
-    (config, hdfsClient) = storeConfig
     content = None
     if (local):
-        baseDir = config['baseDir']
+        baseDir = storeConfig['baseDir']
         fileName = baseDir + name + "\\" + stock + '.json'
         content = retreiveLocal(fileName)
     else: #load from HDFS
-        hdfsBaseDir = config['hdfsBaseDir']
+        hdfsBaseDir = storeConfig['hdfsBaseDir']
         stockFile = hdfsBaseDir + name + '/' + stock + '.json'
+        hdfsUrl = storeConfig['hdfsUrl']
+        hdfsClient = InsecureClient(hdfsUrl, user='hdfs')
         content = retreiveHdfs(hdfsClient, stockFile)
     return content
 
 def saveStock(storeConfig, stock, name, content, local):
-    (config, hdfsClient) = storeConfig
     if (local):
-        baseDir = config['baseDir']
+        baseDir = storeConfig['baseDir']
         fileName = baseDir + name + "\\" + stock + '.json' 
         saveLocal(fileName, content)
     else: #load from HDFS
-        hdfsBaseDir = config['hdfsBaseDir']
+        hdfsBaseDir = storeConfig['hdfsBaseDir']
         fileName = hdfsBaseDir + name + '/' + stock + '.json' 
+        hdfsUrl = storeConfig['hdfsUrl']
+        hdfsClient = InsecureClient(hdfsUrl, user='hdfs')
         saveHdfs(hdfsClient, fileName, content)
     
 def getStockInfoSaved(config, stock, local=True):
     return getStock(config, stock, 'info', local)
 
-def getStockPricesSaved(config, stock, local=True):
-    stockPrices = getStock(config, stock, 'prices', local)
+def getStockPricesSaved(storeConfig, stock, local):
+    stockPrices = getStock(storeConfig, stock, 'prices', local)
     #Convert key from str to int, and value from list to tuple
-    munged = stockPrices['dailyPrices']
-    unmunged = dict()
-    for k,v in munged.items():
-        unmunged[int(k)] = (v[0], v[1])
-    stockPrices['dailyPrices'] = unmunged
+    if (stockPrices):
+        munged = stockPrices['dailyPrices']
+        unmunged = dict()
+        for k,v in munged.items():
+            unmunged[int(k)] = (v[0], v[1])
+        stockPrices['dailyPrices'] = unmunged
     return stockPrices
 
-def getStockMetricsSaved(storeConfig, stock, local=True):
+def getStockMetricsSaved(storeConfig, stock, local):
     return getStock(storeConfig, stock, 'metrics', local)
 
-def saveStockInfo(config, stock, info, local=True):
+def saveStockInfo(config, stock, info, local):
     saveStock(config, stock, 'info', info, local)
 
-def saveStockMetrics(config, stock, metrics, local=True):
+def saveStockMetrics(config, stock, metrics, local):
     saveStock(config, stock, 'metrics', metrics, local)
     
-def saveStockPrices(config, stock, stockPrices, local=True):
+def saveStockPrices(config, stock, stockPrices, local):
     saveStock(config, stock, 'prices', stockPrices, local)
     

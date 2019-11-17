@@ -4,8 +4,6 @@ from bs4 import BeautifulSoup
 import re
 import locale
 
-locale.setlocale( locale.LC_ALL, 'en_US.UTF-8' ) 
-
 def convertToValue(valStr):
     multiplier = 1
     value = 0

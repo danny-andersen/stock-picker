@@ -1,8 +1,48 @@
 from calcStatistics import calculateDCF
 from datetime import datetime
 import locale
+from retreiveStockInfo import getStockInfo
+from scoreStock import calcScore
+from saveRetreiveFiles import getStockInfoSaved, saveStockInfo, saveStockMetrics, getStockPricesSaved, saveStockPrices
+from alphaAdvantage import getLatestDailyPrices, getAllDailyPrices
 
-locale.setlocale( locale.LC_ALL, 'en_US.UTF-8' ) 
+def processStockSpark(bcConfig, stock, local):
+    return processStock(bcConfig.value, stock, local)
+
+def processStock(config, stock, local):
+    print (f"Processing stock: {stock}.")
+    version = config['stats'].getfloat('version')
+    maxPriceAgeDays = config['stats'].getint('maxPriceAgeDays')
+    apiKey = config['keys']['alhaAdvantageApiKey']
+    storeConfig = config['store']
+
+    #Check to see if stock info needs to be updated
+    #Read info from file 
+    info = getStockInfoSaved(storeConfig, stock, local)
+    if (info is None or info['metadata']['version'] < version):
+        if (info): print("Refreshing info")
+        info = getStockInfo(version, stock)
+        saveStockInfo(storeConfig, stock, info, local)
+    
+    prices = getStockPricesSaved(storeConfig, stock, local)
+    if (prices):
+        latestPriceDate = prices['endDate']
+        howOld = datetime.now() - latestPriceDate
+        if (howOld.days > maxPriceAgeDays):
+            #If more than a week old, refresh
+            print ("Refreshing prices")
+            prices = getLatestDailyPrices(apiKey, stock, prices['dailyPrices'])
+            saveStockPrices(storeConfig, stock, prices, local)
+    if (prices is None):
+        #Get all daily prices to save
+        print ("Getting stock prices")
+        prices = getAllDailyPrices(apiKey, stock)
+        saveStockPrices(storeConfig, stock, prices, local)
+    metrics = processStockStats(info, prices['dailyPrices'])
+    saveStockMetrics(storeConfig, stock, metrics, local)
+    scores = calcScore(stock, metrics)
+    return scores
+
 
 def processStockStats(info, dailyPrices):
     now = datetime.now();

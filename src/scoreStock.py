@@ -8,7 +8,7 @@ def normaliseValue(value, min, max):
     return score
 
 
-def calcScore(metrics):
+def calcScore(stock, metrics):
     #Determine score between 0 - 1
     score = 0
     score += normaliseValue(metrics['diviCover'], 0, 1.5)
@@ -27,6 +27,7 @@ def calcScore(metrics):
     if (metrics['lowerSharePriceValue'] > currentPrice): score += 1
     scorePerc = 100 * score / 9
     scoreStats = dict()
+    scoreStats['stock'] = stock
     scoreStats['incomeScorePerc'] = incomeScorePerc
     scoreStats['scorePerc'] = scorePerc
     
