@@ -1,3 +1,3 @@
 build:
-	cd src && zip -r ../processStock.zip .
+	cd src && python -m compileall . && zip -r ../processStock.zip .
 	

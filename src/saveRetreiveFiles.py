@@ -108,4 +108,6 @@ def saveStockMetrics(config, stock, metrics, local):
     
 def saveStockPrices(config, stock, stockPrices, local):
     saveStock(config, stock, 'prices', stockPrices, local)
-    
+
+def saveStockScores(config, name, scores, local):
+    saveStock(config, name, '', scores, local)

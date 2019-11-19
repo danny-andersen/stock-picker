@@ -11,10 +11,13 @@ def processStockSpark(bcConfig, stock, local):
 
 def processStock(config, stock, local):
     print (f"Processing stock: {stock}.")
+    #Set config
     version = config['stats'].getfloat('version')
     maxPriceAgeDays = config['stats'].getint('maxPriceAgeDays')
     apiKey = config['keys']['alhaAdvantageApiKey']
     storeConfig = config['store']
+    localeStr = config['stats']['locale']
+    locale.setlocale(locale.LC_ALL, localeStr) 
 
     #Check to see if stock info needs to be updated
     #Read info from file 

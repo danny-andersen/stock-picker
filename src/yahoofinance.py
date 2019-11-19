@@ -17,7 +17,7 @@ def convertToValue(valStr):
         if (valStr == 'N/A' or valStr == '-'):
             value = 0
         else:
-            value = locale.atof(valStr) * 1000
+            value = locale.atof(valStr.replace(',','')) * 1000
     return value * multiplier
 
 
