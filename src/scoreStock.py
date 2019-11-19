@@ -1,8 +1,10 @@
 def normaliseValue(value, min, max):
-    if value > max:
-        score = max / (max - min)
+    if value is None:
+        score = 0
+    elif value > max:
+        score = 1
     elif value < min:
-        score = min / (max - min)
+        score = 0
     else:
         score = (value - min) / (max - min)
     return score

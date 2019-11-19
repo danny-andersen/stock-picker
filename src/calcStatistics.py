@@ -8,6 +8,7 @@ Created on Sat Nov  2 10:23:05 2019
 import numpy as np
 from sklearn.linear_model import LinearRegression
 from sklearn.preprocessing import PolynomialFeatures
+from sklearn.metrics import mean_squared_error
 from statistics import mean
 
 def calcRMSE(x, cfarray, fitIntercept=True):
@@ -17,7 +18,8 @@ def calcRMSE(x, cfarray, fitIntercept=True):
     cfcheck = model.predict(x)
     #print( cfarray, cfcheck)
     #Determine root mean squared error as %
-    rmse = sum(((cfarray - cfcheck)/cfarray)**2/(4))**0.5
+    #rmse = sum(((cfarray - cfcheck)/cfarray)**2/(4))**0.5
+    rmse = mean_squared_error(cfarray, cfcheck)**0.5
     return (model, rmse)
 
 def getBestFit(yr, cfarray):
@@ -54,6 +56,9 @@ def calculateDCF(fcf, wacc, numOfYears=10):
     #Create regression model of the cash flow for the next up to 10 years
     (model, d, rmse) = getBestFit(yr, cfarray)
     slope = model.coef_
+    vrange = max(cfarray) - min(cfarray)
+    rmse = rmse / vrange
+    #print (f"rmse = {rmse*100:0.2f}")
     if (rmse <= 0.2):
         #Predict later years using logistic regression
         yrp = []
@@ -76,7 +81,8 @@ def calculateDCF(fcf, wacc, numOfYears=10):
         for cf in cfarray: #Same size list
             cfCheck.append(cfAvg)
         #Calc error using mean
-        rmse = sum(((np.array(cfarray) - np.array(cfCheck))/cfarray)**2/(4))**0.5
+        rmse = mean_squared_error(cfarray, cfCheck)**0.5
+        rmse = rmse / vrange
     n = 1
     dcf = 0
     #Calculate future CF (DCF) = Sum (cf/(1+wacc)^n)
