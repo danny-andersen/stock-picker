@@ -104,7 +104,7 @@ def processStockStats(info, dailyPrices):
     totalCapital = totalDebt + totalEquity
     
     cashFlow = info['cashFlow']
-    costOfEquity = cashFlow['Dividends paid']
+    costOfEquity = -cashFlow['Dividends paid']
 #    if (cf is None):
 #        costOfEquity = 0
 #    else:
