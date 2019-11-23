@@ -21,4 +21,5 @@ locale.setlocale( locale.LC_ALL, localeStr)
 with open(stockFileName, 'r') as stockFile:
     for stock in stockFile:
         stock = stock.strip(' \n\r')
-        processStock(config, stock, local)
+        scores = processStock(config, stock, local)
+        

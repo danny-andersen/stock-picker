@@ -55,7 +55,7 @@ def calculateDCF(fcf, wacc, numOfYears=10):
          #n += 1
     #Create regression model of the cash flow for the next up to 10 years
     (model, d, rmse) = getBestFit(yr, cfarray)
-    slope = model.coef_
+    slope = True if (model.coef_ > 0) else False
     vrange = max(cfarray) - min(cfarray)
     rmse = rmse / vrange
     #print (f"rmse = {rmse*100:0.2f}")

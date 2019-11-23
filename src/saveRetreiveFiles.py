@@ -109,5 +109,18 @@ def saveStockMetrics(config, stock, metrics, local):
 def saveStockPrices(config, stock, stockPrices, local):
     saveStock(config, stock, 'prices', stockPrices, local)
 
-def saveStockScores(config, name, scores, local):
-    saveStock(config, name, '', scores, local)
+def saveStockScores(config, scores, local):
+    saveStock(config, 'scores', '', scores, local)
+
+def getStockScores(config, local):
+    return getStock(config, "scores", '', local)
+
+def mergeAndSaveScores(configStore, scores, local):
+    scoreStocks = [s['stock'] for s in scores]
+    currentScores = getStockScores(configStore, local)
+    for cs in currentScores:
+        if (cs['stock'] not in scoreStocks):
+            scores.append(cs)
+    #Sort scores in reverse order so get highest scoring first
+    scores.sort(key=lambda score:score['scorePerc'], reverse=True)
+    saveStockScores(configStore, currentScores, local)
