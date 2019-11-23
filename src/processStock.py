@@ -14,6 +14,7 @@ def processStock(config, stock, local):
     #Set config
     version = config['stats'].getfloat('version')
     maxPriceAgeDays = config['stats'].getint('maxPriceAgeDays')
+    statsMaxAgeDays = config['stats'].getint('statsMaxAgeDays')
     apiKey = config['keys']['alhaAdvantageApiKey']
     storeConfig = config['store']
     localeStr = config['stats']['locale']
@@ -22,7 +23,11 @@ def processStock(config, stock, local):
     #Check to see if stock info needs to be updated
     #Read info from file 
     info = getStockInfoSaved(storeConfig, stock, local)
-    if (info is None or info['metadata']['version'] < version):
+    if (info):
+        infoAge = datetime.now() - info['metadata']['storedDate']
+        if (infoAge.days > statsMaxAgeDays or info['metadata']['version'] < version):
+            info = None
+    if (info is None):
         if (info): print("Refreshing info")
         info = getStockInfo(version, stock)
         saveStockInfo(storeConfig, stock, info, local)
@@ -62,18 +67,29 @@ def processStockStats(info, dailyPrices):
     maxDividend = 0
     thisYearDividend = 0
     for year in years:
-    	dividend = years[year] / 100
-    	if year == now.year:
-	   		thisYearDividend = dividend
-    	if (maxDividend < dividend):
-    		maxDividend = dividend
-    	avgDividend += dividend
-    avgDividend = avgDividend / len(years)
+        	dividend = years[year] / 100
+        	if year == now.year:
+    	   		thisYearDividend = dividend
+        	if (maxDividend < dividend):
+        		maxDividend = dividend
+        	avgDividend += dividend
+
+    if (len(years) != 0):
+        avgDividend = avgDividend / len(years)
+    else:
+        avgDividend = 0
     
     stats = info['stats']
     exDivDate = stats['Ex-Dividend Date']
-    daysSinceExDiv = -(exDivDate - now).days
-    forwardYield = locale.atof(stats['Forward Annual Dividend Yield'].split('%')[0])
+    if (exDivDate):
+        daysSinceExDiv = -(exDivDate - now).days
+    else:
+        daysSinceExDiv = 0
+    fy = stats['Forward Annual Dividend Yield'].split('%')[0]
+    if (fy != '-' and fy != 'N/A'):
+        forwardYield = locale.atof(fy)
+    else:
+        forwardYield = 0
     eps = stats['Diluted EPS'] / 100
     if (thisYearDividend != 0):
         diviCover = eps / thisYearDividend
@@ -91,12 +107,25 @@ def processStockStats(info, dailyPrices):
     metrics['diviCover'] = diviCover
     metrics['currentRatio'] = currentRatio
 
-    priceDatesSorted = sorted(dailyPrices)
-    latestPriceDate = priceDatesSorted[len(priceDatesSorted)-1]
-    (low, high) = dailyPrices[latestPriceDate]
-    #Use the average of the last price range we have
-    currentPrice = ((high + low)/2)/100
+    marketCap = stats['Market Cap']
+    noOfShares = stats['Shares Outstanding']
+    metrics['marketCap'] = marketCap
+    
+    if (len(dailyPrices) > 0):
+        priceDatesSorted = sorted(dailyPrices)
+        latestPriceDate = priceDatesSorted[len(priceDatesSorted)-1]
+        (low, high) = dailyPrices[latestPriceDate]
+        #Use the average of the last price range we have
+        currentPrice = ((high + low)/2)/100
+        if (noOfShares == 0):
+            noOfShares = marketCap / currentPrice
+            
+    else:
+        #Couldnt retreive the prices - use market cap
+        currentPrice = marketCap / noOfShares
+
     metrics['currentPrice'] = currentPrice
+    metrics['noOfShares'] = noOfShares
     
     balanceSheet = info['balanceSheet']
     totalDebt = balanceSheet['Total non-current liabilities']
@@ -109,21 +138,28 @@ def processStockStats(info, dailyPrices):
 #        costOfEquity = 0
 #    else:
 #        costOfEquity = -locale.atoi(cf) * 1000
-    costOfEquityPerc = 100.0 * costOfEquity / totalEquity #Going to assume 0% dividend growth
-    
+    if (totalEquity != 0):
+        costOfEquityPerc = 100.0 * costOfEquity / totalEquity #Going to assume 0% dividend growth
+    else:
+        costOfEquityPerc = 0
     incomeStatement = info['incomeStatement']
     costOfDebt = incomeStatement['Interest expense']
-    costOfDebtPerc = 100.0 * costOfDebt / totalDebt
-    wacc = (costOfEquityPerc * totalEquity / totalCapital) + (costOfDebtPerc * totalDebt / totalCapital)
+    if (totalDebt != 0):
+        costOfDebtPerc = 100.0 * costOfDebt / totalDebt
+    else:
+        costOfDebtPerc = 0
+    if (totalCapital != 0):
+        wacc = (costOfEquityPerc * totalEquity / totalCapital) + (costOfDebtPerc * totalDebt / totalCapital)
+    else:
+        wacc = 0
     metrics['wacc'] = wacc
 
     operatingProfit = incomeStatement['Operating Profit']
     metrics['operatingProfit'] = operatingProfit
-    metrics['interestCover'] = operatingProfit / costOfDebt
-    marketCap = stats['Market Cap']
-    noOfShares = marketCap / currentPrice
-    metrics['marketCap'] = marketCap
-    metrics['noOfShares'] = noOfShares
+    if (costOfDebt != 0):
+        metrics['interestCover'] = operatingProfit / costOfDebt
+    else:
+        metrics['interestCover'] = 0
     
     #Use to calculate DCF from FCF
     fcf = info['freeCashFlow']
@@ -157,9 +193,14 @@ def processStockStats(info, dailyPrices):
     metrics['evSharePrice'] = evSharePrice
     metrics['currentYield'] = currentYield
     tr = incomeStatement['Total revenue']
-    metrics['grossProfitPerc'] = 100 * (tr - incomeStatement['Cost of revenue']) / tr
-    metrics['operatingProfitPerc'] = 100 * incomeStatement['Operating profit'] / tr
-    metrics['overheadPerc'] = 100 * incomeStatement['Central overhead'] / tr
+    if (tr != 0):
+        metrics['grossProfitPerc'] = 100 * (tr - incomeStatement['Cost of revenue']) / tr
+        metrics['operatingProfitPerc'] = 100 * incomeStatement['Operating profit'] / tr
+        metrics['overheadPerc'] = 100 * incomeStatement['Central overhead'] / tr
+    else:
+        metrics['grossProfitPerc'] = 0
+        metrics['operatingProfitPerc'] = 0
+        metrics['overheadPerc'] = 0
 
     return metrics
     

@@ -171,9 +171,11 @@ def getCashFlow(stock):
     return cash
    
 def findAndProcessTable(html, inStr):
-    elements = html.find_all(string=re.compile(inStr,  re.IGNORECASE));
+    regex = re.compile(inStr,  re.IGNORECASE)
+    elements = html.find_all(string=regex);
     #print (f"No of \'{inStr}\' strings found: {len(elements)}")
     statValue = ''
+    inStr = inStr.strip('^') # remove regex control chars
     for element in elements:
         #print (element)
         statsTable = element.find_parent("table")
@@ -193,9 +195,8 @@ def findAndProcessTable(html, inStr):
                         break #first one only
                     if ('(' in statName):
                         statName = statName.split('(')[0].strip()
-                    if (inStr in statName):
+                    if (regex.match(statName)):
                         statValue = value
-                        break
     return (statValue)
 
 def getKeyStatistics(stock):
@@ -215,13 +216,18 @@ def getKeyStatistics(stock):
     stats[searchStr] = findAndProcessTable(html, searchStr)
     searchStr = "Revenue per share"
     stats[searchStr] = findAndProcessTable(html, searchStr)
+    searchStr = "^Shares outstanding"
+    stats["Shares Outstanding"] = convertToValue(findAndProcessTable(html, searchStr))
     searchStr= "Diluted EPS"
-    stats[searchStr] = locale.atof(findAndProcessTable(html, searchStr))
+    stats[searchStr] = convertToValue(findAndProcessTable(html, searchStr))
     searchStr= "Current Ratio"
-    stats[searchStr] = locale.atof(findAndProcessTable( html, searchStr))
+    stats[searchStr] = convertToValue(findAndProcessTable( html, searchStr))
     searchStr= "Ex-Dividend Date"
     divDate = findAndProcessTable(html, searchStr)
-    stats[searchStr] = datetime.strptime(divDate, "%b %d, %Y")
+    if (divDate != "N/A"):
+        stats[searchStr] = datetime.strptime(divDate, "%b %d, %Y")
+    else:
+        stats[searchStr] = None
     searchStr= "Forward Annual Dividend Yield"
     stats[searchStr] = findAndProcessTable(html, searchStr)
     return (stats)

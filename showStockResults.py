@@ -27,7 +27,6 @@ localeStr = config['stats']['locale']
 locale.setlocale(locale.LC_ALL, localeStr) 
 
 local = False
-stock = 'TSCO.L'
 
 if (args.recalc):
     print("Recalculating metrics...")
