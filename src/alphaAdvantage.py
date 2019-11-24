@@ -32,11 +32,11 @@ def getPrices(apiKey, stock, outputSize, existingPrices):
         priceDatesSorted = sorted(dailyPrices)
         latestPriceDate = priceDatesSorted[len(priceDatesSorted)-1]
         earliestPriceDate = priceDatesSorted[0]
+        startDate = datetime.fromtimestamp(earliestPriceDate)
+        endDate = datetime.fromtimestamp(latestPriceDate)
     else:
-        latestPriceDate = datetime.min
-        earliestPriceDate = datetime.min
-    startDate = datetime.fromtimestamp(earliestPriceDate)
-    endDate = datetime.fromtimestamp(latestPriceDate)
+        startDate = datetime.min
+        endDate = datetime.min
     #dailyPrices.sort(key=lambda x:x['date'], reverse=True)
     stockPrices = { "stock": stock, 
                    "startDate" : startDate,

@@ -7,6 +7,7 @@ else:
     sys.path.insert(0, '../src')
 
 from processStock import processStock
+from showScores import scoresOnTheDoors
 import configparser
 import locale
 
@@ -22,4 +23,4 @@ with open(stockFileName, 'r') as stockFile:
     for stock in stockFile:
         stock = stock.strip(' \n\r')
         scores = processStock(config, stock, local)
-        
+        scoresOnTheDoors(config['store'], scores, local)  

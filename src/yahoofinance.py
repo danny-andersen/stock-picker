@@ -17,7 +17,10 @@ def convertToValue(valStr):
         if (valStr == 'N/A' or valStr == '-'):
             value = 0
         else:
-            value = locale.atof(valStr.replace(',','')) * 1000
+            try:
+                value = locale.atof(valStr.replace(',','')) * 1000
+            except ValueError:
+                value = 0
     return value * multiplier
 
 
@@ -32,20 +35,21 @@ def getDividends(stock):
     html = BeautifulSoup(data, "html5lib")
     diviTable = html.find("table", attrs = {'data-test' :"historical-prices"});
     divi = []
-    for tr in diviTable.find_all("tr"):
-        td = tr.find_all("td")
-        if len(td) == 2:
-            strs = td[0].stripped_strings;
-            divDate = ''
-            for str in strs:
-                d = divDate + str;
-            divDate = datetime.strptime(d, "%b %d, %Y")
-            dividend = ''
-            strs = td[1].stripped_strings;
-            for str in strs:
-                dividend = dividend + str;
-                break #first one only
-            divi.append({'date': divDate, 'dividend':float(dividend)})
+    if (diviTable):
+        for tr in diviTable.find_all("tr"):
+            td = tr.find_all("td")
+            if len(td) == 2:
+                strs = td[0].stripped_strings;
+                divDate = ''
+                for str in strs:
+                    d = divDate + str;
+                divDate = datetime.strptime(d, "%b %d, %Y")
+                dividend = ''
+                strs = td[1].stripped_strings;
+                for str in strs:
+                    dividend = dividend + str;
+                    break #first one only
+                divi.append({'date': divDate, 'dividend':float(dividend)})
     return (divi)
 
 def getFreeCashFlow(stock):
@@ -58,26 +62,28 @@ def getFreeCashFlow(stock):
 
     html = BeautifulSoup(data, "html5lib")
     #Find line containing dates
-    datesSpan = html.find("span", string=re.compile("Breakdown", re.IGNORECASE))
-    datesSection = datesSpan.parent
-    datesSection = datesSection.next_sibling #skip ttm field
     dates = []
-    while datesSection is not None:
-        dateStr = datesSection.find("span").string
-        if (dateStr != 'ttm'):
-            dates.append(datetime.strptime(dateStr, "%m/%d/%Y"))
-        datesSection = datesSection.next_sibling
-    #Find 2 lines containing fcf
-    fcfSpan = html.find_all("span", string=re.compile("^Free"), limit=2);
-    #We want the second one
-    fcfSection = fcfSpan[1].parent.parent
-    fcfSection = fcfSection.next_sibling #Advance to values
-    fcfSection = fcfSection.next_sibling #Skip first value - trailing twelve months
     fcf = []
-    while fcfSection is not None:
-        value = fcfSection.find("span").string
-        fcf.append(locale.atoi(value)*1000)
-        fcfSection = fcfSection.next_sibling
+    datesSpan = html.find("span", string=re.compile("Breakdown", re.IGNORECASE))
+    if (datesSpan):
+        datesSection = datesSpan.parent
+        datesSection = datesSection.next_sibling #skip ttm field
+        while datesSection is not None:
+            dateStr = datesSection.find("span").string
+            if (dateStr != 'ttm'):
+                dates.append(datetime.strptime(dateStr, "%m/%d/%Y"))
+            datesSection = datesSection.next_sibling
+        #Find 2 lines containing fcf
+        fcfSpan = html.find_all("span", string=re.compile("^Free"), limit=2);
+        #We want the second one
+        fcfSection = fcfSpan[1].parent.parent
+        fcfSection = fcfSection.next_sibling #Advance to values
+        fcfSection = fcfSection.next_sibling #Skip first value - trailing twelve months
+        while fcfSection is not None:
+            valueStr = fcfSection.find("span")
+            if (valueStr):
+                fcf.append(locale.atoi(valueStr.string)*1000)
+            fcfSection = fcfSection.next_sibling
     return list(zip(dates, fcf))
 
 def getTableValue(html, title):
@@ -225,7 +231,10 @@ def getKeyStatistics(stock):
     searchStr= "Ex-Dividend Date"
     divDate = findAndProcessTable(html, searchStr)
     if (divDate != "N/A"):
-        stats[searchStr] = datetime.strptime(divDate, "%b %d, %Y")
+        try:
+            stats[searchStr] = datetime.strptime(divDate, "%b %d, %Y")
+        except ValueError:
+            stats[searchStr] = None
     else:
         stats[searchStr] = None
     searchStr= "Forward Annual Dividend Yield"

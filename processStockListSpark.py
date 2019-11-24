@@ -5,7 +5,7 @@ if (os.path.exists('processStock.zip')):
 else:
     sys.path.insert(0, './src')
 from processStock import processStockSpark
-from saveRetreiveFiles import mergeAndSaveScores
+from saveRetreiveFiles import mergeAndSaveScores, deleteStockScores
 import configparser
 import locale
 from pyspark import SparkConf, SparkContext
@@ -48,7 +48,7 @@ rdd = sc.parallelize(stocks)
 mrdd = rdd.map(lambda stock: processStockSpark(broadCastConfig, stock, local))
 #Reduce the scores by combining the returned dicts holding the scores, this triggers the map operation
 scores = mrdd.collect()
-mergeAndSaveScores(configStore, scores)
+mergeAndSaveScores(configStore, scores, local)
 
 print (scores)
 

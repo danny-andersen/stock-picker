@@ -1,6 +1,6 @@
 from datetime import datetime
 import json
-from os import path
+import os
 from hdfs import InsecureClient
 from dateutil.parser import parse
 import re
@@ -31,7 +31,7 @@ def datetime_parser(value):
 
 def retreiveLocal(fileName):
     jsonContent = None
-    if (path.exists(fileName)):
+    if (os.path.exists(fileName)):
         fp = open(fileName, 'r')
         jsonContent = json.load(fp, object_hook=datetime_parser)
         fp.close()
@@ -43,6 +43,12 @@ def saveLocal(fileName, content):
     fp.write(infoJson)
     fp.close()
     
+def deleteLocal(fileName):
+    ret = True
+    if (os.path.exists(fileName)):
+        ret = os.remove(fileName)
+    return ret
+    
 def retreiveHdfs(client, fileName):
     jsonContent = None
     if (client.status(fileName, strict=False) != None):
@@ -53,10 +59,16 @@ def retreiveHdfs(client, fileName):
 def saveHdfs(client, fileName, content):
     if (client.status(fileName, strict=False) != None):
         #File is being replaced - need to delete first
-        client.delete(fileName)
+        deleteHdfsFile(client,fileName)
     with client.write(fileName, encoding='utf-8') as writer:
       json.dump(content, writer, default=myconverter)
 
+def deleteHdfsFile(client, fileName):
+    if (client.status(fileName, strict=False) != None):
+        #File is being replaced - need to delete first
+        if (not client.delete(fileName)):
+            print (f"Failed to delete file {fileName}")
+    
 def getStock(storeConfig, stock, name, local):
     content = None
     if (local):
@@ -82,6 +94,18 @@ def saveStock(storeConfig, stock, name, content, local):
         hdfsUrl = storeConfig['hdfsUrl']
         hdfsClient = InsecureClient(hdfsUrl, user='hdfs')
         saveHdfs(hdfsClient, fileName, content)
+
+def deleteStockFile(storeConfig, stock, name, local):
+    if (local):
+        baseDir = storeConfig['baseDir']
+        fileName = baseDir + name + "\\" + stock + '.json' 
+        deleteLocal(fileName)
+    else: #delete from HDFS
+        hdfsBaseDir = storeConfig['hdfsBaseDir']
+        fileName = hdfsBaseDir + name + '/' + stock + '.json' 
+        hdfsUrl = storeConfig['hdfsUrl']
+        hdfsClient = InsecureClient(hdfsUrl, user='hdfs')
+        deleteHdfsFile(hdfsClient, fileName)
     
 def getStockInfoSaved(config, stock, local=True):
     return getStock(config, stock, 'info', local)
@@ -112,6 +136,9 @@ def saveStockPrices(config, stock, stockPrices, local):
 def saveStockScores(config, scores, local):
     saveStock(config, 'scores', '', scores, local)
 
+def deleteStockScores(config, local):
+    deleteStockFile(config, 'scores', '', local)
+    
 def getStockScores(config, local):
     return getStock(config, "scores", '', local)
 

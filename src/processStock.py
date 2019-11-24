@@ -87,7 +87,10 @@ def processStockStats(info, dailyPrices):
         daysSinceExDiv = 0
     fy = stats['Forward Annual Dividend Yield'].split('%')[0]
     if (fy != '-' and fy != 'N/A'):
-        forwardYield = locale.atof(fy)
+        try:
+            forwardYield = locale.atof(fy)
+        except ValueError:
+            forwardYield = 0
     else:
         forwardYield = 0
     eps = stats['Diluted EPS'] / 100
@@ -122,7 +125,10 @@ def processStockStats(info, dailyPrices):
             
     else:
         #Couldnt retreive the prices - use market cap
-        currentPrice = marketCap / noOfShares
+        if (noOfShares != 0):
+            currentPrice = marketCap / noOfShares
+        else:
+            currentPrice = 0
 
     metrics['currentPrice'] = currentPrice
     metrics['noOfShares'] = noOfShares
@@ -163,7 +169,10 @@ def processStockStats(info, dailyPrices):
     
     #Use to calculate DCF from FCF
     fcf = info['freeCashFlow']
-    (dcf, error, fcfForecastSlope) = calculateDCF(fcf, wacc, 5)
+    if (len(fcf) > 0):
+        (dcf, error, fcfForecastSlope) = calculateDCF(fcf, wacc, 5)
+    else:
+        (dcf, error, fcfForecastSlope) = (0, 0, 0)
     metrics['discountedCashFlow'] = dcf
     metrics['dcfError'] = error
     metrics['fcfForecastSlope'] = fcfForecastSlope
@@ -176,20 +185,29 @@ def processStockStats(info, dailyPrices):
     metrics['intrinsicValue'] = intrinsicValue
     intrinsicValueRange = dcf*error
     metrics['intrinsicValueRange'] = intrinsicValueRange
-    lowerSharePriceValue = (intrinsicValue - intrinsicValueRange) / noOfShares
-    upperSharePriceValue = (intrinsicValue + intrinsicValueRange)/ noOfShares
-    assetSharePriceValue = assetValue / noOfShares
     enterpriseValue = (marketCap + totalDebt - currentAssets) #Price to buy the organisation
     shareholderFunds = balanceSheet['Stockholder Equity']
     metrics['netAssetValue'] = shareholderFunds
-    evSharePrice = enterpriseValue / noOfShares
-    currentYield = 100*thisYearDividend/currentPrice
+    if (noOfShares != 0):
+        lowerSharePriceValue = (intrinsicValue - intrinsicValueRange) / noOfShares
+        upperSharePriceValue = (intrinsicValue + intrinsicValueRange)/ noOfShares
+        assetSharePriceValue = assetValue / noOfShares
+        evSharePrice = enterpriseValue / noOfShares
+        metrics['breakUpPrice'] = breakUpValue / noOfShares # Tangible assets - total liabilities
+        metrics['netAssetValuePrice'] = shareholderFunds / noOfShares #Balance sheet NAV = Total assets - total liabilities (which is shareholder funds)
+        currentYield = 100*thisYearDividend/currentPrice
+    else:
+        lowerSharePriceValue = 0
+        upperSharePriceValue = 0
+        assetSharePriceValue = 0
+        evSharePrice = 0
+        metrics['breakUpPrice'] = 0# Tangible assets - total liabilities
+        metrics['netAssetValuePrice'] = 0
+        currentYield = 0
     metrics['lowerSharePriceValue'] = lowerSharePriceValue
     metrics['upperSharePriceValue'] = upperSharePriceValue
     metrics['assetSharePriceValue'] = assetSharePriceValue
     metrics['enterpriseValue'] = enterpriseValue
-    metrics['breakUpPrice'] = breakUpValue / noOfShares # Tangible assets - total liabilities
-    metrics['netAssetValuePrice'] = shareholderFunds / noOfShares #Balance sheet NAV = Total assets - total liabilities (which is shareholder funds)
     metrics['evSharePrice'] = evSharePrice
     metrics['currentYield'] = currentYield
     tr = incomeStatement['Total revenue']

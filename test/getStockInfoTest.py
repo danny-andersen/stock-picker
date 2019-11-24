@@ -3,7 +3,7 @@ sys.path.insert(0, '../src')
 
 from processStock import processStockStats
 from scoreStock import calcScore
-from saveRetreiveFiles import getStockInfoSaved, getStockPricesSaved, getStockMetricsSaved
+from saveRetreiveFiles import getStockInfoSaved, getStockPricesSaved
 import configparser
 import locale
 from printResults import printResults
