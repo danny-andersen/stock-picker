@@ -5,7 +5,7 @@ if (os.path.exists('processStock.zip')):
 else:
     sys.path.insert(0, './src')
 from processStock import processStockSpark
-from saveRetreiveFiles import mergeAndSaveScores, deleteStockScores
+from saveRetreiveFiles import mergeAndSaveScores
 import configparser
 import locale
 from pyspark import SparkConf, SparkContext

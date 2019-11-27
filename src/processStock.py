@@ -10,7 +10,7 @@ def processStockSpark(bcConfig, stock, local):
     return processStock(bcConfig.value, stock, local)
 
 def processStock(config, stock, local):
-    print (f"Processing stock: {stock}.")
+    print (f"Processing stock: {stock}")
     #Set config
     version = config['stats'].getfloat('version')
     maxPriceAgeDays = config['stats'].getint('maxPriceAgeDays')
