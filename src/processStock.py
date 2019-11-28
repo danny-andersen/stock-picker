@@ -5,6 +5,7 @@ from retreiveStockInfo import getStockInfo
 from scoreStock import calcScore
 from saveRetreiveFiles import getStockInfoSaved, saveStockInfo, saveStockMetrics, getStockPricesSaved, saveStockPrices
 from alphaAdvantage import getLatestDailyPrices, getAllDailyPrices
+from checkStockInfo import checkStockInfo
 
 def processStockSpark(bcConfig, stock, local):
     return processStock(bcConfig.value, stock, local)
@@ -27,30 +28,39 @@ def processStock(config, stock, local):
         infoAge = datetime.now() - info['metadata']['storedDate']
         if (infoAge.days > statsMaxAgeDays or info['metadata']['version'] < version):
             info = None
-    if (info is None):
-        if (info): print("Refreshing info")
+    if (info):
+        #Check info is valid
+        if (not checkStockInfo(info)):
+            print(f"{stock}: Refreshing info")
+            info = None
+    if (not info):
         info = getStockInfo(version, stock)
-        saveStockInfo(storeConfig, stock, info, local)
-    
+        if (checkStockInfo(info)):
+            saveStockInfo(storeConfig, stock, info, local)
+        else:
+            print(f"{stock}: Retreived info incomplete")
+            info = None
     prices = getStockPricesSaved(storeConfig, stock, local)
     if (prices):
         latestPriceDate = prices['endDate']
         howOld = datetime.now() - latestPriceDate
         if (howOld.days > maxPriceAgeDays):
             #If more than a week old, refresh
-            print ("Refreshing prices")
+            print (f"{stock}: Refreshing prices")
             prices = getLatestDailyPrices(apiKey, stock, prices['dailyPrices'])
             saveStockPrices(storeConfig, stock, prices, local)
     if (prices is None):
         #Get all daily prices to save
-        print ("Getting stock prices")
+        print ("f{stock}: Getting stock prices")
         prices = getAllDailyPrices(apiKey, stock)
         saveStockPrices(storeConfig, stock, prices, local)
-    metrics = processStockStats(info, prices['dailyPrices'])
-    saveStockMetrics(storeConfig, stock, metrics, local)
-    scores = calcScore(stock, metrics)
+    if (info and prices):
+        metrics = processStockStats(info, prices['dailyPrices'])
+        saveStockMetrics(storeConfig, stock, metrics, local)
+        scores = calcScore(stock, metrics)
+    else:
+        scores = None
     return scores
-
 
 def processStockStats(info, dailyPrices):
     now = datetime.now();

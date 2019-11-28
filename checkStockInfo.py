@@ -14,9 +14,7 @@ def countZeros(d):
         retVal = True if zero > v else False
     return retVal
     
-def checkStockInfo(storeConfig, stock, local):
-    #Read info from file 
-    info = getStockInfoSaved(storeConfig, stock, local)
+def checkStockInfo(info):
     if (info):
         missing = 0
         if (len(info['dividends']) == 0):
@@ -64,7 +62,8 @@ if __name__ == "__main__":
         sys.exit(1)
     stocksThatFailed = []
     for score in scores:
-        if (not checkStockInfo(storeConfig, score['stock'], args.local)):
+        info = getStockInfoSaved(storeConfig, score['stock'], args.local)
+        if (not checkStockInfo(info)):
             stocksThatFailed.append(score['stock'])
     if (stocksThatFailed):
         with open('stocksToReprocess.txt', 'w+') as f:
