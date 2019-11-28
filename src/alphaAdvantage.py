@@ -6,8 +6,10 @@ Created on Mon Oct 14 20:17:35 2019
 """
 
 from datetime import datetime
-from urllib.request import urlopen
+import httplib2
 import json
+
+header = {'user-agent': 'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/72.0.3626.121 Safari/537.36'}
 
 def getPrices(apiKey, stock, outputSize, existingPrices):
     function="TIME_SERIES_DAILY_ADJUSTED"
@@ -16,8 +18,11 @@ def getPrices(apiKey, stock, outputSize, existingPrices):
     dailyPrice=f"function={function}&symbol={stock}&outputsize={outputSize}&apikey={apiKey}"
     url = baseUrl + dailyPrice
 
-    response = urlopen(url)
-    data = response.read().decode("utf-8")
+    http = httplib2.Http()
+    data = http.request(url, method="GET", headers=header)[1]
+
+#    response = urlopen(url)
+#    data = response.read().decode("utf-8")
     priceArray = json.loads(data).get("Time Series (Daily)", [])
     dailyPrices = dict()
     for dateKey in priceArray:

@@ -1,8 +1,11 @@
 from datetime import datetime
-from urllib.request import urlopen
+#from urllib.request import urlopen
+import httplib2
 from bs4 import BeautifulSoup
 import re
 import locale
+
+header = {'user-agent': 'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/72.0.3626.121 Safari/537.36'}
 
 def convertToValue(valStr):
     multiplier = 1
@@ -29,8 +32,10 @@ def getDividends(stock):
     dividendHistory = "/history?period1=583714800&period2=1570662000&interval=div%7Csplit&filter=div&frequency=1d"
     url = baseUrl + stock + dividendHistory
 
-    response = urlopen(url)
-    data = response.read().decode("utf-8")
+    http = httplib2.Http()
+    data = http.request(url, method="GET", headers=header)[1]
+#    response = urlopen(url)
+#    data = response.read().decode("utf-8")
 
     html = BeautifulSoup(data, "html5lib")
     diviTable = html.find("table", attrs = {'data-test' :"historical-prices"});
@@ -57,8 +62,10 @@ def getFreeCashFlow(stock):
     cf = "/cash-flow?p="
     url = baseUrl + stock + cf + stock
 
-    response = urlopen(url)
-    data = response.read().decode("utf-8")
+    http = httplib2.Http()
+    data = http.request(url, method="GET", headers=header)[1]
+#    response = urlopen(url)
+#    data = response.read().decode("utf-8")
 
     html = BeautifulSoup(data, "html5lib")
     #Find line containing dates
@@ -102,8 +109,10 @@ def getBalanceSheet(stock):
     baseUrl = "https://finance.yahoo.com/quote/"
     cf = "/balance-sheet?p="
     url = baseUrl + stock + cf + stock
-    response = urlopen(url)
-    data = response.read().decode("utf-8")
+#    response = urlopen(url)
+#    data = response.read().decode("utf-8")
+    http = httplib2.Http()
+    data = http.request(url, method="GET", headers=header)[1]
     html = BeautifulSoup(data, "html5lib")
 #    fp = open("balance.html", "w")
 #    fp.write(data)
@@ -140,8 +149,10 @@ def getIncomeStatement(stock):
     baseUrl = "https://finance.yahoo.com/quote/"
     cf = "/financials?p="
     url = baseUrl + stock + cf + stock
-    response = urlopen(url)
-    data = response.read().decode("utf-8")
+#    response = urlopen(url)
+#    data = response.read().decode("utf-8")
+    http = httplib2.Http()
+    data = http.request(url, method="GET", headers=header)[1]
 #    fp = open("income.html", "w")
 #    fp.write(data)
 #    fp.close()
@@ -165,11 +176,10 @@ def getCashFlow(stock):
     baseUrl = "https://finance.yahoo.com/quote/"
     cf = "/cash-flow?p="
     url = baseUrl + stock + cf + stock
-    response = urlopen(url)
-    data = response.read().decode("utf-8")
-#    fp = open("income.html", "w")
-#    fp.write(data)
-#    fp.close()
+    http = httplib2.Http()
+    data = http.request(url, method="GET", headers=header)[1]
+#    response = urlopen(url)
+#    data = response.read().decode("utf-8")
     html = BeautifulSoup(data, "html5lib")
     cash = dict()
     value = getTableValue(html, "Dividends Paid")
@@ -211,8 +221,10 @@ def getKeyStatistics(stock):
 
     url = baseUrl + stock + stats + stock
 
-    response = urlopen(url)
-    data = response.read().decode("utf-8")
+    http = httplib2.Http()
+    data = http.request(url, method="GET", headers=header)[1]
+#    response = urlopen(url)
+#    data = response.read().decode("utf-8")
 
     html = BeautifulSoup(data, "html5lib")
     stats = {}
