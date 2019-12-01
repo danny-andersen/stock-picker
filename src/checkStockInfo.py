@@ -35,7 +35,10 @@ def checkStockInfo(info):
     else:
         p = False
     return p
-   
+
+def checkStockSpark(bconfig, stock, local):
+    info = getStockInfoSaved(bconfig.value['store'], stock, local)
+    return stock if not checkStockInfo(info) else None
    
 if __name__ == "__main__":
     import argparse
@@ -50,7 +53,7 @@ if __name__ == "__main__":
     
     #Read in ini file
     config = configparser.ConfigParser()
-    config.read('./stockpicker.ini')
+    config.read('../stockpicker.ini')
     localeStr = config['stats']['locale']
     locale.setlocale( locale.LC_ALL, localeStr) 
     storeConfig = config['store']
@@ -62,10 +65,13 @@ if __name__ == "__main__":
         sys.exit(1)
     stocksThatFailed = []
     for score in scores:
-        info = getStockInfoSaved(storeConfig, score['stock'], args.local)
+        stock = score['stock']
+        info = getStockInfoSaved(storeConfig, stock, args.local)
         if (not checkStockInfo(info)):
-            stocksThatFailed.append(score['stock'])
+            stocksThatFailed.append(stock)
     if (stocksThatFailed):
         with open('stocksToReprocess.txt', 'w+') as f:
             for stock in stocksThatFailed:
-                f.write(f"{stock}\n")
+                if (stock):
+                    f.write(f"{stock}\n")
+    

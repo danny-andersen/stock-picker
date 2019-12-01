@@ -20,7 +20,7 @@ def scoresOnTheDoors(storeConfig, scores, numToShow, local):
         if (stockIndex == 'q'):
             sys.exit(0)
         found = False
-        if (isinstance(stockIndex, int)):
+        try:
             index = int(stockIndex)
             if (index < numScores):
                 found = True
@@ -28,7 +28,7 @@ def scoresOnTheDoors(storeConfig, scores, numToShow, local):
                 if (index > numToShow): 
                     numToShow = index
                     tab = tabulate(scores[0:numToShow], headers='keys', showindex="always")
-        else:
+        except:
             index = 0
             for score in scores:
                 if (score['stock'] == stockIndex):
@@ -39,11 +39,12 @@ def scoresOnTheDoors(storeConfig, scores, numToShow, local):
                 index += 1
         if (not found):
             print("Please enter a valid number or stock symbol!")
-        #Show detailed metrics for selected stock
-        metrics = getStockMetricsSaved(storeConfig, stock, local)
-        if (metrics):
-            stockScore = calcScore(stock, metrics)
-            printResults(stock, stockScore, metrics)
+        else:
+            #Show detailed metrics for selected stock
+            metrics = getStockMetricsSaved(storeConfig, stock, local)
+            if (metrics):
+                stockScore = calcScore(stock, metrics)
+                printResults(stock, stockScore, metrics)
         #Display prompt
         input('Press Enter to continue...')
 

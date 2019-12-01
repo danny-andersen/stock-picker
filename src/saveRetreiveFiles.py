@@ -143,12 +143,16 @@ def getStockScores(config, local):
     return getStock(config, "scores", '', local)
 
 def mergeAndSaveScores(configStore, scores, local):
-    scoreStocks = [s['stock'] for s in scores]
-    currentScores = getStockScores(configStore, local)
-    if (currentScores):
-        for cs in currentScores:
-            if (cs['stock'] not in scoreStocks):
-                scores.append(cs)
-    #Sort scores in reverse order so get highest scoring first
-    scores.sort(key=lambda score:score['scorePerc'], reverse=True)
-    saveStockScores(configStore, scores, local)
+    if (scores):
+        #Remove any nulls
+        scores = [s for s in scores if s]
+        #Get list of stocks
+        scoreStocks = [s['stock'] for s in scores]
+        currentScores = getStockScores(configStore, local)
+        if (currentScores):
+            for cs in currentScores:
+                if (cs['stock'] not in scoreStocks):
+                    scores.append(cs)
+        #Sort scores in reverse order so get highest scoring first
+        scores.sort(key=lambda score:score['scorePerc'], reverse=True)
+        saveStockScores(configStore, scores, local)
