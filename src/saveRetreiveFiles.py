@@ -117,7 +117,7 @@ def getStockPricesSaved(storeConfig, stock, local):
         munged = stockPrices['dailyPrices']
         unmunged = dict()
         for k,v in munged.items():
-            unmunged[int(k)] = (v[0], v[1])
+            unmunged[int(k)] = (v[0], v[1]) #timestamp = (min, max)
         stockPrices['dailyPrices'] = unmunged
     return stockPrices
 
