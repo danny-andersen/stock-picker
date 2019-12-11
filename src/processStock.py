@@ -6,6 +6,7 @@ from scoreStock import calcScore
 from saveRetreiveFiles import getStockInfoSaved, saveStockInfo, saveStockMetrics, getStockPricesSaved, saveStockPrices
 from alphaAdvantage import getLatestDailyPrices, getAllDailyPrices
 from checkStockInfo import checkStockInfo
+from printResults import getResultStr
 
 def processStockSpark(bcConfig, stock, local):
     return processStock(bcConfig.value, stock, local)
@@ -60,6 +61,9 @@ def processStock(config, stock, local):
         scores = calcScore(stock, metrics)
     else:
         scores = None
+    resultStr = getResultStr(stock, scores, metrics)
+    #Save results to dropbox
+    
     return scores
 
 def processStockStats(info, dailyPrices):

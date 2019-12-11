@@ -46,8 +46,10 @@ def scoresOnTheDoors(storeConfig, scores, numToShow, local):
                 stockScore = calcScore(stock, metrics)
                 printResults(stock, stockScore, metrics)
         #Display prompt
-        input('Press Enter to continue...')
-
+        ret = input('Press Enter to continue or q to quit...')
+        if (ret == 'q'):
+            sys.exit(0)
+            
 if __name__ == "__main__":
     import argparse
     import configparser
