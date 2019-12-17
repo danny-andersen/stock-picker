@@ -3,11 +3,10 @@ from datetime import datetime
 import locale
 from retreiveStockInfo import getStockInfo
 from scoreStock import calcScore
-from saveRetreiveFiles import getStockInfoSaved, saveStockInfo, saveStockMetrics, getStockPricesSaved, saveStockPrices
+from saveRetreiveFiles import getStockInfoSaved, saveStockInfo, saveStockMetrics, getStockPricesSaved, saveStockPrices, saveStringToDropbox
 from alphaAdvantage import getLatestDailyPrices, getAllDailyPrices
 from checkStockInfo import checkStockInfo
 from printResults import getResultsStr
-import dropbox
 
 def processStockSpark(bcConfig, stock, local):
     return processStock(bcConfig.value, stock, local)
@@ -19,7 +18,6 @@ def processStock(config, stock, local):
     maxPriceAgeDays = config['stats'].getint('maxPriceAgeDays')
     statsMaxAgeDays = config['stats'].getint('statsMaxAgeDays')
     apiKey = config['keys']['alhaAdvantageApiKey']
-    dropboxAccessToken = config['keys']['dropboxAccessToken']
     storeConfig = config['store']
     localeStr = config['stats']['locale']
     locale.setlocale(locale.LC_ALL, localeStr) 
@@ -65,13 +63,7 @@ def processStock(config, stock, local):
         scores = None
     resultStr = getResultsStr(stock, scores, metrics)
     #Save results to dropbox
-    dbx = dropbox.Dropbox(dropboxAccessToken)
-    #try:
-    dbx.files_upload(
-            resultStr.encode("utf-8"), path="/{0}-results.txt".format(stock), mode=dropbox.files.WriteMode.overwrite, mute=True)
-#    except dropbox.exceptions.ApiError as err:
-#        print('*** API error', err)
-#        return None
+    saveStringToDropbox(storeConfig, "/details/{0}-results.txt".format(stock), resultStr)
 #    
     return scores
 

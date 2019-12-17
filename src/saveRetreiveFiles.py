@@ -4,6 +4,8 @@ import os
 from hdfs import InsecureClient
 from dateutil.parser import parse
 import re
+from tabulate import tabulate
+import dropbox
 
 def myconverter(o):
     if isinstance(o, datetime):
@@ -142,17 +144,25 @@ def deleteStockScores(config, local):
 def getStockScores(config, local):
     return getStock(config, "scores", '', local)
 
-def mergeAndSaveScores(configStore, scores, local):
+def mergeAndSaveScores(storeConfig, scores, local):
     if (scores):
         #Remove any nulls
         scores = [s for s in scores if s]
         #Get list of stocks
         scoreStocks = [s['stock'] for s in scores]
-        currentScores = getStockScores(configStore, local)
+        currentScores = getStockScores(storeConfig, local)
         if (currentScores):
             for cs in currentScores:
                 if (cs['stock'] not in scoreStocks):
                     scores.append(cs)
         #Sort scores in reverse order so get highest scoring first
         scores.sort(key=lambda score:score['scorePerc'], reverse=True)
-        saveStockScores(configStore, scores, local)
+        saveStockScores(storeConfig, scores, local)
+        summary = tabulate(scores, headers='keys', showindex="always")
+        path="/summary.txt"
+        saveStringToDropbox(storeConfig, path, summary)
+        
+def saveStringToDropbox(config, path, dataStr):
+    dropboxAccessToken = config['dropboxAccessToken']
+    dbx = dropbox.Dropbox(dropboxAccessToken)
+    dbx.files_upload(dataStr.encode("utf-8"), path, mode=dropbox.files.WriteMode.overwrite, mute=True)
