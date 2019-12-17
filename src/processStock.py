@@ -59,11 +59,10 @@ def processStock(config, stock, local):
         metrics = processStockStats(info, prices['dailyPrices'])
         saveStockMetrics(storeConfig, stock, metrics, local)
         scores = calcScore(stock, metrics)
+        resultStr = getResultsStr(stock, scores, metrics)
+        saveStringToDropbox(storeConfig, "/details/{0}-results.txt".format(stock), resultStr)
     else:
         scores = None
-    resultStr = getResultsStr(stock, scores, metrics)
-    #Save results to dropbox
-    saveStringToDropbox(storeConfig, "/details/{0}-results.txt".format(stock), resultStr)
 #    
     return scores
 
