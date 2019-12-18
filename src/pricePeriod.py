@@ -4,6 +4,7 @@ from saveRetreiveFiles import getStockPricesSaved
 from datetime import datetime, timedelta
 import matplotlib.pyplot as plt
 import numpy as np
+import math
 
 def findNearestSample(start, timestamps, sampleTimeStamp):
     diff = abs(timestamps[start] - sampleTimeStamp)
@@ -76,7 +77,7 @@ def getPriceChangeFrequency(priceTimeStamps, prices):
     fvalWithFreq = [(days[i[0]],i[1]/maxVal, fPhase[i[0]]) for i in sortedfval]
     return (priceTimes, priceSamples, fvalWithFreq)
 
-def calcWeightedSlope(fvalF):
+def calcWeightedSlope(priceTimeStamps, prices, fvalF):
     totalWeightedSlope = 0
     for i in range(2,10):
         period = fvalF[i][0]
@@ -101,7 +102,14 @@ def calcWeightedSlope(fvalF):
         weightedSlope = slope * weight
         print (f"Period {i} {period:0.1f} days: weightedSlope {weightedSlope*100:0.2f}% slope {slope:.2f} phase {angle:.2f} deg")
         #print (f"(Price period {start} to {end} for freq period {period:0.0F} of weight {weight:0.2f}, slope is {slope}, weighted: {weightedSlope}")
-        totalWeightedSlope += weightedSlope
+        if (not math.isnan(weightedSlope)):
+            totalWeightedSlope += weightedSlope
+    return totalWeightedSlope
+
+def getWeightedSlope(prices):
+    priceTimeStamps = sorted(prices)
+    (priceTimes, priceSamples, fvalWithFreq) = getPriceChangeFrequency(priceTimeStamps, prices)
+    totalWeightedSlope = calcWeightedSlope(priceTimeStamps, prices, fvalWithFreq)
     return totalWeightedSlope
     
 if __name__ == "__main__":
@@ -122,7 +130,7 @@ if __name__ == "__main__":
     locale.setlocale( locale.LC_ALL, localeStr) 
     storeConfig = config['store']
     
-    stock='DRX.L'
+    stock='BHP.L'
     #For stock, read prices, prices is a dict with key of timestamp and values of (min,max)
     prices = getStockPricesSaved(storeConfig, stock, args.dfs)['dailyPrices']
     priceTimeStamps = sorted(prices)
@@ -133,6 +141,6 @@ if __name__ == "__main__":
     plt.bar(*zip(*fvalWithFreq[1:20]))
     plt.show()
     #For each harmonic determine if the current price is at a local mimima x days ago +/- 10% days
-    totalWeightedSlope = calcWeightedSlope(fvalWithFreq)
+    totalWeightedSlope = calcWeightedSlope(priceTimeStamps, prices, fvalWithFreq)
     print (f"Percent likelihood price will inc (dec): {totalWeightedSlope*100:0.2f}%")
     

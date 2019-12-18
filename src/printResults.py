@@ -69,6 +69,8 @@ def getResultsStr(stock, scores, metrics):
     retStr += str.format(f"Current Year Yield = {metrics['currentYield']:.2f}%\n")
     retStr += str.format(f"Forward Dividend Yield = {metrics['forwardYield']}%\n")
     
+    retStr += str.format(f"WeightedSlope = {metrics['weightedSlopePerc']}%\n")
+    retStr += str.format(f"Buy Signal = {scores['buySignal']}\n")
     retStr += str.format(f"Share income Score: {scores['incomeScorePerc']:0.2f}%\n")
     retStr += str.format(f"Share overall Score: {scores['scorePerc']:0.2f}%\n")
     return retStr

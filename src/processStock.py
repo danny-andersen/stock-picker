@@ -7,6 +7,7 @@ from saveRetreiveFiles import getStockInfoSaved, saveStockInfo, saveStockMetrics
 from alphaAdvantage import getLatestDailyPrices, getAllDailyPrices
 from checkStockInfo import checkStockInfo
 from printResults import getResultsStr
+from pricePeriod import getWeightedSlope
 
 def processStockSpark(bcConfig, stock, local):
     return processStock(bcConfig.value, stock, local)
@@ -113,7 +114,7 @@ def processStockStats(info, dailyPrices):
     else:
         diviCover = 0
     currentRatio = stats['Current Ratio']
-    
+
     metrics['thisYearDividend'] = thisYearDividend
     metrics['maxDividend'] = maxDividend
     metrics['avgDividend'] = avgDividend
@@ -136,7 +137,10 @@ def processStockStats(info, dailyPrices):
         currentPrice = ((high + low)/2)/100
         if (noOfShares == 0):
             noOfShares = marketCap / currentPrice
-            
+        #Calculate slope as to whether price is increasing or decreasing
+        #For each harmonic determine if the current price is at a local mimima x days ago +/- 10% days
+        totalWeightedSlope = getWeightedSlope(dailyPrices)
+        metrics['weightedSlopePerc'] = totalWeightedSlope * 100
     else:
         #Couldnt retreive the prices - use market cap
         if (noOfShares != 0):

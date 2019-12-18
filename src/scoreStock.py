@@ -32,5 +32,14 @@ def calcScore(stock, metrics):
     scoreStats['stock'] = stock
     scoreStats['incomeScorePerc'] = incomeScorePerc
     scoreStats['scorePerc'] = scorePerc
-    
+    #One tick per 20%
+    numTicks = int(metrics['weightedSlopePerc']/20)
+    if (numTicks > 0):
+        tick = '+'
+    else:
+        tick = '-'
+    buySell = ''
+    for i in range(0,abs(numTicks)):
+        buySell += tick
+    scoreStats['buySignal'] = buySell
     return scoreStats
