@@ -39,6 +39,8 @@ def calcScore(stock, metrics):
     else:
         tick = '-'
     buySell = ''
+    if (abs(numTicks) > 10): 
+        numTicks=10
     for i in range(0,abs(numTicks)):
         buySell += tick
     scoreStats['buySignal'] = buySell
