@@ -7,21 +7,22 @@ import locale
 
 header = {'user-agent': 'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/72.0.3626.121 Safari/537.36'}
 
-def convertToValue(valStr):
-    multiplier = 1
+# pageValueMultiplier is set if some pages being processed show numbers in thousands
+def convertToValue(valStr, pageValueMultiplier=1):
+    multiplier = 1 # This converts M and B to the relevant values
     value = 0
     if (valStr is not None):
         if ('M' in valStr):
-            multiplier = 1000
+            multiplier = 1000000
             valStr = valStr.strip('M')
         if ('B' in valStr):
-            multiplier = 1000000
+            multiplier = 1000000000
             valStr = valStr.strip('B')
         if (valStr == 'N/A' or valStr == '-'):
             value = 0
         else:
             try:
-                value = locale.atof(valStr.replace(',','')) * 1000
+                value = locale.atof(valStr.replace(',','')) * pageValueMultiplier
             except ValueError:
                 value = 0
     return value * multiplier
@@ -29,7 +30,8 @@ def convertToValue(valStr):
 
 def getDividends(stock):
     baseUrl = "https://finance.yahoo.com/quote/"
-    dividendHistory = "/history?period1=583714800&period2=1570662000&interval=div%7Csplit&filter=div&frequency=1d"
+    endPeriod = int(datetime.now().timestamp())
+    dividendHistory = f"/history?period1=927500400&period2={endPeriod}&interval=div%7Csplit&filter=div&frequency=1d"
     url = baseUrl + stock + dividendHistory
 
     http = httplib2.Http()
@@ -93,17 +95,19 @@ def getFreeCashFlow(stock):
             fcfSection = fcfSection.next_sibling
     return list(zip(dates, fcf))
 
-def getTableValue(html, title):
+def getTableValue(html, title, first=False):
     div = html.find("div", attrs={"title":re.compile(title, re.IGNORECASE)})
     value = None
     if (div is not None):
         section = div.parent
         section = section.next_sibling #Advance to first value
+        if (not first):
+            section = section.next_sibling #Advance to second value
         if (section is not None):
             span = section.find("span")
             if (span is not None):
                 value = span.string
-    return convertToValue(value)
+    return convertToValue(value, 1000) #All table values in thousands
   
 def getBalanceSheet(stock):
     baseUrl = "https://finance.yahoo.com/quote/"
@@ -119,29 +123,29 @@ def getBalanceSheet(stock):
 #    fp.close()
     balanceSheet = dict()
 
-    value = getTableValue(html, "Total Current Assets")
+    value = getTableValue(html, "Total Current Assets", True)
 #    if (value is None):
 #        value = getBalanceSheetValue(html, "Total Current assets")
 #    if (value is None):
 #        value = getBalanceSheetValue(html, "Total current assets")
     balanceSheet['Total Current Assets'] = value
 
-    value = getTableValue(html, "Net property, plant and equipment")
+    value = getTableValue(html, "Net property, plant and equipment", True)
     balanceSheet['Total Plant'] = value
 
-    value = getTableValue(html, "Total Assets")
+    value = getTableValue(html, "Total Assets", True)
     balanceSheet['Total Assets'] = value
 
-    value = getTableValue(html, "Interest expense")
+    value = getTableValue(html, "Interest expense", True)
     balanceSheet['Interest expense'] = value
     
-    value = getTableValue(html, "Total Current Liabilities")
+    value = getTableValue(html, "Total Current Liabilities", True)
     balanceSheet['Total current liabilities'] = value
     
-    value = getTableValue(html, "Total non-current liabilities")
+    value = getTableValue(html, "Total non-current liabilities", True)
     balanceSheet['Total non-current liabilities'] = value
     
-    value = getTableValue(html, "Total stockholders' equity")
+    value = getTableValue(html, "Total stockholders' equity", True)
     balanceSheet['Stockholder Equity'] = value
     return balanceSheet
 
@@ -161,15 +165,10 @@ def getIncomeStatement(stock):
     income['Total revenue'] = getTableValue(html, "Total revenue")
     income['Cost of revenue'] = getTableValue(html, "Cost of revenue")
     income['Central overhead'] = getTableValue(html, "Selling general and administrative")
-    income['Operating profit'] = getTableValue(html, "Operating income or loss")
     income['Interest expense'] = getTableValue(html, "Interest Expense")
+    income['Net income'] = getTableValue(html, "Net Income")
+    income['Operating profit'] = getTableValue(html, "Operating Income or Loss")
 
-#    div = html.find("div", attrs={"title":"Operating Income or Loss"})
-#    section = div.parent
-#    section = section.next_sibling #Advance to first value
-#    value = section.find("span").string
-    value = getTableValue(html, "Operating Income or Loss")
-    income['Operating Profit'] = value
     return income
 
 def getCashFlow(stock):

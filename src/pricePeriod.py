@@ -82,7 +82,7 @@ def calcWeightedSlope(priceTimeStamps, prices, fvalF):
     for i in range(2,10):
         period = fvalF[i][0]
         weight = fvalF[i][1]
-        angle = fvalF[i][2]
+        #angle = fvalF[i][2]
         now = datetime.now()
         start = now - timedelta(days=period)  #forward project from period
         end = now - timedelta(days=period*0.8) #20% of period forward
@@ -100,7 +100,7 @@ def calcWeightedSlope(priceTimeStamps, prices, fvalF):
         Y = y - y.mean()
         slope = X.dot(Y) / X.dot(X)
         weightedSlope = slope * weight
-        print (f"Period {i} {period:0.1f} days: weightedSlope {weightedSlope*100:0.2f}% slope {slope:.2f} phase {angle:.2f} deg")
+        #print (f"Period {i} {period:0.1f} days: weightedSlope {weightedSlope*100:0.2f}% slope {slope:.2f} phase {angle:.2f} deg")
         #print (f"(Price period {start} to {end} for freq period {period:0.0F} of weight {weight:0.2f}, slope is {slope}, weighted: {weightedSlope}")
         if (not math.isnan(weightedSlope)):
             totalWeightedSlope += weightedSlope

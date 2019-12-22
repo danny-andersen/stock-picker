@@ -178,7 +178,7 @@ def processStockStats(info, dailyPrices):
         wacc = 0
     metrics['wacc'] = wacc
 
-    operatingProfit = incomeStatement['Operating Profit']
+    operatingProfit = incomeStatement['Operating profit']
     metrics['operatingProfit'] = operatingProfit
     if (costOfDebt != 0):
         metrics['interestCover'] = operatingProfit / costOfDebt
@@ -214,6 +214,8 @@ def processStockStats(info, dailyPrices):
         metrics['breakUpPrice'] = breakUpValue / noOfShares # Tangible assets - total liabilities
         metrics['netAssetValuePrice'] = shareholderFunds / noOfShares #Balance sheet NAV = Total assets - total liabilities (which is shareholder funds)
         currentYield = 100*thisYearDividend/currentPrice
+        metrics['maxYield'] = 100*maxDividend/currentPrice
+        metrics['avgYield'] = 100*avgDividend/currentPrice
     else:
         lowerSharePriceValue = 0
         upperSharePriceValue = 0
@@ -233,6 +235,7 @@ def processStockStats(info, dailyPrices):
         metrics['grossProfitPerc'] = 100 * (tr - incomeStatement['Cost of revenue']) / tr
         metrics['operatingProfitPerc'] = 100 * incomeStatement['Operating profit'] / tr
         metrics['overheadPerc'] = 100 * incomeStatement['Central overhead'] / tr
+        metrics['netProfitPerc'] = 100 * incomeStatement['Net income'] / tr
     else:
         metrics['grossProfitPerc'] = 0
         metrics['operatingProfitPerc'] = 0
