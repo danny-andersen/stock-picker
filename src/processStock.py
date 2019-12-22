@@ -240,6 +240,7 @@ def processStockStats(info, dailyPrices):
         metrics['grossProfitPerc'] = 0
         metrics['operatingProfitPerc'] = 0
         metrics['overheadPerc'] = 0
+        metrics['netProfitPerc'] = 0
 
     return metrics
     
