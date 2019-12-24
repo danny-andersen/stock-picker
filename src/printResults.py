@@ -60,7 +60,7 @@ def getResultsStr(stock, scores, metrics):
     
     retStr += str.format(f"Gross Profit {metrics['grossProfitPerc']:0.2f}%, Operating Profit {metrics['operatingProfitPerc']:0.2f}%, Net Profit {metrics['netProfitPerc']:0.2f}%\n")
     retStr += str.format(f"Overhead {metrics['overheadPerc']:0.2f}%\n")
-    
+
     retStr += str.format(f"Current share price: {metrics['currentPrice']:0.2f}\n")
     retStr += str.format(f"DCF value Share price range: {metrics['lowerSharePriceValue']:0.2f} - {metrics['upperSharePriceValue']:0.2f}\n")    
     retStr += str.format(f"Fixed asset value Share price: {metrics['assetSharePriceValue']:0.2f}\n")

@@ -64,7 +64,7 @@ def processStock(config, stock, local):
         saveStringToDropbox(storeConfig, "/details/{0}-results.txt".format(stock), resultStr)
     else:
         scores = None
-#    
+ 
     return scores
 
 def processStockStats(info, dailyPrices):
@@ -100,15 +100,14 @@ def processStockStats(info, dailyPrices):
         daysSinceExDiv = -(exDivDate - now).days
     else:
         daysSinceExDiv = 0
-    fy = stats['Forward Annual Dividend Yield'].split('%')[0]
-    if (fy != '-' and fy != 'N/A'):
-        try:
-            forwardYield = locale.atof(fy)
-        except ValueError:
-            forwardYield = 0
-    else:
+    forwardYield = stats['Forward Annual Dividend Yield']
+    if (not forwardYield):
         forwardYield = 0
-    eps = stats['Diluted EPS'] / 100
+    eps = stats['Diluted EPS']
+    if (not eps):
+        eps = 0
+    else:
+        eps = 0 / 100
     if (thisYearDividend != 0):
         diviCover = eps / thisYearDividend
     else:
@@ -126,8 +125,10 @@ def processStockStats(info, dailyPrices):
     metrics['currentRatio'] = currentRatio
 
     marketCap = stats['Market Cap']
-    noOfShares = stats['Shares Outstanding']
+    if (not marketCap): marketCap = 0
     metrics['marketCap'] = marketCap
+    noOfShares = stats['Shares Outstanding']
+    if (not noOfShares): noOfShares = 0 
     
     if (len(dailyPrices) > 0):
         priceDatesSorted = sorted(dailyPrices)
@@ -153,11 +154,15 @@ def processStockStats(info, dailyPrices):
     
     balanceSheet = info['balanceSheet']
     totalDebt = balanceSheet['Total non-current liabilities']
+    if (not totalDebt): totalDebt = 0
     totalEquity = balanceSheet['Stockholder Equity'] ##THIS IS THE WRONG STATISTIC - should be market cap
+    if (not totalEquity): totalEquity = 0
     totalCapital = totalDebt + totalEquity
     
     cashFlow = info['cashFlow']
-    costOfEquity = -cashFlow['Dividends paid']
+    cf = cashFlow['Dividends paid']
+    if (not cf): cf = 0
+    costOfEquity = -cf
 #    if (cf is None):
 #        costOfEquity = 0
 #    else:
@@ -168,6 +173,7 @@ def processStockStats(info, dailyPrices):
         costOfEquityPerc = 0
     incomeStatement = info['incomeStatement']
     costOfDebt = incomeStatement['Interest expense']
+    if (not costOfDebt): costOfDebt = 0
     if (totalDebt != 0):
         costOfDebtPerc = 100.0 * costOfDebt / totalDebt
     else:
@@ -179,6 +185,7 @@ def processStockStats(info, dailyPrices):
     metrics['wacc'] = wacc
 
     operatingProfit = incomeStatement['Operating profit']
+    if (not operatingProfit): operatingProfit = 0
     metrics['operatingProfit'] = operatingProfit
     if (costOfDebt != 0):
         metrics['interestCover'] = operatingProfit / costOfDebt
@@ -187,7 +194,7 @@ def processStockStats(info, dailyPrices):
     
     #Use to calculate DCF from FCF
     fcf = info['freeCashFlow']
-    if (len(fcf) > 0):
+    if (fcf and len(fcf) > 0):
         (dcf, error, fcfForecastSlope) = calculateDCF(fcf, wacc, 5)
     else:
         (dcf, error, fcfForecastSlope) = (0, 0, 0)
@@ -196,15 +203,22 @@ def processStockStats(info, dailyPrices):
     metrics['fcfForecastSlope'] = fcfForecastSlope
     #Intrinsic value = plant equipment + current assets + 10 year DCF
     currentAssets = balanceSheet['Total Current Assets']
-    assetValue = balanceSheet['Total Plant'] + currentAssets #Does not include intangibles + goodwill
-    breakUpValue = assetValue - totalDebt - balanceSheet['Total current liabilities']
+    if (not currentAssets): currentAssets = 0
+    totalPlant = balanceSheet['Total Plant']
+    if (not totalPlant): totalPlant = 0
+    assetValue = totalPlant + currentAssets #Does not include intangibles + goodwill
+    totalLiabilities = balanceSheet['Total current liabilities']
+    if (not totalLiabilities): totalLiabilities = 0
+    breakUpValue = assetValue - totalDebt - totalLiabilities
     metrics['breakUpValue'] = breakUpValue
+    if (not breakUpValue): breakUpValue = 0
     intrinsicValue = breakUpValue + dcf
     metrics['intrinsicValue'] = intrinsicValue
     intrinsicValueRange = dcf*error
     metrics['intrinsicValueRange'] = intrinsicValueRange
     enterpriseValue = (marketCap + totalDebt - currentAssets) #Price to buy the organisation
     shareholderFunds = balanceSheet['Stockholder Equity']
+    if (not shareholderFunds): shareholderFunds = 0
     metrics['netAssetValue'] = shareholderFunds
     if (noOfShares != 0):
         lowerSharePriceValue = (intrinsicValue - intrinsicValueRange) / noOfShares

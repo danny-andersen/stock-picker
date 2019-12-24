@@ -1,5 +1,9 @@
 import sys
-sys.path.insert(0, './src')
+import os
+if (os.path.exists('processStock.zip')):
+    sys.path.insert(0, 'processStock.zip')
+else:
+    sys.path.insert(0, './src')
 
 from processStock import processStock
 from showScores import scoresOnTheDoors
@@ -17,8 +21,6 @@ configStore = config['store']
 
 import argparse
 parser = argparse.ArgumentParser(description='Re-calculate and display metrics and scores of given stock symbols')
-parser.add_argument('-n', '--num', type=int, default=10,
-                   help='top number of stock scores to show, defaults to 10')
 parser.add_argument('-d', '--hdfs', action='store_const', const=False, default=True,
                    help='Set if using hdfs filesystem rather than local store (True)')
 args = parser.parse_args()

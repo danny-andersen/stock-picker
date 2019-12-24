@@ -1,13 +1,14 @@
 import sys
 from saveRetreiveFiles import getStockInfoSaved, getStockScores
+from datetime import datetime
 
-def countZeros(d):
+def countNones(d):
     retVal = False
     if (d):
         zero = 0
         v = 0
         for (key, value) in d.items():
-            if (value == 0):
+            if (value == None):
                 zero += 1
             else:
                 v += 1
@@ -17,13 +18,11 @@ def countZeros(d):
 def checkStockInfo(info):
     if (info):
         missing = 0
-        if (len(info['dividends']) == 0):
-            missing +=1
         d = info['balanceSheet']
-        if (countZeros(d)):
+        if (countNones(d)):
             missing += 1
         d = info['incomeStatement']
-        if (countZeros(d)):
+        if (countNones(d)):
             missing += 1
         fcf = info['freeCashFlow']
         if (len(fcf) == 0):
@@ -44,9 +43,7 @@ if __name__ == "__main__":
     import argparse
     import configparser
     import locale
-    parser = argparse.ArgumentParser(description='Re-calculate and display metrics and scores of given stock symbols')
-    parser.add_argument('-n', '--num', type=int, default=10,
-                       help='top number of stock scores to show, defaults to 10')
+    parser = argparse.ArgumentParser(description='Check saved stock info of stock in saved scores')
     parser.add_argument('-l', '--local', action='store_const', const=True, default=False,
                        help='Set if using local filesystem rather than HDFS store (False)')
     args = parser.parse_args()
@@ -57,18 +54,26 @@ if __name__ == "__main__":
     localeStr = config['stats']['locale']
     locale.setlocale( locale.LC_ALL, localeStr) 
     storeConfig = config['store']
-    
+    version = config['stats'].getfloat('version')
+    statsMaxAgeDays = config['stats'].getint('statsMaxAgeDays')
+   
     #Read score file
     scores = getStockScores(storeConfig, args.local)
     if (not scores):
         print("Failed to retreive saved scores - please check filesystem or re-run scoring")
         sys.exit(1)
     stocksThatFailed = []
+    staleStocks = []
     for score in scores:
         stock = score['stock']
         info = getStockInfoSaved(storeConfig, stock, args.local)
-        if (not checkStockInfo(info)):
-            stocksThatFailed.append(stock)
+        infoAge = datetime.now() - info['metadata']['storedDate']
+        if (infoAge.days > statsMaxAgeDays or info['metadata']['version'] < version):
+            staleStocks.append(stock)
+        else:
+            if (not checkStockInfo(info)):
+                stocksThatFailed.append(stock)
+    print (f"Number of stocks processed: {len(scores)}, number that were stale: {len(staleStocks)}, number that failed check {len(stocksThatFailed)}")
     if (stocksThatFailed):
         with open('stocksToReprocess.txt', 'w+') as f:
             for stock in stocksThatFailed:

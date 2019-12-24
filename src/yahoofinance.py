@@ -10,7 +10,7 @@ header = {'user-agent': 'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36
 # pageValueMultiplier is set if some pages being processed show numbers in thousands
 def convertToValue(valStr, pageValueMultiplier=1):
     multiplier = 1 # This converts M and B to the relevant values
-    value = 0
+    value = None
     if (valStr is not None):
         if ('M' in valStr):
             multiplier = 1000000
@@ -23,9 +23,10 @@ def convertToValue(valStr, pageValueMultiplier=1):
         else:
             try:
                 value = locale.atof(valStr.replace(',','')) * pageValueMultiplier
+                value = value * multiplier
             except ValueError:
-                value = 0
-    return value * multiplier
+                value = None
+    return value
 
 
 def getDividends(stock):
@@ -189,7 +190,7 @@ def findAndProcessTable(html, inStr):
     regex = re.compile(inStr,  re.IGNORECASE)
     elements = html.find_all(string=regex);
     #print (f"No of \'{inStr}\' strings found: {len(elements)}")
-    statValue = ''
+    statValue = None
     inStr = inStr.strip('^') # remove regex control chars
     for element in elements:
         #print (element)
@@ -249,6 +250,10 @@ def getKeyStatistics(stock):
     else:
         stats[searchStr] = None
     searchStr= "Forward Annual Dividend Yield"
-    stats[searchStr] = findAndProcessTable(html, searchStr)
+    val = findAndProcessTable(html, searchStr)
+    if (val):
+        stats[searchStr] = convertToValue(val.split('%')[0])
+    else:
+        stats[searchStr] = val
     return (stats)
 
