@@ -242,7 +242,7 @@ def getKeyStatistics(stock):
     stats[searchStr] = convertToValue(findAndProcessTable( html, searchStr))
     searchStr= "Ex-Dividend Date"
     divDate = findAndProcessTable(html, searchStr)
-    if (divDate != "N/A"):
+    if (divDate and divDate != "N/A"):
         try:
             stats[searchStr] = datetime.strptime(divDate, "%b %d, %Y")
         except ValueError:
@@ -254,6 +254,6 @@ def getKeyStatistics(stock):
     if (val):
         stats[searchStr] = convertToValue(val.split('%')[0])
     else:
-        stats[searchStr] = val
+        stats[searchStr] = None
     return (stats)
 

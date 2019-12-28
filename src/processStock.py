@@ -26,10 +26,12 @@ def processStock(config, stock, local):
     #Check to see if stock info needs to be updated
     #Read info from file 
     info = getStockInfoSaved(storeConfig, stock, local)
+    newInfoReqd = False
     if (info):
         infoAge = datetime.now() - info['metadata']['storedDate']
         if (infoAge.days > statsMaxAgeDays or info['metadata']['version'] < version):
             info = None
+            newInfoReqd = True
     if (info):
         #Check info is valid
         if (not checkStockInfo(info)):
@@ -37,7 +39,7 @@ def processStock(config, stock, local):
             info = None
     if (not info):
         info = getStockInfo(version, stock)
-        if (checkStockInfo(info)):
+        if ((newInfoReqd and info) or checkStockInfo(info)):
             saveStockInfo(storeConfig, stock, info, local)
         else:
             print(f"{stock}: Retreived info incomplete")
@@ -70,6 +72,7 @@ def processStock(config, stock, local):
 def processStockStats(info, dailyPrices):
     now = datetime.now();
     metrics = dict()
+    metrics['infoDate'] = info['metadata']['storedDate']
     #Determine this years dividend, average and max dividend
     dividends = info['dividends']
     #Calc dividend by year
@@ -129,7 +132,7 @@ def processStockStats(info, dailyPrices):
     metrics['marketCap'] = marketCap
     noOfShares = stats['Shares Outstanding']
     if (not noOfShares): noOfShares = 0 
-    
+    totalWeightedSlope = 0
     if (len(dailyPrices) > 0):
         priceDatesSorted = sorted(dailyPrices)
         latestPriceDate = priceDatesSorted[len(priceDatesSorted)-1]
@@ -141,7 +144,6 @@ def processStockStats(info, dailyPrices):
         #Calculate slope as to whether price is increasing or decreasing
         #For each harmonic determine if the current price is at a local mimima x days ago +/- 10% days
         totalWeightedSlope = getWeightedSlope(dailyPrices)
-        metrics['weightedSlopePerc'] = totalWeightedSlope * 100
     else:
         #Couldnt retreive the prices - use market cap
         if (noOfShares != 0):
@@ -149,6 +151,7 @@ def processStockStats(info, dailyPrices):
         else:
             currentPrice = 0
 
+    metrics['weightedSlopePerc'] = totalWeightedSlope * 100
     metrics['currentPrice'] = currentPrice
     metrics['noOfShares'] = noOfShares
     
@@ -238,6 +241,8 @@ def processStockStats(info, dailyPrices):
         metrics['breakUpPrice'] = 0# Tangible assets - total liabilities
         metrics['netAssetValuePrice'] = 0
         currentYield = 0
+        metrics['maxYield'] = 0
+        metrics['avgYield'] = 0
     metrics['lowerSharePriceValue'] = lowerSharePriceValue
     metrics['upperSharePriceValue'] = upperSharePriceValue
     metrics['assetSharePriceValue'] = assetSharePriceValue
@@ -245,11 +250,20 @@ def processStockStats(info, dailyPrices):
     metrics['evSharePrice'] = evSharePrice
     metrics['currentYield'] = currentYield
     tr = incomeStatement['Total revenue']
+    if (not tr): tr = 0
     if (tr != 0):
-        metrics['grossProfitPerc'] = 100 * (tr - incomeStatement['Cost of revenue']) / tr
-        metrics['operatingProfitPerc'] = 100 * incomeStatement['Operating profit'] / tr
-        metrics['overheadPerc'] = 100 * incomeStatement['Central overhead'] / tr
-        metrics['netProfitPerc'] = 100 * incomeStatement['Net income'] / tr
+        val = incomeStatement['Cost of revenue']
+        if (not val): val = 0
+        metrics['grossProfitPerc'] = 100 * (tr - val) / tr
+        val = incomeStatement['Operating profit']
+        if (not val): val = 0
+        metrics['operatingProfitPerc'] = 100 * val / tr
+        val = incomeStatement['Central overhead']
+        if (not val): val = 0
+        metrics['overheadPerc'] = 100 * val / tr
+        val = incomeStatement['Net income']
+        if (not val): val = 0
+        metrics['netProfitPerc'] = 100 * val / tr
     else:
         metrics['grossProfitPerc'] = 0
         metrics['operatingProfitPerc'] = 0

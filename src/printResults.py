@@ -38,7 +38,7 @@ def printResults(stock, scores, metrics):
 
 def getResultsStr(stock, scores, metrics):
     retStr = str.format("-----------------------------------------------------------------------------------------------------\n")
-    retStr += str.format(f"---------------------------------------Metrics for Stock {stock}------------------------------------\n")
+    retStr += str.format(f"-----------------Metrics for Stock {stock}, based on info dated {metrics['infoDate'].strftime('%Y-%m-%d')}------------------------------\n")
     retStr += str.format(f"This year dividend: {metrics['thisYearDividend']}p({metrics['currentYield']:0.2f}%), Max Dividend: {metrics['maxDividend']:.2f}p ({metrics['maxYield']:0.2f}%), Avg Dividend: {metrics['avgDividend']:.2f} ({metrics['avgYield']:0.2f}%)\n")
     if (metrics['exDivDate']):
         retStr += str.format(f"Days since Ex-Dividend = {metrics['daysSinceExDiv']} {metrics['exDivDate'].strftime('%Y-%m-%d')}\n")
