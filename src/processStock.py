@@ -232,7 +232,7 @@ def processStockStats(info, dailyPrices):
     shareholderFunds = balanceSheet['Stockholder Equity']
     if (not shareholderFunds): shareholderFunds = 0
     metrics['netAssetValue'] = shareholderFunds
-    if (shareholderFunds > 0):
+    if (shareholderFunds > 0 and incomeStatement['Net income']):
         metrics['returnOnEquity'] = shareholderFunds / incomeStatement['Net income']
     else:
         metrics['returnOnEquity'] = 0
