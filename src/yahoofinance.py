@@ -1,11 +1,22 @@
 from datetime import datetime
+import time
 #from urllib.request import urlopen
 import httplib2
 from bs4 import BeautifulSoup
 import re
 import locale
+#Chrome on Win 10
+#header = {'user-agent': 'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/72.0.3626.121 Safari/537.36'}
+#Chromium on Pi
+header = {'user-agent': 'Mozilla/5.0 (X11; Linux armv7l) AppleWebKit/537.36 (KHTML, like Gecko) Raspbian Chromium/74.0.3729.157 Chrome/74.0.3729.157 Safari/537.36'}
+baseUrl = "https://finance.yahoo.com/quote/"
 
-header = {'user-agent': 'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/72.0.3626.121 Safari/537.36'}
+def getUrlHtml(url):
+    http = httplib2.Http()
+    data = http.request(url, method="GET", headers=header)[1]
+    dom = BeautifulSoup(data, "html5lib")
+    time.sleep(60)  #Sleep for 60 seconds to limit number of gets on yahoo web site to prevent blacklisting
+    return dom
 
 # pageValueMultiplier is set if some pages being processed show numbers in thousands
 def convertToValue(valStr, pageValueMultiplier=1):
@@ -18,29 +29,23 @@ def convertToValue(valStr, pageValueMultiplier=1):
         if ('B' in valStr):
             multiplier = 1000000000
             valStr = valStr.strip('B')
-        if (valStr == 'N/A' or valStr == '-'):
+        if (valStr == 'N/A' or valStr == '-' or valStr == ''):
             value = 0
         else:
             try:
                 value = locale.atof(valStr.replace(',','')) * pageValueMultiplier
                 value = value * multiplier
             except ValueError:
-                value = None
+                value = 0
     return value
 
 
 def getDividends(stock):
-    baseUrl = "https://finance.yahoo.com/quote/"
     endPeriod = int(datetime.now().timestamp())
     dividendHistory = f"/history?period1=927500400&period2={endPeriod}&interval=div%7Csplit&filter=div&frequency=1d"
     url = baseUrl + stock + dividendHistory
 
-    http = httplib2.Http()
-    data = http.request(url, method="GET", headers=header)[1]
-#    response = urlopen(url)
-#    data = response.read().decode("utf-8")
-
-    html = BeautifulSoup(data, "html5lib")
+    html = getUrlHtml(url)
     diviTable = html.find("table", attrs = {'data-test' :"historical-prices"});
     divi = []
     if (diviTable):
@@ -60,17 +65,7 @@ def getDividends(stock):
                 divi.append({'date': divDate, 'dividend':float(dividend)})
     return (divi)
 
-def getFreeCashFlow(stock):
-    baseUrl = "https://finance.yahoo.com/quote/"
-    cf = "/cash-flow?p="
-    url = baseUrl + stock + cf + stock
-
-    http = httplib2.Http()
-    data = http.request(url, method="GET", headers=header)[1]
-#    response = urlopen(url)
-#    data = response.read().decode("utf-8")
-
-    html = BeautifulSoup(data, "html5lib")
+def getFreeCashFlow(html):
     #Find line containing dates
     dates = []
     fcf = []
@@ -111,14 +106,10 @@ def getTableValue(html, title, first=False):
     return convertToValue(value, 1000) #All table values in thousands
   
 def getBalanceSheet(stock):
-    baseUrl = "https://finance.yahoo.com/quote/"
     cf = "/balance-sheet?p="
     url = baseUrl + stock + cf + stock
-#    response = urlopen(url)
-#    data = response.read().decode("utf-8")
-    http = httplib2.Http()
-    data = http.request(url, method="GET", headers=header)[1]
-    html = BeautifulSoup(data, "html5lib")
+    html = getUrlHtml(url)
+
 #    fp = open("balance.html", "w")
 #    fp.write(data)
 #    fp.close()
@@ -137,9 +128,6 @@ def getBalanceSheet(stock):
     value = getTableValue(html, "Total Assets", True)
     balanceSheet['Total Assets'] = value
 
-    value = getTableValue(html, "Interest expense", True)
-    balanceSheet['Interest expense'] = value
-    
     value = getTableValue(html, "Total Current Liabilities", True)
     balanceSheet['Total current liabilities'] = value
     
@@ -151,17 +139,9 @@ def getBalanceSheet(stock):
     return balanceSheet
 
 def getIncomeStatement(stock):
-    baseUrl = "https://finance.yahoo.com/quote/"
     cf = "/financials?p="
     url = baseUrl + stock + cf + stock
-#    response = urlopen(url)
-#    data = response.read().decode("utf-8")
-    http = httplib2.Http()
-    data = http.request(url, method="GET", headers=header)[1]
-#    fp = open("income.html", "w")
-#    fp.write(data)
-#    fp.close()
-    html = BeautifulSoup(data, "html5lib")
+    html = getUrlHtml(url)
     income = dict()
     income['Total revenue'] = getTableValue(html, "Total revenue")
     income['Cost of revenue'] = getTableValue(html, "Cost of revenue")
@@ -173,18 +153,13 @@ def getIncomeStatement(stock):
     return income
 
 def getCashFlow(stock):
-    baseUrl = "https://finance.yahoo.com/quote/"
     cf = "/cash-flow?p="
     url = baseUrl + stock + cf + stock
-    http = httplib2.Http()
-    data = http.request(url, method="GET", headers=header)[1]
-#    response = urlopen(url)
-#    data = response.read().decode("utf-8")
-    html = BeautifulSoup(data, "html5lib")
+    html = getUrlHtml(url)
     cash = dict()
     value = getTableValue(html, "Dividends Paid")
     cash['Dividends paid'] = value
-    return cash
+    return (html, cash)
    
 def findAndProcessTable(html, inStr):
     regex = re.compile(inStr,  re.IGNORECASE)
@@ -216,17 +191,11 @@ def findAndProcessTable(html, inStr):
     return (statValue)
 
 def getKeyStatistics(stock):
-    baseUrl = "https://finance.yahoo.com/quote/"
     stats = "/key-statistics?p="
 
     url = baseUrl + stock + stats + stock
+    html = getUrlHtml(url)
 
-    http = httplib2.Http()
-    data = http.request(url, method="GET", headers=header)[1]
-#    response = urlopen(url)
-#    data = response.read().decode("utf-8")
-
-    html = BeautifulSoup(data, "html5lib")
     stats = {}
     searchStr = "Market Cap"
     stats[searchStr] = convertToValue(findAndProcessTable(html, searchStr))

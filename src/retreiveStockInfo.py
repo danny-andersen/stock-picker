@@ -12,9 +12,9 @@ def getStockInfo(version, stock):
     #WACC = Weighted average cost of capital
     balanceSheet = getBalanceSheet(stock)
     incomeStatement = getIncomeStatement(stock)
-    cashFlow = getCashFlow(stock)
+    (cfHtml, cashFlow) = getCashFlow(stock)
+    fcf = getFreeCashFlow(cfHtml)
     stats = getKeyStatistics(stock)
-    fcf = getFreeCashFlow(stock)
     meta = { 'version': version,
              'storedDate': datetime.now(),
              }

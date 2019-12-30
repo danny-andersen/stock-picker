@@ -13,19 +13,19 @@ def countNones(d):
             else:
                 v += 1
         retVal = True if zero > v else False
-    return retVal
+    return (zero, retVal)
     
 def checkStockInfo(info):
     if (info):
         missing = 0
         d = info['balanceSheet']
-        if (countNones(d)):
+        if (countNones(d)[1]):
             missing += 1
         d = info['incomeStatement']
-        if (countNones(d)):
+        if (countNones(d)[1]):
             missing += 1
-        fcf = info['freeCashFlow']
-        if (len(fcf) == 0):
+        d = info['stats']
+        if (countNones(d)[1]):
             missing += 1
         if (missing > 2):
             p = False
@@ -34,6 +34,25 @@ def checkStockInfo(info):
     else:
         p = False
     return p
+
+def isStockInfoBetter(currentInfo, newInfo):
+    cnt = 0
+    newCnt = 0
+    if (currentInfo):
+        d = currentInfo['balanceSheet']
+        cnt += countNones(d)[0]
+        d = currentInfo['incomeStatement']
+        cnt += countNones(d)[0]
+        d = currentInfo['stats']
+        cnt += countNones(d)[0]
+    if (newInfo):
+        d = newInfo['balanceSheet']
+        newCnt += countNones(d)[0]
+        d = newInfo['incomeStatement']
+        newCnt += countNones(d)[0]
+        d = newInfo['stats']
+        newCnt += countNones(d)[0]
+    return newCnt > cnt
 
 def checkStockSpark(bconfig, stock, local):
     info = getStockInfoSaved(bconfig.value['store'], stock, local)

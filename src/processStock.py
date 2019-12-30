@@ -5,7 +5,7 @@ from retreiveStockInfo import getStockInfo
 from scoreStock import calcScore
 from saveRetreiveFiles import getStockInfoSaved, saveStockInfo, saveStockMetrics, getStockPricesSaved, saveStockPrices, saveStringToDropbox
 from alphaAdvantage import getLatestDailyPrices, getAllDailyPrices
-from checkStockInfo import checkStockInfo
+from checkStockInfo import checkStockInfo, isStockInfoBetter
 from printResults import getResultsStr
 from pricePeriod import getWeightedSlope
 
@@ -26,20 +26,22 @@ def processStock(config, stock, local):
     #Check to see if stock info needs to be updated
     #Read info from file 
     info = getStockInfoSaved(storeConfig, stock, local)
+    currentInfo = info
     newInfoReqd = False
     if (info):
         infoAge = datetime.now() - info['metadata']['storedDate']
         if (infoAge.days > statsMaxAgeDays or info['metadata']['version'] < version):
             info = None
             newInfoReqd = True
+            print(f"{stock}: Stored info v{info['metadata']['version']} needs to be updated to v{version}")
     if (info):
         #Check info is valid
         if (not checkStockInfo(info)):
-            print(f"{stock}: Refreshing info")
+            print(f"{stock}: Stored info invalid - retrying")
             info = None
     if (not info):
         info = getStockInfo(version, stock)
-        if ((newInfoReqd and info) or checkStockInfo(info)):
+        if ((newInfoReqd and info) or checkStockInfo(info) or isStockInfoBetter(currentInfo, info)):
             saveStockInfo(storeConfig, stock, info, local)
         else:
             print(f"{stock}: Retreived info incomplete")
