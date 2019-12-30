@@ -5,15 +5,15 @@ from datetime import datetime
 def countNones(d):
     retVal = False
     if (d):
-        zero = 0
+        zeroCnt = 0
         v = 0
         for (key, value) in d.items():
             if (value == None):
-                zero += 1
+                zeroCnt += 1
             else:
                 v += 1
-        retVal = True if zero > v else False
-    return (zero, retVal)
+        retVal = True if zeroCnt > v else False
+    return (zeroCnt, retVal)
     
 def checkStockInfo(info):
     if (info):
@@ -35,23 +35,20 @@ def checkStockInfo(info):
         p = False
     return p
 
-def isStockInfoBetter(currentInfo, newInfo):
+def countInfoNones(info):
     cnt = 0
-    newCnt = 0
-    if (currentInfo):
-        d = currentInfo['balanceSheet']
+    if (info):
+        d = info['balanceSheet']
         cnt += countNones(d)[0]
-        d = currentInfo['incomeStatement']
+        d = info['incomeStatement']
         cnt += countNones(d)[0]
-        d = currentInfo['stats']
+        d = info['stats']
         cnt += countNones(d)[0]
-    if (newInfo):
-        d = newInfo['balanceSheet']
-        newCnt += countNones(d)[0]
-        d = newInfo['incomeStatement']
-        newCnt += countNones(d)[0]
-        d = newInfo['stats']
-        newCnt += countNones(d)[0]
+    return cnt
+
+def isStockInfoBetter(currentInfo, newInfo):
+    cnt = countInfoNones(currentInfo)
+    newCnt = countInfoNones(newInfo)
     return newCnt > cnt
 
 def checkStockSpark(bconfig, stock, local):

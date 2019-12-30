@@ -5,7 +5,7 @@ from retreiveStockInfo import getStockInfo
 from scoreStock import calcScore
 from saveRetreiveFiles import getStockInfoSaved, saveStockInfo, saveStockMetrics, getStockPricesSaved, saveStockPrices, saveStringToDropbox
 from alphaAdvantage import getLatestDailyPrices, getAllDailyPrices
-from checkStockInfo import checkStockInfo, isStockInfoBetter
+from checkStockInfo import checkStockInfo, isStockInfoBetter, countInfoNones
 from printResults import getResultsStr
 from pricePeriod import getWeightedSlope
 
@@ -19,6 +19,7 @@ def processStock(config, stock, local):
     maxPriceAgeDays = config['stats'].getint('maxPriceAgeDays')
     statsMaxAgeDays = config['stats'].getint('statsMaxAgeDays')
     apiKey = config['keys']['alhaAdvantageApiKey']
+    maxNonesInInfo = config['stats'].getint('maxNonesInInfo')
     storeConfig = config['store']
     localeStr = config['stats']['locale']
     locale.setlocale(locale.LC_ALL, localeStr) 
@@ -34,6 +35,12 @@ def processStock(config, stock, local):
             info = None
             newInfoReqd = True
             print(f"{stock}: Stored info v{info['metadata']['version']} needs to be updated to v{version}")
+    #Count if info has any nulls / nones, 
+    numNones = countInfoNones(info)
+    #if it has more than a configured threshold then it will be replaced if what we get is any better
+    if (numNones > maxNonesInInfo):
+        print (f"{stock} Stored version has {numNones}, which is more than the threshold {maxNonesInInfo}")
+        info = None
     if (info):
         #Check info is valid
         if (not checkStockInfo(info)):
@@ -225,6 +232,10 @@ def processStockStats(info, dailyPrices):
     shareholderFunds = balanceSheet['Stockholder Equity']
     if (not shareholderFunds): shareholderFunds = 0
     metrics['netAssetValue'] = shareholderFunds
+    if (shareholderFunds > 0):
+        metrics['returnOnEquity'] = shareholderFunds / incomeStatement['Net income']
+    else:
+        metrics['returnOnEquity'] = 0
     if (noOfShares != 0):
         lowerSharePriceValue = (intrinsicValue - intrinsicValueRange) / noOfShares
         upperSharePriceValue = (intrinsicValue + intrinsicValueRange)/ noOfShares
