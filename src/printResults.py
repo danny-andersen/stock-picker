@@ -37,8 +37,10 @@ def printResults(stock, scores, metrics):
 #    print (f"Share overall Score: {scores['scorePerc']:0.2f}%")
 
 def getResultsStr(stock, scores, metrics):
-    retStr = str.format("-----------------------------------------------------------------------------------------------------\n")
-    retStr += str.format(f"-----------------Metrics for Stock {stock}, based on info dated {metrics['infoDate'].strftime('%Y-%m-%d')}------------------------------\n")
+    retStr = str.format("-----------------------------------------------------------------------------------------------\n")
+    retStr += str.format(f"-----------------Metrics for Stock {stock}, based on info dated {metrics['infoDate'].strftime('%Y-%m-%d')}---------------------------\n")
+
+    retStr += str.format(f"--------Valuations:----------------\n")
     retStr += str.format(f"WACC % = {metrics['wacc']:.2f}\n")
     retStr += str.format(f"5 year DCF = {metrics['discountedCashFlow']/1000000000:.3f}B (Forecast FCF error: {metrics['dcfError']*100:.1f}%)\n")
     retStr += str.format(f"Market Cap value = {metrics['marketCap']/1000000000:.3f}B\n")
@@ -46,19 +48,8 @@ def getResultsStr(stock, scores, metrics):
     retStr += str.format(f"Net Asset value = {metrics['netAssetValue']/1000000000:.3f}B\n")
     retStr += str.format(f"Break up value = {metrics['breakUpValue']/1000000000:.3f}B\n")
     retStr += str.format(f"Enterprise value = {metrics['enterpriseValue']/1000000000:.3f}B\n")
-    
-    retStr += str.format(f"Dividend cover = {metrics['diviCover']:.2f}\n")
-    retStr += str.format(f"Current Ratio = {metrics['currentRatio']}\n")
-    retStr += str.format(f"Interest Cover= {metrics['interestCover']:0.2f}\n")
-    if (metrics['fcfForecastSlope']):
-        retStr += str.format(f"Cash flow trend: {'Up' if metrics['fcfForecastSlope']> 0 else 'Down'}\n")
-    else:
-        retStr += str.format("Cash flow forecast not available\n")
-    
-    retStr += str.format(f"Gross Profit {metrics['grossProfitPerc']:0.2f}%, Operating Profit {metrics['operatingProfitPerc']:0.2f}%, Net Profit {metrics['netProfitPerc']:0.2f}%\n")
-    retStr += str.format(f"Overhead {metrics['overheadPerc']:0.2f}%\n")
-    retStr += str.format(f"Return on Equity {metrics['returnOnEquity']:0.2f}%\n")
 
+    retStr += str.format(f"------Share value:------------------\n")
     retStr += str.format(f"Current share price: {metrics['currentPrice']:0.2f}\n")
     retStr += str.format(f"DCF value Share price range: {metrics['lowerSharePriceValue']:0.2f} - {metrics['upperSharePriceValue']:0.2f}\n")    
     retStr += str.format(f"Fixed asset value Share price: {metrics['assetSharePriceValue']:0.2f}\n")
@@ -66,13 +57,31 @@ def getResultsStr(stock, scores, metrics):
     retStr += str.format(f"Net asset value Share price: {metrics['netAssetValuePrice']:0.2f}\n")
     retStr += str.format(f"Enterprise value (to buy org) Share price: {metrics['evSharePrice']:0.2f}\n")
 
-    retStr += str.format(f"This year dividend: {metrics['thisYearDividend']}p({metrics['currentYield']:0.2f}%), Max Dividend: {metrics['maxDividend']:.2f}p ({metrics['maxYield']:0.2f}%), Avg Dividend: {metrics['avgDividend']:.2f} ({metrics['avgYield']:0.2f}%)\n")
+    retStr += str.format(f"------Dividends:--------------------\n")
+    retStr += str.format(f"This year dividend: {metrics['thisYearDividend']:0.2f}p({metrics['currentYield']:0.2f}%), Max Dividend: {metrics['maxDividend']:0.2f}p ({metrics['maxYield']:0.2f}%), Avg Dividend: {metrics['avgDividend']:0.2f} ({metrics['avgYield']:0.2f}%)\n")
     if (metrics['exDivDate']):
         retStr += str.format(f"Days since Ex-Dividend = {metrics['daysSinceExDiv']} {metrics['exDivDate'].strftime('%Y-%m-%d')}\n")
-    retStr += str.format(f"Current Year Yield = {metrics['currentYield']:.2f}%\n")
-    retStr += str.format(f"Forward Dividend Yield = {metrics['forwardYield']}%\n")
+    retStr += str.format(f"Current Year Yield = {metrics['currentYield']:0.2f}%\n")
+    retStr += str.format(f"Forward Dividend Yield = {metrics['forwardYield']:0.2f}%\n")
+
+    retStr += str.format(f"------Profitability:----------------\n")
+    retStr += str.format(f"Gross Profit {metrics['grossProfitPerc']:0.2f}%, Operating Profit {metrics['operatingProfitPerc']:0.2f}%, Net Profit {metrics['netProfitPerc']:0.2f}%\n")
+    retStr += str.format(f"Overhead {metrics['overheadPerc']:0.2f}%\n")
+    if (metrics['fcfForecastSlope']):
+        retStr += str.format(f"Cash flow trend: {'Up' if metrics['fcfForecastSlope']> 0 else 'Down'}\n")
+    else:
+        retStr += str.format("Cash flow forecast not available\n")
     
-    retStr += str.format(f"WeightedSlope = {metrics['weightedSlopePerc']}%\n")
+    retStr += str.format(f"------Key Ratios:-------------------\n")
+    retStr += str.format(f"Dividend cover = {metrics['diviCover']:.2f}\n")
+    retStr += str.format(f"Current Ratio = {metrics['currentRatio']}\n")
+    retStr += str.format(f"Interest Cover = {metrics['interestCover']:0.2f}\n")
+    retStr += str.format(f"Return on Equity = {metrics['returnOnEquity']:0.2f}%\n")
+    retStr += str.format(f"Return on Assets = {metrics['returnOnAssets']:0.2f}%\n")
+    retStr += str.format(f"Percentage of Liabilities are Stockholder funds {metrics['stockHolderEquityPerc']:0.2f}%\n")
+
+    retStr += str.format(f"------Summary:----------------------\n")
+    retStr += str.format(f"Buy signal weighted slope forecast = {metrics['weightedSlopePerc']:0.0f}%\n")
     retStr += str.format(f"Buy Signal = {scores['buySignal']}\n")
     retStr += str.format(f"Share income Score: {scores['incomeScorePerc']:0.2f}%\n")
     retStr += str.format(f"Share overall Score: {scores['scorePerc']:0.2f}%\n")

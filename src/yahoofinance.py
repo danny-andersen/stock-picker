@@ -23,15 +23,18 @@ def convertToValue(valStr, pageValueMultiplier=1):
     multiplier = 1 # This converts M and B to the relevant values
     value = None
     if (valStr is not None):
-        if ('M' in valStr):
-            multiplier = 1000000
-            valStr = valStr.strip('M')
-        if ('B' in valStr):
-            multiplier = 1000000000
-            valStr = valStr.strip('B')
         if (valStr == 'N/A' or valStr == '-' or valStr == ''):
             value = 0
         else:
+            if ('M' in valStr):
+                multiplier = 1000000
+                valStr = valStr.strip('M')
+            elif ('B' in valStr):
+                multiplier = 1000000000
+                valStr = valStr.strip('B')
+            elif ('K' in valStr):
+                multiplier = 1000
+                valStr = valStr.strip('K')
             try:
                 value = locale.atof(valStr.replace(',','')) * pageValueMultiplier
                 value = value * multiplier
@@ -103,6 +106,14 @@ def getTableValue(html, title, first=False):
             span = section.find("span")
             if (span is not None):
                 value = span.string
+            else:
+                #If no value then no span
+                value = ""
+        else:
+            print (f"Failed to retreive section of sibling of title {title} from html")
+
+    else:
+        print (f"Failed to retreive div with title {title} from html")
     return convertToValue(value, 1000) #All table values in thousands
   
 def getBalanceSheet(stock):
@@ -188,6 +199,10 @@ def findAndProcessTable(html, inStr):
                         statName = statName.split('(')[0].strip()
                     if (regex.match(statName)):
                         statValue = value
+            if (not statValue):
+                print (f"Failed to table value for {inStr} from html")
+        else:
+            print (f"Failed to retreive table for {inStr} from html")
     return (statValue)
 
 def getKeyStatistics(stock):
@@ -197,32 +212,32 @@ def getKeyStatistics(stock):
     html = getUrlHtml(url)
 
     stats = {}
-    searchStr = "Market Cap"
-    stats[searchStr] = convertToValue(findAndProcessTable(html, searchStr))
-    searchStr = "Return on Assets"
-    stats[searchStr] = findAndProcessTable(html, searchStr)
-    searchStr = "Revenue per share"
-    stats[searchStr] = findAndProcessTable(html, searchStr)
+    searchStr = "^Market Cap"
+    stats["Market Cap"] = convertToValue(findAndProcessTable(html, searchStr))
+    searchStr = "^Return on Assets"
+    stats["Return on Assets"] = findAndProcessTable(html, searchStr)
+    searchStr = "^Revenue per share"
+    stats["Revenue per share"] = findAndProcessTable(html, searchStr)
     searchStr = "^Shares outstanding"
     stats["Shares Outstanding"] = convertToValue(findAndProcessTable(html, searchStr))
-    searchStr= "Diluted EPS"
-    stats[searchStr] = convertToValue(findAndProcessTable(html, searchStr))
-    searchStr= "Current Ratio"
-    stats[searchStr] = convertToValue(findAndProcessTable( html, searchStr))
-    searchStr= "Ex-Dividend Date"
+    searchStr= "^Diluted EPS"
+    stats["Diluted EPS"] = convertToValue(findAndProcessTable(html, searchStr))
+    searchStr= "^Current Ratio"
+    stats["Current Ratio"] = convertToValue(findAndProcessTable( html, searchStr))
+    searchStr= "^Ex-Dividend Date"
     divDate = findAndProcessTable(html, searchStr)
     if (divDate and divDate != "N/A"):
         try:
-            stats[searchStr] = datetime.strptime(divDate, "%b %d, %Y")
+            stats["Ex-Dividend Date"] = datetime.strptime(divDate, "%b %d, %Y")
         except ValueError:
-            stats[searchStr] = None
+            stats["Ex-Dividend Date"] = None
     else:
-        stats[searchStr] = None
-    searchStr= "Forward Annual Dividend Yield"
+        stats["Ex-Dividend Date"] = None
+    searchStr= "^Forward Annual Dividend Yield"
     val = findAndProcessTable(html, searchStr)
     if (val):
-        stats[searchStr] = convertToValue(val.split('%')[0])
+        stats["Forward Annual Dividend Yield"] = convertToValue(val.split('%')[0])
     else:
-        stats[searchStr] = None
+        stats["Forward Annual Dividend Yield"] = None
     return (stats)
 

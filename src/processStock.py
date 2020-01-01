@@ -35,11 +35,13 @@ def processStock(config, stock, local):
             info = None
             newInfoReqd = True
             print(f"{stock}: Stored info v{info['metadata']['version']} needs to be updated to v{version}")
+    else:
+        print(f"{stock}: No info stored")
     #Count if info has any nulls / nones, 
     numNones = countInfoNones(info)
     #if it has more than a configured threshold then it will be replaced if what we get is any better
     if (numNones > maxNonesInInfo):
-        print (f"{stock} Stored version has {numNones}, which is more than the threshold {maxNonesInInfo}")
+        print (f"{stock} Stored version has {numNones} nulls, which is more than the threshold ({maxNonesInInfo})")
         info = None
     if (info):
         #Check info is valid
@@ -47,6 +49,7 @@ def processStock(config, stock, local):
             print(f"{stock}: Stored info invalid - retrying")
             info = None
     if (not info):
+        print(f"{stock}: Retreiving latest stock info")
         info = getStockInfo(version, stock)
         if ((newInfoReqd and info) or checkStockInfo(info) or isStockInfoBetter(currentInfo, info)):
             saveStockInfo(storeConfig, stock, info, local)
@@ -119,7 +122,7 @@ def processStockStats(info, dailyPrices):
     if (not eps):
         eps = 0
     else:
-        eps = 0 / 100
+        eps = eps / 100
     if (thisYearDividend != 0):
         diviCover = eps / thisYearDividend
     else:
@@ -232,10 +235,18 @@ def processStockStats(info, dailyPrices):
     shareholderFunds = balanceSheet['Stockholder Equity']
     if (not shareholderFunds): shareholderFunds = 0
     metrics['netAssetValue'] = shareholderFunds
-    if (shareholderFunds > 0 and incomeStatement['Net income']):
-        metrics['returnOnEquity'] = shareholderFunds / incomeStatement['Net income']
+    netIncome = incomeStatement['Net income']
+    if (shareholderFunds > 0):
+        metrics['returnOnEquity'] = 100*netIncome / shareholderFunds
     else:
         metrics['returnOnEquity'] = 0
+    totalAssets = balanceSheet['Total Assets']
+    if (totalAssets > 0):
+        metrics['returnOnAssets'] = netIncome / totalAssets
+        metrics['stockHolderEquityPerc'] = 100 * shareholderFunds / totalAssets
+    else:
+        metrics['returnOnAssets'] = 0
+        metrics['stockHolderEquityPerc'] = 0
     if (noOfShares != 0):
         lowerSharePriceValue = (intrinsicValue - intrinsicValueRange) / noOfShares
         upperSharePriceValue = (intrinsicValue + intrinsicValueRange)/ noOfShares
