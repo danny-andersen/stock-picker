@@ -226,13 +226,17 @@ def getKeyStatistics(stock):
     stats["Current Ratio"] = convertToValue(findAndProcessTable( html, searchStr))
     searchStr= "^Ex-Dividend Date"
     divDate = findAndProcessTable(html, searchStr)
-    if (divDate and divDate != "N/A"):
-        try:
-            stats["Ex-Dividend Date"] = datetime.strptime(divDate, "%b %d, %Y")
-        except ValueError:
-            stats["Ex-Dividend Date"] = None
+    if (divDate):
+        if (divDate == 'N/A' or divDate == '-' or divDate == ''):
+            value = 0
+        else:
+            try:
+                value = datetime.strptime(divDate, "%b %d, %Y")
+            except ValueError:
+                value = 0
     else:
-        stats["Ex-Dividend Date"] = None
+        value = None
+    stats["Ex-Dividend Date"] = value
     searchStr= "^Forward Annual Dividend Yield"
     val = findAndProcessTable(html, searchStr)
     if (val):

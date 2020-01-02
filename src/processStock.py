@@ -1,5 +1,5 @@
 from calcStatistics import calculateDCF
-from datetime import datetime
+from datetime import datetime, timedelta
 import locale
 from retreiveStockInfo import getStockInfo
 from scoreStock import calcScore
@@ -7,7 +7,7 @@ from saveRetreiveFiles import getStockInfoSaved, saveStockInfo, saveStockMetrics
 from alphaAdvantage import getLatestDailyPrices, getAllDailyPrices
 from checkStockInfo import checkStockInfo, isStockInfoBetter, countInfoNones
 from printResults import getResultsStr
-from pricePeriod import getWeightedSlope
+from pricePeriod import getWeightedSlope, calcPriceStatisticsForPeriod
 
 def processStockSpark(bcConfig, stock, local):
     return processStock(bcConfig.value, stock, local)
@@ -96,14 +96,19 @@ def processStockStats(info, dailyPrices):
     avgDividend = 0
     maxDividend = 0
     thisYearDividend = 0
+    lastYearDividend = 0
+    lastYear = now.year - 1
     for year in years:
-        	dividend = years[year] / 100
-        	if year == now.year:
-    	   		thisYearDividend = dividend
-        	if (maxDividend < dividend):
-        		maxDividend = dividend
-        	avgDividend += dividend
-
+       dividend = years[year] / 100
+       if (year == now.year):
+        	   thisYearDividend = dividend
+       if (year == lastYear):
+           lastYearDividend = dividend
+       if (maxDividend < dividend):
+           maxDividend = dividend
+       avgDividend += dividend
+    if (thisYearDividend == 0):
+        thisYearDividend = lastYearDividend
     if (len(years) != 0):
         avgDividend = avgDividend / len(years)
     else:
@@ -111,7 +116,7 @@ def processStockStats(info, dailyPrices):
     
     stats = info['stats']
     exDivDate = stats['Ex-Dividend Date']
-    if (exDivDate):
+    if (exDivDate and exDivDate != 0):
         daysSinceExDiv = -(exDivDate - now).days
     else:
         daysSinceExDiv = 0
@@ -121,13 +126,13 @@ def processStockStats(info, dailyPrices):
     eps = stats['Diluted EPS']
     if (not eps):
         eps = 0
+        diviCover = 0
     else:
         eps = eps / 100
-    if (thisYearDividend != 0):
-        diviCover = eps / thisYearDividend
-    else:
-        diviCover = 0
-    currentRatio = stats['Current Ratio']
+        if (thisYearDividend != 0):
+            diviCover = eps / thisYearDividend
+        else:
+            diviCover = 0
 
     metrics['thisYearDividend'] = thisYearDividend
     metrics['maxDividend'] = maxDividend
@@ -137,7 +142,6 @@ def processStockStats(info, dailyPrices):
     metrics['daysSinceExDiv'] = daysSinceExDiv
     metrics['eps'] = eps
     metrics['diviCover'] = diviCover
-    metrics['currentRatio'] = currentRatio
 
     marketCap = stats['Market Cap']
     if (not marketCap): marketCap = 0
@@ -162,11 +166,20 @@ def processStockStats(info, dailyPrices):
             currentPrice = marketCap / noOfShares
         else:
             currentPrice = 0
-
+    priceStats = calcPriceStatisticsForPeriod(dailyPrices, now-timedelta(days=364), now)
+    metrics.update(priceStats)
     metrics['weightedSlopePerc'] = totalWeightedSlope * 100
     metrics['currentPrice'] = currentPrice
     metrics['noOfShares'] = noOfShares
-    
+    if (currentPrice > 0):
+        metrics['currentYield'] = 100*thisYearDividend/currentPrice
+        metrics['maxYield'] = 100*maxDividend/currentPrice
+        metrics['avgYield'] = 100*avgDividend/currentPrice
+    else:
+        metrics['currentYield'] = 0
+        metrics['maxYield'] = 0
+        metrics['avgYield'] = 0
+        
     balanceSheet = info['balanceSheet']
     totalDebt = balanceSheet['Total non-current liabilities']
     if (not totalDebt): totalDebt = 0
@@ -199,14 +212,6 @@ def processStockStats(info, dailyPrices):
         wacc = 0
     metrics['wacc'] = wacc
 
-    operatingProfit = incomeStatement['Operating profit']
-    if (not operatingProfit): operatingProfit = 0
-    metrics['operatingProfit'] = operatingProfit
-    if (costOfDebt != 0):
-        metrics['interestCover'] = operatingProfit / costOfDebt
-    else:
-        metrics['interestCover'] = 0
-    
     #Use to calculate DCF from FCF
     fcf = info['freeCashFlow']
     if (fcf and len(fcf) > 0):
@@ -222,11 +227,16 @@ def processStockStats(info, dailyPrices):
     totalPlant = balanceSheet['Total Plant']
     if (not totalPlant): totalPlant = 0
     assetValue = totalPlant + currentAssets #Does not include intangibles + goodwill
-    totalLiabilities = balanceSheet['Total current liabilities']
-    if (not totalLiabilities): totalLiabilities = 0
-    breakUpValue = assetValue - totalDebt - totalLiabilities
+    currentLiabilities = balanceSheet['Total current liabilities']
+    if (not currentLiabilities): currentLiabilities = 0
+    if (currentAssets == 0 or currentLiabilities == 0):
+        currentRatio = stats['Current Ratio']
+    else:
+        currentRatio = currentAssets / currentLiabilities
+    metrics['currentRatio'] = currentRatio
+
+    breakUpValue = assetValue - totalDebt - currentLiabilities
     metrics['breakUpValue'] = breakUpValue
-    if (not breakUpValue): breakUpValue = 0
     intrinsicValue = breakUpValue + dcf
     metrics['intrinsicValue'] = intrinsicValue
     intrinsicValueRange = dcf*error
@@ -241,8 +251,8 @@ def processStockStats(info, dailyPrices):
     else:
         metrics['returnOnEquity'] = 0
     totalAssets = balanceSheet['Total Assets']
-    if (totalAssets > 0):
-        metrics['returnOnAssets'] = netIncome / totalAssets
+    if (totalAssets and totalAssets > 0):
+        metrics['returnOnAssets'] = 100 * netIncome / totalAssets
         metrics['stockHolderEquityPerc'] = 100 * shareholderFunds / totalAssets
     else:
         metrics['returnOnAssets'] = 0
@@ -254,9 +264,6 @@ def processStockStats(info, dailyPrices):
         evSharePrice = enterpriseValue / noOfShares
         metrics['breakUpPrice'] = breakUpValue / noOfShares # Tangible assets - total liabilities
         metrics['netAssetValuePrice'] = shareholderFunds / noOfShares #Balance sheet NAV = Total assets - total liabilities (which is shareholder funds)
-        currentYield = 100*thisYearDividend/currentPrice
-        metrics['maxYield'] = 100*maxDividend/currentPrice
-        metrics['avgYield'] = 100*avgDividend/currentPrice
     else:
         lowerSharePriceValue = 0
         upperSharePriceValue = 0
@@ -264,24 +271,30 @@ def processStockStats(info, dailyPrices):
         evSharePrice = 0
         metrics['breakUpPrice'] = 0# Tangible assets - total liabilities
         metrics['netAssetValuePrice'] = 0
-        currentYield = 0
-        metrics['maxYield'] = 0
-        metrics['avgYield'] = 0
     metrics['lowerSharePriceValue'] = lowerSharePriceValue
     metrics['upperSharePriceValue'] = upperSharePriceValue
     metrics['assetSharePriceValue'] = assetSharePriceValue
     metrics['enterpriseValue'] = enterpriseValue
     metrics['evSharePrice'] = evSharePrice
-    metrics['currentYield'] = currentYield
+    operatingProfit = incomeStatement['Operating profit']
+    if (not operatingProfit): operatingProfit = 0
+    metrics['operatingProfit'] = operatingProfit
+    if (costOfDebt != 0):
+        metrics['interestCover'] = operatingProfit / costOfDebt
+    else:
+        metrics['interestCover'] = 0
     tr = incomeStatement['Total revenue']
     if (not tr): tr = 0
     if (tr != 0):
         val = incomeStatement['Cost of revenue']
-        if (not val): val = 0
-        metrics['grossProfitPerc'] = 100 * (tr - val) / tr
-        val = incomeStatement['Operating profit']
-        if (not val): val = 0
-        metrics['operatingProfitPerc'] = 100 * val / tr
+        if (not val): 
+            metrics['grossProfitPerc'] = 0
+        else:
+            metrics['grossProfitPerc'] = 100 * (tr - val) / tr
+        if (operatingProfit != 0):
+            metrics['operatingProfitPerc'] = 100 * operatingProfit / tr
+        else:
+            metrics['operatingProfitPerc'] = 0
         val = incomeStatement['Central overhead']
         if (not val): val = 0
         metrics['overheadPerc'] = 100 * val / tr

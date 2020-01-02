@@ -4,6 +4,7 @@ from saveRetreiveFiles import getStockPricesSaved
 from datetime import datetime, timedelta
 import matplotlib.pyplot as plt
 import numpy as np
+from statistics import stdev, median, mean
 import math
 
 def findNearestSample(start, timestamps, sampleTimeStamp):
@@ -45,6 +46,17 @@ def getPriceSamples(priceTimeStamps, prices, startDate, endDate):
             print(f"Missing day {sampleDate}")
         sampleDate += incDate
     return (priceTimes, priceSamples)
+
+def calcPriceStatisticsForPeriod(prices, start, end):
+    ts = sorted(prices)
+    (times, samples) = getPriceSamples(ts, prices, start, end)
+    stats = dict()
+    stats['stddevPrice'] = stdev(samples)/100
+    stats['medianPrice'] = median(samples)/100
+    stats['avgPrice'] = mean(samples)/100
+    stats['maxPrice'] = max(samples)/100
+    stats['minPrice'] = min(samples)/100
+    return (stats)
     
 def getPriceChangeFrequency(priceTimeStamps, prices):
     endDate = datetime.now()

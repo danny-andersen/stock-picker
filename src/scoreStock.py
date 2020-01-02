@@ -32,6 +32,8 @@ def calcScore(stock, metrics):
     scoreStats['stock'] = stock
     scoreStats['incomeScorePerc'] = incomeScorePerc
     scoreStats['scorePerc'] = scorePerc
+    scoreStats['currentYield'] = metrics['currentYield']
+    scoreStats['avgYield'] = metrics['avgYield']
     #One tick per 20%
     numTicks = int(metrics['weightedSlopePerc']/20)
     if (numTicks > 0):

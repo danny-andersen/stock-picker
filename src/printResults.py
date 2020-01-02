@@ -51,6 +51,8 @@ def getResultsStr(stock, scores, metrics):
 
     retStr += str.format(f"------Share value:------------------\n")
     retStr += str.format(f"Current share price: {metrics['currentPrice']:0.2f}\n")
+    retStr += str.format(f"12 month share price: {metrics['minPrice']:0.2f}-{metrics['maxPrice']:0.2f}, avg: {metrics['avgPrice']:0.2f} median: {metrics['medianPrice']:0.2f} std dev: {metrics['stddevPrice']:0.2f} \n")
+    
     retStr += str.format(f"DCF value Share price range: {metrics['lowerSharePriceValue']:0.2f} - {metrics['upperSharePriceValue']:0.2f}\n")    
     retStr += str.format(f"Fixed asset value Share price: {metrics['assetSharePriceValue']:0.2f}\n")
     retStr += str.format(f"Break up value Share price: {metrics['breakUpPrice']:0.2f}\n")
@@ -73,8 +75,8 @@ def getResultsStr(stock, scores, metrics):
         retStr += str.format("Cash flow forecast not available\n")
     
     retStr += str.format(f"------Key Ratios:-------------------\n")
-    retStr += str.format(f"Dividend cover = {metrics['diviCover']:.2f}\n")
-    retStr += str.format(f"Current Ratio = {metrics['currentRatio']}\n")
+    retStr += str.format(f"Dividend cover = {metrics['diviCover']:0.2f}\n")
+    retStr += str.format(f"Current Ratio = {metrics['currentRatio']:0.2f}\n")
     retStr += str.format(f"Interest Cover = {metrics['interestCover']:0.2f}\n")
     retStr += str.format(f"Return on Equity = {metrics['returnOnEquity']:0.2f}%\n")
     retStr += str.format(f"Return on Assets = {metrics['returnOnAssets']:0.2f}%\n")
