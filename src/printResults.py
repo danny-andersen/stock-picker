@@ -84,7 +84,8 @@ def getResultsStr(stock, scores, metrics):
 
     retStr += str.format(f"------Summary:----------------------\n")
     retStr += str.format(f"Buy signal weighted slope forecast = {metrics['weightedSlopePerc']:0.0f}%\n")
+    retStr += str.format(f"Buy signal forecast period = {scores['buySignalDays']:0.0f} days\n")
     retStr += str.format(f"Buy Signal = {scores['buySignal']}\n")
-    retStr += str.format(f"Share income Score: {scores['incomeScorePerc']:0.2f}%\n")
-    retStr += str.format(f"Share overall Score: {scores['scorePerc']:0.2f}%\n")
+    retStr += str.format(f"Share income Score: {scores['incomeScore']:0.2f}%\n")
+    retStr += str.format(f"Share overall Score: {scores['stockScore']:0.2f}%\n")
     return retStr

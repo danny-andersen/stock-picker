@@ -1,8 +1,6 @@
 import sys
 sys.path.insert(0, './src')
-from saveRetreiveFiles import getStockPricesSaved
 from datetime import datetime, timedelta
-import matplotlib.pyplot as plt
 import numpy as np
 from statistics import stdev, median, mean
 import math
@@ -48,14 +46,21 @@ def getPriceSamples(priceTimeStamps, prices, startDate, endDate):
     return (priceTimes, priceSamples)
 
 def calcPriceStatisticsForPeriod(prices, start, end):
-    ts = sorted(prices)
-    (times, samples) = getPriceSamples(ts, prices, start, end)
     stats = dict()
-    stats['stddevPrice'] = stdev(samples)/100
-    stats['medianPrice'] = median(samples)/100
-    stats['avgPrice'] = mean(samples)/100
-    stats['maxPrice'] = max(samples)/100
-    stats['minPrice'] = min(samples)/100
+    if (prices):
+        ts = sorted(prices)
+        (times, samples) = getPriceSamples(ts, prices, start, end)
+        stats['stddevPrice'] = stdev(samples)/100
+        stats['medianPrice'] = median(samples)/100
+        stats['avgPrice'] = mean(samples)/100
+        stats['maxPrice'] = max(samples)/100
+        stats['minPrice'] = min(samples)/100
+    else:
+        stats['stddevPrice'] = 0
+        stats['medianPrice'] = 0
+        stats['avgPrice'] = 0
+        stats['maxPrice'] = 0
+        stats['minPrice'] = 0
     return (stats)
     
 def getPriceChangeFrequency(priceTimeStamps, prices):
@@ -89,70 +94,48 @@ def getPriceChangeFrequency(priceTimeStamps, prices):
     fvalWithFreq = [(days[i[0]],i[1]/maxVal, fPhase[i[0]]) for i in sortedfval]
     return (priceTimes, priceSamples, fvalWithFreq)
 
-def calcWeightedSlope(priceTimeStamps, prices, fvalF):
+def calcWeightedSlope(dateToCalcFrom, priceTimeStamps, prices, fvalF):
     totalWeightedSlope = 0
+    totalWeightedPeriodForward = 0
+    percOfPeriodToBaseForecast = 20
+    totalWeights = 0
+    secsPerDay = 1440 * 60
     for i in range(2,10):
         period = fvalF[i][0]
         weight = fvalF[i][1]
+        if (period == 0 or weight == 0):
+            continue
         #angle = fvalF[i][2]
-        now = datetime.now()
-        start = now - timedelta(days=period)  #forward project from period
-        end = now - timedelta(days=period*0.8) #20% of period forward
+        start = dateToCalcFrom - timedelta(days=period)  #forward project from period
+        end = dateToCalcFrom - timedelta(days=period*(1-percOfPeriodToBaseForecast/100)) #20% of period forward
         (priceTimes, priceSamples) = getPriceSamples(priceTimeStamps, prices, start, end)
-        startts = start.timestamp()
-        secsPerDay = 1440 * 60
-        times = [int((t.timestamp() - startts)/secsPerDay) for t in priceTimes]
-        #print (times)
-        #plt.plot(times, priceSamples)
-        #plt.show()
-        x = np.array(times)
-        #x = np.linspace(1, len(priceSamples))
-        y = np.array(priceSamples)
-        X = x - x.mean()
-        Y = y - y.mean()
-        slope = X.dot(Y) / X.dot(X)
-        weightedSlope = slope * weight
-        #print (f"Period {i} {period:0.1f} days: weightedSlope {weightedSlope*100:0.2f}% slope {slope:.2f} phase {angle:.2f} deg")
-        #print (f"(Price period {start} to {end} for freq period {period:0.0F} of weight {weight:0.2f}, slope is {slope}, weighted: {weightedSlope}")
-        if (not math.isnan(weightedSlope)):
-            totalWeightedSlope += weightedSlope
-    return totalWeightedSlope
+        if (priceSamples and len(priceSamples) > 0):
+            startts = start.timestamp()
+            times = [int((t.timestamp() - startts)/secsPerDay) for t in priceTimes]
+            x = np.array(times)
+            y = np.array(priceSamples)
+            X = x - x.mean()
+            Y = y - y.mean()
+            slope = X.dot(Y) / X.dot(X)
+            weightedSlope = slope * weight
+            weightedPeriodForward = weight * period * (1-percOfPeriodToBaseForecast/100)
+            #print (f"Period {i} {period:0.1f} days: weightedSlope {weightedSlope*100:0.2f}% slope {slope:.2f} phase {angle:.2f} deg")
+            #print (f"(Price period {start} to {end} for freq period {period:0.0F} of weight {weight:0.2f}, slope is {slope}, weighted: {weightedSlope}")
+            if (not math.isnan(weightedSlope)):
+                totalWeightedSlope += weightedSlope
+                totalWeightedPeriodForward += weightedPeriodForward
+                totalWeights += weight
+    if (totalWeights != 0):
+        avgSlope = totalWeightedSlope / totalWeights
+        avgPeriod = totalWeightedPeriodForward / totalWeights
+    else:
+        avgSlope = 0
+        avgPeriod = 0
+    return (avgSlope, avgPeriod)
 
 def getWeightedSlope(prices):
     priceTimeStamps = sorted(prices)
     (priceTimes, priceSamples, fvalWithFreq) = getPriceChangeFrequency(priceTimeStamps, prices)
-    totalWeightedSlope = calcWeightedSlope(priceTimeStamps, prices, fvalWithFreq)
+    totalWeightedSlope = calcWeightedSlope(datetime.now(), priceTimeStamps, prices, fvalWithFreq)
     return totalWeightedSlope
-    
-if __name__ == "__main__":
-    import argparse
-    import configparser
-    import locale
-    parser = argparse.ArgumentParser(description='Re-calculate and display metrics and scores of given stock symbols')
-    parser.add_argument('-n', '--num', type=int, default=10,
-                       help='top number of stock scores to show, defaults to 10')
-    parser.add_argument('-d', '--dfs', action='store_const', const=False, default=True,
-                       help='Set if using HDFS filesystem rather than local (True)')
-    args = parser.parse_args()
-    
-    #Read in ini file
-    config = configparser.ConfigParser()
-    config.read('./stockpicker.ini')
-    localeStr = config['stats']['locale']
-    locale.setlocale( locale.LC_ALL, localeStr) 
-    storeConfig = config['store']
-    
-    stock='BHP.L'
-    #For stock, read prices, prices is a dict with key of timestamp and values of (min,max)
-    prices = getStockPricesSaved(storeConfig, stock, args.dfs)['dailyPrices']
-    priceTimeStamps = sorted(prices)
-    (priceTimes, priceSamples, fvalWithFreq) = getPriceChangeFrequency(priceTimeStamps, prices)
-    plt.plot(priceTimes, priceSamples)
-    plt.show()
-    #print (fvalWithFreq[0:20])
-    plt.bar(*zip(*fvalWithFreq[1:20]))
-    plt.show()
-    #For each harmonic determine if the current price is at a local mimima x days ago +/- 10% days
-    totalWeightedSlope = calcWeightedSlope(priceTimeStamps, prices, fvalWithFreq)
-    print (f"Percent likelihood price will inc (dec): {totalWeightedSlope*100:0.2f}%")
     

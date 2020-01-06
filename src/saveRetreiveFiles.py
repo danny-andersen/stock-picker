@@ -156,7 +156,7 @@ def mergeAndSaveScores(storeConfig, scores, local):
                 if (cs['stock'] not in scoreStocks):
                     scores.append(cs)
         #Sort scores in reverse order so get highest scoring first
-        scores.sort(key=lambda score:score['scorePerc'], reverse=True)
+        scores.sort(key=lambda score:score['stockScore'], reverse=True)
         saveStockScores(storeConfig, scores, local)
         summary = tabulate(scores, headers='keys', showindex="always")
         path="/summary-by-stockScore.txt"
@@ -166,7 +166,7 @@ def mergeAndSaveScores(storeConfig, scores, local):
         summary = tabulate(scores, headers='keys', showindex="always")
         path="/summary-by-currentYield.txt"
         saveStringToDropbox(storeConfig, path, summary)
-        scores.sort(key=lambda score:score['incomeScorePerc'], reverse=True)
+        scores.sort(key=lambda score:score['incomeScore'], reverse=True)
         saveStockScores(storeConfig, scores, local)
         summary = tabulate(scores, headers='keys', showindex="always")
         path="/summary-by-incomeScore.txt"

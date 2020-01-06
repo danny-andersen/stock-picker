@@ -4,7 +4,7 @@ import locale
 from retreiveStockInfo import getStockInfo
 from scoreStock import calcScore
 from saveRetreiveFiles import getStockInfoSaved, saveStockInfo, saveStockMetrics, getStockPricesSaved, saveStockPrices, saveStringToDropbox
-from alphaAdvantage import getLatestDailyPrices, getAllDailyPrices
+from alphaAdvantage import getLatestDailyPrices, getAllDailyPrices, checkPrices
 from checkStockInfo import checkStockInfo, isStockInfoBetter, countInfoNones
 from printResults import getResultsStr
 from pricePeriod import getWeightedSlope, calcPriceStatisticsForPeriod
@@ -65,6 +65,13 @@ def processStock(config, stock, local):
             print (f"{stock}: Refreshing prices")
             prices = getLatestDailyPrices(apiKey, stock, prices['dailyPrices'])
             saveStockPrices(storeConfig, stock, prices, local)
+        else:
+            #Check saved prices to determine if have any prices in pounds and convert
+            #Note: This step can be removed once all old stock reprocessed
+            checkedPrices = checkPrices(prices['dailyPrices'])
+            if (checkedPrices):
+                prices['dailyPrices'] = checkedPrices
+                saveStockPrices(storeConfig, stock, prices, local)
     if (prices is None):
         #Get all daily prices to save
         print ("f{stock}: Getting stock prices")
@@ -159,16 +166,18 @@ def processStockStats(info, dailyPrices):
             noOfShares = marketCap / currentPrice
         #Calculate slope as to whether price is increasing or decreasing
         #For each harmonic determine if the current price is at a local mimima x days ago +/- 10% days
-        totalWeightedSlope = getWeightedSlope(dailyPrices)
+        (totalWeightedSlope, forecastPeriod) = getWeightedSlope(dailyPrices)
+        metrics['weightedSlopePerc'] = totalWeightedSlope * 100
+        metrics['slopeForecastPeriodDays'] = forecastPeriod
     else:
         #Couldnt retreive the prices - use market cap
         if (noOfShares != 0):
             currentPrice = marketCap / noOfShares
         else:
             currentPrice = 0
+        metrics['weightedSlopePerc'] = 0
     priceStats = calcPriceStatisticsForPeriod(dailyPrices, now-timedelta(days=364), now)
     metrics.update(priceStats)
-    metrics['weightedSlopePerc'] = totalWeightedSlope * 100
     metrics['currentPrice'] = currentPrice
     metrics['noOfShares'] = noOfShares
     if (currentPrice > 0):

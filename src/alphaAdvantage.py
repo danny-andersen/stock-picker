@@ -1,18 +1,42 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Mon Oct 14 20:17:35 2019
-
-@author: S243372
-"""
 
 from datetime import datetime
 import httplib2
 import json
+import time
+from math import log10
 
-header = {'user-agent': 'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/72.0.3626.121 Safari/537.36'}
+header = {'user-agent': 'Mozilla/5.0 (X11; Linux armv7l) AppleWebKit/537.36 (KHTML, like Gecko) Raspbian Chromium/74.0.3729.157 Chrome/74.0.3729.157 Safari/537.36'}
+#header = {'user-agent': 'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/72.0.3626.121 Safari/537.36'}
 
+def checkPrices(prices):
+     #Check prices dont vary wildy between days, if they do, delete the day
+     newPrices = dict()
+     changed = False #Use to indicate if changes made - if none made then return None
+     pricedates = sorted(prices)
+     (priceLow, priceHigh) = prices[pricedates[0]]
+     lastPrice = (priceLow + priceHigh) / 2
+     for pricedate in pricedates:
+         (priceLow, priceHigh) = prices[pricedate]
+         price = (priceLow + priceHigh) /2
+         if (abs(int(log10(price)) - int(log10(lastPrice))) >= 2):
+             if (lastPrice > price):
+                 price *= 100  # price in pounds - convert to pence
+                 priceLow *= 100
+                 priceHigh *= 100
+                 changed = True
+#         reldelta = abs(price - lastPrice) / price
+#         if (reldelta > 0.5): 
+
+         newPrices[pricedate] = (priceLow, priceHigh)
+         lastPrice = price
+     if (changed):
+         return newPrices
+     else:
+         return None
+             
+     
 def getPrices(apiKey, stock, outputSize, existingPrices):
-    function="TIME_SERIES_DAILY_ADJUSTED"
+    function="TIME_SERIES_DAILY"
     baseUrl = "https://www.alphavantage.co/query?"
     #outputSize = "full"
     dailyPrice=f"function={function}&symbol={stock}&outputsize={outputSize}&apikey={apiKey}"
@@ -20,7 +44,8 @@ def getPrices(apiKey, stock, outputSize, existingPrices):
 
     http = httplib2.Http()
     data = http.request(url, method="GET", headers=header)[1]
-
+    time.sleep(10) #Implement a bit of rate limiting
+    
 #    response = urlopen(url)
 #    data = response.read().decode("utf-8")
     priceArray = json.loads(data).get("Time Series (Daily)", [])
@@ -31,10 +56,13 @@ def getPrices(apiKey, stock, outputSize, existingPrices):
         low = float(price["3. low"])
         dt = datetime.strptime(dateKey, "%Y-%m-%d")
         dailyPrices[int(dt.timestamp())] = (low, high)
-    if (existingPrices):
-        dailyPrices.update(existingPrices)
     if (len((dailyPrices)) > 0):
-        priceDatesSorted = sorted(dailyPrices)
+        if (existingPrices):
+            existingPrices.update(dailyPrices)
+        else:
+            existingPrices = dailyPrices
+    if (existingPrices):
+        priceDatesSorted = sorted(existingPrices)
         latestPriceDate = priceDatesSorted[len(priceDatesSorted)-1]
         earliestPriceDate = priceDatesSorted[0]
         startDate = datetime.fromtimestamp(earliestPriceDate)
@@ -42,11 +70,14 @@ def getPrices(apiKey, stock, outputSize, existingPrices):
     else:
         startDate = datetime.min
         endDate = datetime.min
-    #dailyPrices.sort(key=lambda x:x['date'], reverse=True)
+    #Correct any prices that are in pounds, not pence
+    checkedPrices = checkPrices(existingPrices)
+    if (checkedPrices):
+        existingPrices = checkedPrices
     stockPrices = { "stock": stock, 
                    "startDate" : startDate,
                    "endDate": endDate,
-                   "dailyPrices": dailyPrices}
+                   "dailyPrices": existingPrices}
 
     return stockPrices
 

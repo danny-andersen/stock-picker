@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 import time
 #from urllib.request import urlopen
 import httplib2
@@ -42,6 +42,34 @@ def convertToValue(valStr, pageValueMultiplier=1):
                 value = 0
     return value
 
+#Note: this doesent work 
+def getLatestPrice(stock):
+    now = datetime.now()
+    start = now - timedelta(days = 15)
+    endPeriod = int(now.timestamp())
+    startPeriod = int(start.timestamp())
+    dividendHistory = f"/history?period1={startPeriod}&period2={endPeriod}&interval=1d&filter=history&frequency=1d"
+    url = baseUrl + stock + dividendHistory
+
+    html = getUrlHtml(url)
+    priceTable = html.find("table", attrs = {'data-test' :"historical-prices"});
+    priceAndDate = dict()
+    if (priceTable):
+        for tr in priceTable.find_all("tr"):
+            td = tr.find_all("td")
+            if len(td) == 2:
+                strs = td[0].stripped_strings;
+                priceDate = ''
+                for str in strs:
+                    d = priceDate + str;
+                priceDate = datetime.strptime(d, "%b %d, %Y")
+                price = ''
+                strs = td[1].stripped_strings;
+                for str in strs:
+                    price = price + str;
+                    break #first one only
+                priceAndDate.append({'date': priceDate, 'price':float(price)})
+    return (priceAndDate)
 
 def getDividends(stock):
     endPeriod = int(datetime.now().timestamp())

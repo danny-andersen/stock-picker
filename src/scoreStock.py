@@ -30,8 +30,8 @@ def calcScore(stock, metrics):
     scorePerc = 100 * score / 9
     scoreStats = dict()
     scoreStats['stock'] = stock
-    scoreStats['incomeScorePerc'] = incomeScorePerc
-    scoreStats['scorePerc'] = scorePerc
+    scoreStats['incomeScore'] = incomeScorePerc
+    scoreStats['stockScore'] = scorePerc
     scoreStats['currentYield'] = metrics['currentYield']
     scoreStats['avgYield'] = metrics['avgYield']
     #One tick per 20%
@@ -46,4 +46,5 @@ def calcScore(stock, metrics):
     for i in range(0,abs(numTicks)):
         buySell += tick
     scoreStats['buySignal'] = buySell
+    scoreStats['buySignalDays'] = metrics['slopeForecastPeriodDays']
     return scoreStats
