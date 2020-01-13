@@ -44,7 +44,7 @@ def getPrices(apiKey, stock, outputSize, existingPrices):
 
     http = httplib2.Http()
     data = http.request(url, method="GET", headers=header)[1]
-    time.sleep(10) #Implement a bit of rate limiting
+    #time.sleep(10) #Implement a bit of rate limiting
     
 #    response = urlopen(url)
 #    data = response.read().decode("utf-8")
