@@ -159,6 +159,7 @@ def processStockStats(info, dailyPrices):
     if (len(dailyPrices) > 0):
         priceDatesSorted = sorted(dailyPrices)
         latestPriceDate = priceDatesSorted[len(priceDatesSorted)-1]
+        metrics['currentPriceDate'] = datetime.fromtimestamp(latestPriceDate)
         (low, high) = dailyPrices[latestPriceDate]
         #Use the average of the last price range we have
         currentPrice = ((high + low)/2)/100

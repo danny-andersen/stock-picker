@@ -44,11 +44,14 @@ def getPrices(apiKey, stock, outputSize, existingPrices):
 
     http = httplib2.Http()
     data = http.request(url, method="GET", headers=header)[1]
-    #time.sleep(10) #Implement a bit of rate limiting
+    time.sleep(30) #Implement a bit of rate limiting
     
 #    response = urlopen(url)
 #    data = response.read().decode("utf-8")
-    priceArray = json.loads(data).get("Time Series (Daily)", [])
+    if (data):
+        priceArray = json.loads(data).get("Time Series (Daily)", [])
+    else:
+        print(f"Failed to load latest prices for {stock}")
     dailyPrices = dict()
     for dateKey in priceArray:
         price = priceArray[dateKey]
