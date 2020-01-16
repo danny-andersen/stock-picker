@@ -10,6 +10,7 @@ from sklearn.linear_model import LinearRegression
 from sklearn.preprocessing import PolynomialFeatures
 from sklearn.metrics import mean_squared_error
 from statistics import mean
+import math
 
 def calcRMSE(x, cfarray, fitIntercept=True):
     y = np.array(cfarray)
@@ -57,7 +58,10 @@ def calculateDCF(fcf, wacc, numOfYears=10):
     (model, d, rmse) = getBestFit(yr, cfarray)
     slope = True if (model.coef_ > 0) else False
     vrange = max(cfarray) - min(cfarray)
-    rmse = rmse / vrange
+    if (vrange == 0):
+        rmse = 0
+    else:
+        rmse = rmse / vrange
     #print (f"rmse = {rmse*100:0.2f}")
     if (rmse <= 0.2):
         #Predict later years using logistic regression
@@ -82,12 +86,17 @@ def calculateDCF(fcf, wacc, numOfYears=10):
             cfCheck.append(cfAvg)
         #Calc error using mean
         rmse = mean_squared_error(cfarray, cfCheck)**0.5
-        rmse = rmse / vrange
+        if (math.isnan(rmse)):
+            rmse = 0
+        if (vrange == 0):
+            rmse = 0
+        else:
+            rmse = rmse / vrange
     n = 1
     dcf = 0
     #Calculate future CF (DCF) = Sum (cf/(1+wacc)^n)
     for cf in cfPred:
          dcf += cf / (1+wacc)**n
          n += 1
-    
+    print (dcf, rmse, slope)
     return (dcf, rmse, slope)

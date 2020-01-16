@@ -78,6 +78,7 @@ def getResultsStr(stock, scores, metrics):
     retStr += str.format(f"Dividend cover = {metrics['diviCover']:0.2f}\n")
     retStr += str.format(f"Current Ratio = {metrics['currentRatio']:0.2f}\n")
     retStr += str.format(f"Interest Cover = {metrics['interestCover']:0.2f}\n")
+    retStr += str.format(f"P/E Ratio = {metrics['PEratio']:0.2f}\n")
     retStr += str.format(f"Return on Equity = {metrics['returnOnEquity']:0.2f}%\n")
     retStr += str.format(f"Return on Assets = {metrics['returnOnAssets']:0.2f}%\n")
     retStr += str.format(f"Percentage of Liabilities are Stockholder funds {metrics['stockHolderEquityPerc']:0.2f}%\n")

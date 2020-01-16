@@ -293,6 +293,13 @@ def processStockStats(info, dailyPrices):
         metrics['interestCover'] = operatingProfit / costOfDebt
     else:
         metrics['interestCover'] = 0
+    eps = stats['Diluted EPS'] / 100
+    metrics['EPS'] = eps
+    if (eps != 0):
+        pe = currentPrice / eps
+    else:
+        pe = 0
+    metrics['PEratio'] = pe
     tr = incomeStatement['Total revenue']
     if (not tr): tr = 0
     if (tr != 0):

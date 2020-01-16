@@ -48,10 +48,11 @@ def getPrices(apiKey, stock, outputSize, existingPrices):
     
 #    response = urlopen(url)
 #    data = response.read().decode("utf-8")
-    if (data):
+    if (data and data != ""):
         priceArray = json.loads(data).get("Time Series (Daily)", [])
     else:
         print(f"Failed to load latest prices for {stock}")
+        priceArray = None
     dailyPrices = dict()
     for dateKey in priceArray:
         price = priceArray[dateKey]
