@@ -192,6 +192,7 @@ def processStockStats(info, dailyPrices):
         
     balanceSheet = info['balanceSheet']
     totalDebt = balanceSheet['Total non-current liabilities']
+    metrics['totalDebt'] = totalDebt
     if (not totalDebt): totalDebt = 0
     totalEquity = balanceSheet['Stockholder Equity'] ##THIS IS THE WRONG STATISTIC - should be market cap
     if (not totalEquity): totalEquity = 0
@@ -253,13 +254,22 @@ def processStockStats(info, dailyPrices):
     metrics['intrinsicValueRange'] = intrinsicValueRange
     enterpriseValue = (marketCap + totalDebt - currentAssets) #Price to buy the organisation
     shareholderFunds = balanceSheet['Stockholder Equity']
-    if (not shareholderFunds): shareholderFunds = 0
+    if (not shareholderFunds): 
+        totalAssets = balanceSheet['Total Assets' ]
+        if (not totalAssets):
+            shareholderFunds = 0
+        else:
+            shareholderFunds = totalAssets - totalDebt - currentLiabilities
     metrics['netAssetValue'] = shareholderFunds
     netIncome = incomeStatement['Net income']
     if (shareholderFunds > 0):
         metrics['returnOnEquity'] = 100*netIncome / shareholderFunds
+        metrics['intrinsicWithIntangibles'] = shareholderFunds + dcf
+        metrics['priceToBook'] = marketCap / shareholderFunds 
     else:
         metrics['returnOnEquity'] = 0
+        metrics['intrinsicWithIntangibles'] = 0
+        metrics['priceToBook'] = 0
     totalAssets = balanceSheet['Total Assets']
     if (totalAssets and totalAssets > 0):
         metrics['returnOnAssets'] = 100 * netIncome / totalAssets
@@ -272,6 +282,7 @@ def processStockStats(info, dailyPrices):
         upperSharePriceValue = (intrinsicValue + intrinsicValueRange)/ noOfShares
         assetSharePriceValue = assetValue / noOfShares
         evSharePrice = enterpriseValue / noOfShares
+        metrics['intrinsicWithIntangiblesPrice'] = metrics['intrinsicWithIntangibles'] / noOfShares
         metrics['breakUpPrice'] = breakUpValue / noOfShares # Tangible assets - total liabilities
         metrics['netAssetValuePrice'] = shareholderFunds / noOfShares #Balance sheet NAV = Total assets - total liabilities (which is shareholder funds)
     else:
@@ -279,6 +290,7 @@ def processStockStats(info, dailyPrices):
         upperSharePriceValue = 0
         assetSharePriceValue = 0
         evSharePrice = 0
+        metrics['intrinsicWithIntangiblesPrice'] = 0
         metrics['breakUpPrice'] = 0# Tangible assets - total liabilities
         metrics['netAssetValuePrice'] = 0
     metrics['lowerSharePriceValue'] = lowerSharePriceValue

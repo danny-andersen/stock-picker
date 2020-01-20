@@ -98,5 +98,5 @@ def calculateDCF(fcf, wacc, numOfYears=10):
     for cf in cfPred:
          dcf += cf / (1+wacc)**n
          n += 1
-    print (dcf, rmse, slope)
+#    print (dcf, rmse, slope)
     return (dcf, rmse, slope)

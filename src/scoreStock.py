@@ -27,7 +27,9 @@ def calcScore(stock, metrics):
         score -= 1 # penalise stock that has negative break up value, i.e. net asset value less intangibles
     if (metrics['assetSharePriceValue'] > currentPrice): score += 1
     if (metrics['lowerSharePriceValue'] > currentPrice): score += 1
-    scorePerc = 100 * score / 9
+    if (metrics['intrinsicWithIntangiblesPrice'] > currentPrice): score += 1
+    if (metrics['priceToBook'] < 0): score += 1
+    scorePerc = 100 * score / 11
     scoreStats = dict()
     scoreStats['stock'] = stock
     scoreStats['incomeScore'] = incomeScorePerc
