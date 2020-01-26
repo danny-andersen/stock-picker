@@ -1,25 +1,31 @@
 def normaliseValue(value, min, max):
-    if value is None:
-        score = 0
-    elif value > max:
+    if (value is None or value == 0):
+        score = -1
+    elif value >= max:
         score = 1
-    elif value < min:
+    elif value <= min:
         score = 0
     else:
         score = (value - min) / (max - min)
     return score
 
-
+def getScore(value, min, max, score, total):
+    normaliseValue(metrics['diviCover'], 0, 1.5)
+    if (norm != -1):
+        score += norm
+        total += 1
+    return (score, total)
+    
 def calcScore(stock, metrics):
     #Determine score between 0 - 1
     score = 0
-    score += normaliseValue(metrics['diviCover'], 0, 1.5)
-    score += normaliseValue(metrics['interestCover'], 0, 1.2)
-    score += normaliseValue(metrics['currentRatio'], 0, 1.2)
-    score += normaliseValue(metrics['fcfForecastSlope'], 0, 1)
-    score += normaliseValue(metrics['currentYield'], 2.5, 4)
-    score += normaliseValue(metrics['forwardYield'], 2.5, 4)
-    incomeScorePerc = 100 * score / 6
+    total = 0
+    (score, total) = getScore(metrics['interestCover'], 0, 1.2, score, total)
+    (score, total) = getScore(metrics['currentRatio'], 0, 1.2, score, total)
+    (score, total) = getScoree(metrics['fcfForecastSlope'], 0, 1, score, total)
+    (score, total) = getScore(metrics['currentYield'], 2.5, 4, score, total)
+    (score, total) = getScore(metrics['forwardYield'], 2.5, 4, score, total)
+    incomeScorePerc = 100 * score / total
     currentPrice = metrics['currentPrice']
     if (metrics['breakUpPrice'] > currentPrice): 
         score += 1
@@ -29,11 +35,21 @@ def calcScore(stock, metrics):
     if (metrics['lowerSharePriceValue'] > currentPrice): score += 1
     if (metrics['intrinsicWithIntangiblesPrice'] > currentPrice): score += 1
     if (metrics['priceToBook'] < 0): score += 1
-    scorePerc = 100 * score / 11
+    if (metrics['returnOnEquity'] > 11 or metrics['returnOnCapitalEmployed'] > 11):
+        #Stock is beating the market average
+        score += 1
+    altmann = metrics['altmannZ']
+    if (altmann != 0):
+        if (altmann > 3.0):
+            score += 1 #Artificially increase % for a good altmann by not increasing perfect score count
+        elif (altmann < 1.8):
+            score -= 2 #Potentially bankrupt stock.....
+    scorePerc = 100 * score / 12
     scoreStats = dict()
     scoreStats['stock'] = stock
     scoreStats['incomeScore'] = incomeScorePerc
     scoreStats['stockScore'] = scorePerc
+    scoreStats['altmannZ'] = altmann
     scoreStats['currentYield'] = metrics['currentYield']
     scoreStats['avgYield'] = metrics['avgYield']
     #One tick per 20%

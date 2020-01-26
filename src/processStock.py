@@ -32,9 +32,9 @@ def processStock(config, stock, local):
     if (info):
         infoAge = datetime.now() - info['metadata']['storedDate']
         if (infoAge.days > statsMaxAgeDays or info['metadata']['version'] < version):
-            info = None
             newInfoReqd = True
             print(f"{stock}: Stored info v{info['metadata']['version']} needs to be updated to v{version}")
+            info = None
     else:
         print(f"{stock}: No info stored")
     #Count if info has any nulls / nones, 
@@ -192,8 +192,8 @@ def processStockStats(info, dailyPrices):
         
     balanceSheet = info['balanceSheet']
     totalDebt = balanceSheet['Total non-current liabilities']
-    metrics['totalDebt'] = totalDebt
     if (not totalDebt): totalDebt = 0
+    metrics['totalDebt'] = totalDebt
     totalEquity = balanceSheet['Stockholder Equity'] ##THIS IS THE WRONG STATISTIC - should be market cap
     if (not totalEquity): totalEquity = 0
     totalCapital = totalDebt + totalEquity
@@ -262,6 +262,7 @@ def processStockStats(info, dailyPrices):
             shareholderFunds = totalAssets - totalDebt - currentLiabilities
     metrics['netAssetValue'] = shareholderFunds
     netIncome = incomeStatement['Net income']
+    if (not netIncome): netIncome = 0
     if (shareholderFunds > 0):
         metrics['returnOnEquity'] = 100*netIncome / shareholderFunds
         metrics['intrinsicWithIntangibles'] = shareholderFunds + dcf
@@ -272,10 +273,10 @@ def processStockStats(info, dailyPrices):
         metrics['priceToBook'] = 0
     totalAssets = balanceSheet['Total Assets']
     if (totalAssets and totalAssets > 0):
-        metrics['returnOnAssets'] = 100 * netIncome / totalAssets
+        metrics['returnOnCapitalEmployed'] = 100 * netIncome / (totalAssets - currentLiabilities)
         metrics['stockHolderEquityPerc'] = 100 * shareholderFunds / totalAssets
     else:
-        metrics['returnOnAssets'] = 0
+        metrics['returnOnCapitalEmployed'] = 0
         metrics['stockHolderEquityPerc'] = 0
     if (noOfShares != 0):
         lowerSharePriceValue = (intrinsicValue - intrinsicValueRange) / noOfShares
@@ -305,7 +306,11 @@ def processStockStats(info, dailyPrices):
         metrics['interestCover'] = operatingProfit / costOfDebt
     else:
         metrics['interestCover'] = 0
-    eps = stats['Diluted EPS'] / 100
+    eps = stats['Diluted EPS']
+    if (not eps): 
+        eps = 0
+    else:
+        eps = eps / 100
     metrics['EPS'] = eps
     if (eps != 0):
         pe = currentPrice / eps
@@ -335,6 +340,21 @@ def processStockStats(info, dailyPrices):
         metrics['operatingProfitPerc'] = 0
         metrics['overheadPerc'] = 0
         metrics['netProfitPerc'] = 0
-
+    #Altmann Z score = 1.2A + 1.4B + 3.3C + 0.6D + 1.0E
+    retainedEarnings = balanceSheet['Retained earnings'] 
+    if (totalAssets != 0 and currentAssets !=0 and currentLiabilities != 0 and netIncome != 0 and marketCap != 0 and totalDebt != 0 and tr != 0 and retainedEarnings != 0):
+        # A = Working capital (Current assets - current liabilities) / Total assets
+        A = (currentAssets - currentLiabilities) / totalAssets
+        # B = Retained earnings / Total assets
+        B = retainedEarnings / totalAssets
+        # C = Net income  / total Assets
+        C = netIncome / totalAssets
+        # D = Capitilisation / total liabilities
+        D = marketCap / (totalDebt + currentLiabilities)
+        # E = Sales / total assets
+        E = tr / totalAssets
+        metrics['altmannZ'] = 1.2*A + 1.4*B + 3.3*C + 0.6*D + 1.0*E
+    else:
+        metrics['altmannZ'] = 0
     return metrics
     

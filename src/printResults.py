@@ -82,11 +82,12 @@ def getResultsStr(stock, scores, metrics):
     retStr += str.format(f"Current Ratio = {metrics['currentRatio']:0.2f}\n")
     retStr += str.format(f"Interest Cover = {metrics['interestCover']:0.2f}\n")
     retStr += str.format(f"P/E Ratio = {metrics['PEratio']:0.2f}\n")
-    retStr += str.format(f"Price to Book Ratio = {metrics['priceToBook']:0.2f}\n")
-    retStr += str.format(f"Return on Equity = {metrics['returnOnEquity']:0.2f}%\n")
-    retStr += str.format(f"Return on Assets = {metrics['returnOnAssets']:0.2f}%\n")
-    retStr += str.format(f"Percentage of Liabilities are Stockholder funds {metrics['stockHolderEquityPerc']:0.2f}%\n")
-
+    retStr += str.format(f"Price to Book Ratio = {metrics['priceToBook']:0.1f}\n")
+    retStr += str.format(f"Return on Equity (RoE) = {metrics['returnOnEquity']:0.1f}%\n")
+    retStr += str.format(f"Return on Capital Employed (RoCE) = {metrics['returnOnCapitalEmployed']:0.1f}%\n")
+    retStr += str.format(f"Percentage of Liabilities are Stockholder funds {metrics['stockHolderEquityPerc']:0.1f}%\n")
+    retStr += str.format(f"AltmannZ score (<1.8 is bad, >3 is good) {metrics['altmannZ']:0.2f}\n")
+    
     retStr += str.format(f"------Summary:----------------------\n")
     retStr += str.format(f"Buy signal weighted slope forecast = {metrics['weightedSlopePerc']:0.0f}%\n")
     retStr += str.format(f"Buy signal forecast period = {scores['buySignalDays']:0.0f} days\n")

@@ -167,6 +167,9 @@ def getBalanceSheet(stock):
     value = getTableValue(html, "Total Assets", True)
     balanceSheet['Total Assets'] = value
 
+    value = getTableValue(html, "Retained earnings", True)
+    balanceSheet['Retained earnings'] = value
+    
     value = getTableValue(html, "Total Current Liabilities", True)
     balanceSheet['Total current liabilities'] = value
     
