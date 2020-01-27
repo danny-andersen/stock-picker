@@ -5,6 +5,8 @@ import httplib2
 from bs4 import BeautifulSoup
 import re
 import locale
+from random import random
+
 #Chrome on Win 10
 #header = {'user-agent': 'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/72.0.3626.121 Safari/537.36'}
 #Chromium on Pi
@@ -15,7 +17,7 @@ def getUrlHtml(url):
     http = httplib2.Http()
     data = http.request(url, method="GET", headers=header)[1]
     dom = BeautifulSoup(data, "html5lib")
-    time.sleep(60)  #Sleep for 60 seconds to limit number of gets on yahoo web site to prevent blacklisting
+    time.sleep(15 + 15 * random())  #Sleep for up to 30 seconds to limit number of gets on yahoo web site to prevent blacklisting
     return dom
 
 # pageValueMultiplier is set if some pages being processed show numbers in thousands

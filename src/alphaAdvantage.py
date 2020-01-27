@@ -4,6 +4,7 @@ import httplib2
 import json
 import time
 from math import log10
+from random import random
 
 header = {'user-agent': 'Mozilla/5.0 (X11; Linux armv7l) AppleWebKit/537.36 (KHTML, like Gecko) Raspbian Chromium/74.0.3729.157 Chrome/74.0.3729.157 Safari/537.36'}
 #header = {'user-agent': 'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/72.0.3626.121 Safari/537.36'}
@@ -44,7 +45,7 @@ def getPrices(apiKey, stock, outputSize, existingPrices):
 
     http = httplib2.Http()
     data = http.request(url, method="GET", headers=header)[1]
-    time.sleep(30) #Implement a bit of rate limiting
+    time.sleep(30 + 30 * random())  #Sleep for up to 60 seconds to limit number of gets to prevent blacklisting
     
 #    response = urlopen(url)
 #    data = response.read().decode("utf-8")
