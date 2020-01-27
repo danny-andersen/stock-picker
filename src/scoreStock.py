@@ -37,7 +37,7 @@ def calcScore(stock, metrics):
     if (metrics['assetSharePriceValue'] > currentPrice): score += 1
     if (metrics['lowerSharePriceValue'] > currentPrice): score += 1
     if (metrics['intrinsicWithIntangiblesPrice'] > currentPrice): score += 1
-    if (metrics['priceToBook'] < 0): score += 1
+    if (metrics['priceToBook'] < 1): score += 1
     if (metrics['returnOnEquity'] > 11 or metrics['returnOnCapitalEmployed'] > 11):
         #Stock is beating the market average
         score += 1
