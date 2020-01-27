@@ -242,6 +242,7 @@ def processStockStats(info, dailyPrices):
     if (not currentLiabilities): currentLiabilities = 0
     if (currentAssets == 0 or currentLiabilities == 0):
         currentRatio = stats['Current Ratio']
+        if (not currentRatio): currentRatio = 0
     else:
         currentRatio = currentAssets / currentLiabilities
     metrics['currentRatio'] = currentRatio

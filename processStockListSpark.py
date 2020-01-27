@@ -23,6 +23,7 @@ config.read('stockpicker.ini')
 localeStr = config['stats']['locale']
 locale.setlocale(locale.LC_ALL, localeStr) 
 configStore = config['store']
+numJobs = config['spark']['numJobs']
 
 stocks = []
 with open(stockFileName, 'r') as stockFile:
@@ -50,7 +51,7 @@ processedCount = 0
 while tries > 0:
     #Parallise the stock list - one spark process per stock
     print(f"***************Attempt {attempts}: Parallelising stock processing job for {len(stocks)} stocks....standby")
-    rdd = sc.parallelize(stocks)
+    rdd = sc.parallelize(stocks, numSlices=numJobs)
     #This does the actual work of retrieving the stock data and working out the metrics and scores
     #It returns a dict of scores
     mrdd = rdd.map(lambda stock: processStockSpark(broadCastConfig, stock, local))

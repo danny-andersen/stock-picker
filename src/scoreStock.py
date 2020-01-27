@@ -10,7 +10,7 @@ def normaliseValue(value, min, max):
     return score
 
 def getScore(value, min, max, score, total):
-    normaliseValue(metrics['diviCover'], 0, 1.5)
+    norm = normaliseValue(value, min, max)
     if (norm != -1):
         score += norm
         total += 1
@@ -22,10 +22,13 @@ def calcScore(stock, metrics):
     total = 0
     (score, total) = getScore(metrics['interestCover'], 0, 1.2, score, total)
     (score, total) = getScore(metrics['currentRatio'], 0, 1.2, score, total)
-    (score, total) = getScoree(metrics['fcfForecastSlope'], 0, 1, score, total)
+    (score, total) = getScore(metrics['fcfForecastSlope'], 0, 1, score, total)
     (score, total) = getScore(metrics['currentYield'], 2.5, 4, score, total)
     (score, total) = getScore(metrics['forwardYield'], 2.5, 4, score, total)
-    incomeScorePerc = 100 * score / total
+    if (total > 0):
+        incomeScorePerc = 100 * score / total
+    else:
+        incomeScorePerc = 0
     currentPrice = metrics['currentPrice']
     if (metrics['breakUpPrice'] > currentPrice): 
         score += 1
