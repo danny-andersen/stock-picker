@@ -268,6 +268,7 @@ def processStockStats(info, dailyPrices):
         metrics['returnOnEquity'] = 100*netIncome / shareholderFunds
         metrics['intrinsicWithIntangibles'] = shareholderFunds + dcf
         metrics['priceToBook'] = marketCap / shareholderFunds 
+        metrics['priceToBookNoIntangibles'] = marketCap / breakUpValue 
     else:
         metrics['returnOnEquity'] = 0
         metrics['intrinsicWithIntangibles'] = 0

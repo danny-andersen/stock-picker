@@ -82,9 +82,10 @@ def getResultsStr(stock, scores, metrics):
     retStr += str.format(f"Current Ratio = {metrics['currentRatio']:0.2f}\n")
     retStr += str.format(f"Interest Cover = {metrics['interestCover']:0.2f}\n")
     retStr += str.format(f"P/E Ratio = {metrics['PEratio']:0.2f}\n")
-    retStr += str.format(f"Price to Book Ratio (<1.0, potential bargain) = {metrics['priceToBook']:0.1f}\n")
-    retStr += str.format(f"Return on Equity (RoE) = {metrics['returnOnEquity']:0.1f}%\n")
-    retStr += str.format(f"Return on Capital Employed (RoCE) = {metrics['returnOnCapitalEmployed']:0.1f}%\n")
+    retStr += str.format(f"Price to Book Ratio (<1.0, potential bargain) = {metrics['priceToBook']:0.2f}\n")
+    retStr += str.format(f"Price to Book Ratio (exc Intangibles) (<1.0, potential real bargain) = {metrics['intrinsicWithIntangibles']:0.2f}\n")
+    retStr += str.format(f"Return on Equity (RoE) = {metrics['returnOnEquity']:0.2f}%\n")
+    retStr += str.format(f"Return on Capital Employed (RoCE) = {metrics['returnOnCapitalEmployed']:0.2f}%\n")
     retStr += str.format(f"Percentage of Liabilities are Stockholder funds {metrics['stockHolderEquityPerc']:0.1f}%\n")
     retStr += str.format(f"AltmannZ score (<1.8 is bad, >3 is good) {metrics['altmannZ']:0.2f}\n")
     
