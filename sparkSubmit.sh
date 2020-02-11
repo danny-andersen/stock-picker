@@ -5,4 +5,4 @@ cd -
 	--executor-memory 512M  \
 	--num-executors 8  \
 	--properties-file spark-props.conf \
-	--py-files processStock.zip processStockListSpark.py 
+	--py-files processStock.zip $1

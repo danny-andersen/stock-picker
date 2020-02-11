@@ -266,6 +266,8 @@ def processStockStats(info, dailyPrices):
         else:
             shareholderFunds = totalAssets - totalDebt - currentLiabilities
     metrics['netAssetValue'] = shareholderFunds
+    gearing = (totalDebt - currentAssets) / shareholderFunds
+    metrics['gearing'] = gearing 
     netIncome = incomeStatement['Net income']
     if (not netIncome): netIncome = 0
     if (shareholderFunds > 0):

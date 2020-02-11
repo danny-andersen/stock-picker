@@ -128,3 +128,4 @@ dmypy.json
 
 #Any local config
 *.ini
+heldstocklist.txt

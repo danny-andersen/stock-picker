@@ -82,6 +82,7 @@ def getResultsStr(stock, scores, metrics):
     retStr += str.format(f"Current Ratio = {metrics['currentRatio']:0.2f}\n")
     retStr += str.format(f"Interest Cover = {metrics['interestCover']:0.2f}\n")
     retStr += str.format(f"P/E Ratio = {metrics['PEratio']:0.2f}\n")
+    retStr += str.format(f"Gearing (<0.5 good, >1.0 bad) = {metrics['gearing']:0.2f}\n")
     retStr += str.format(f"Price to Book Ratio (<1.0, potential bargain) = {metrics['priceToBook']:0.2f}\n")
     retStr += str.format(f"Price to Book Ratio (exc Intangibles) (<1.0, potential real bargain) = {metrics['priceToBookNoIntangibles']:0.2f}\n")
     retStr += str.format(f"Return on Equity (RoE) = {metrics['returnOnEquity']:0.2f}%\n")

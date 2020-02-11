@@ -47,7 +47,13 @@ def calcScore(stock, metrics):
             score += 1 #Artificially increase % for a good altmann by not increasing perfect score count
         elif (altmann < 1.8):
             score -= 2 #Potentially bankrupt stock.....
-    scorePerc = 100 * score / 12
+    gearing = metrics['gearing']
+    if (gearing != 0):
+        if (gearing < 0.5):
+            score += 1
+        elif (gearing > 1.0):
+            score -= 1
+    scorePerc = 100 * score / 13
     scoreStats = dict()
     scoreStats['stock'] = stock
     scoreStats['incomeScore'] = incomeScorePerc

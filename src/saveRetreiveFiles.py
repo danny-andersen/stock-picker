@@ -135,8 +135,8 @@ def saveStockMetrics(config, stock, metrics, local):
 def saveStockPrices(config, stock, stockPrices, local):
     saveStock(config, stock, 'prices', stockPrices, local)
 
-def saveStockScores(config, scores, local):
-    saveStock(config, 'scores', '', scores, local)
+def saveStockScores(config, scores, type, local):
+    saveStock(config, f'scores-by-{type}', '', scores, local)
 
 def deleteStockScores(config, local):
     deleteStockFile(config, 'scores', '', local)
@@ -144,12 +144,32 @@ def deleteStockScores(config, local):
 def getStockScores(config, local):
     return getStock(config, "scores", '', local)
 
-def mergeAndSaveScores(storeConfig, scores, local):
+def addRelativePostionByStock(stocks, scores, heading):
+    positionByStock = dict()
+    i = 1
+    for s in scores:
+        positionByStock[s['stock']] = i
+        i += 1
+    for s in stocks:
+        stockName = s['stock']
+        #Find the position for the stock
+        pos = positionByStock[stockName]
+        #Save the position against the heading
+        s[heading] = pos
+    
+def mergeAndSaveScores(storeConfig, scores, heldStocks, local):
     if (scores):
         #Remove any nulls
         scores = [s for s in scores if s]
         #Get list of stocks
         scoreStocks = [s['stock'] for s in scores]
+        #Create list of held stock dicts
+        heldDict = []
+        for hs in heldStocks:
+            for s in scores:
+                if (hs == s['stock']):
+                    heldDict.append(s)
+        #Add in ones that we already have that are missing (if any)
         currentScores = getStockScores(storeConfig, local)
         if (currentScores):
             for cs in currentScores:
@@ -157,21 +177,30 @@ def mergeAndSaveScores(storeConfig, scores, local):
                     scores.append(cs)
         #Sort scores in reverse order so get highest scoring first
         scores.sort(key=lambda score:score['stockScore'], reverse=True)
-        saveStockScores(storeConfig, scores, local)
+        addRelativePostionByStock(heldDict, scores, 'stockPosition')
+        saveStockScores(storeConfig, scores, 'stock', local)
         summary = tabulate(scores, headers='keys', showindex="always")
         path="/summary-by-stockScore.txt"
         saveStringToDropbox(storeConfig, path, summary)
         scores.sort(key=lambda score:score['currentYield'], reverse=True)
-        saveStockScores(storeConfig, scores, local)
+        addRelativePostionByStock(heldDict, scores, 'yieldPosition')
+        saveStockScores(storeConfig, scores, 'yield', local)
         summary = tabulate(scores, headers='keys', showindex="always")
         path="/summary-by-currentYield.txt"
         saveStringToDropbox(storeConfig, path, summary)
         scores.sort(key=lambda score:score['incomeScore'], reverse=True)
-        saveStockScores(storeConfig, scores, local)
+        addRelativePostionByStock(heldDict, scores, 'incomePosition')
+        saveStockScores(storeConfig, scores, 'income', local)
         summary = tabulate(scores, headers='keys', showindex="always")
         path="/summary-by-incomeScore.txt"
         saveStringToDropbox(storeConfig, path, summary)
-        
+
+        heldDict.sort(key=lambda h:h['stockPosition'], reverse=False)
+        saveStockScores(storeConfig, heldDict, 'held', local)
+        summary = tabulate(heldDict, headers='keys', showindex="always")
+        path="/held-scores-summary.txt"
+        saveStringToDropbox(storeConfig, path, summary)
+
 def saveStringToDropbox(config, path, dataStr):
     dropboxAccessToken = config['dropboxAccessToken']
     dbx = dropbox.Dropbox(dropboxAccessToken)
