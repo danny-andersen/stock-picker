@@ -114,14 +114,15 @@ def getFreeCashFlow(html):
         #Find 2 lines containing fcf
         fcfSpan = html.find_all("span", string=re.compile("^Free"), limit=2);
         #We want the second one
-        fcfSection = fcfSpan[1].parent.parent
-        fcfSection = fcfSection.next_sibling #Advance to values
-        fcfSection = fcfSection.next_sibling #Skip first value - trailing twelve months
-        while fcfSection is not None:
-            valueStr = fcfSection.find("span")
-            if (valueStr):
-                fcf.append(locale.atoi(valueStr.string)*1000)
-            fcfSection = fcfSection.next_sibling
+        if (len(fcfSpan) > 1):
+            fcfSection = fcfSpan[1].parent.parent
+            fcfSection = fcfSection.next_sibling #Advance to values
+            fcfSection = fcfSection.next_sibling #Skip first value - trailing twelve months
+            while fcfSection is not None:
+                valueStr = fcfSection.find("span")
+                if (valueStr):
+                    fcf.append(locale.atoi(valueStr.string)*1000)
+                fcfSection = fcfSection.next_sibling
     return list(zip(dates, fcf))
 
 def getTableValue(html, title, first=False):
@@ -216,11 +217,11 @@ def findAndProcessTable(html, inStr):
         statsTable = element.find_parent("table")
         if (statsTable != None):
             for tr in statsTable.find_all("tr"):
+                statName = ''
                 td = tr.find_all("td")
                 #print (len(td))
                 if len(td) == 2:
                     strs = td[0].stripped_strings
-                    statName = ''
                     for str in strs:
                         statName = statName + str
                     value = ''
@@ -232,8 +233,9 @@ def findAndProcessTable(html, inStr):
                         statName = statName.split('(')[0].strip()
                     if (regex.match(statName)):
                         statValue = value
+                        break
             if (not statValue):
-                print (f"Failed to table value for {inStr} from html")
+                print (f"Failed to find table value for {inStr} from html")
         else:
             print (f"Failed to retreive table for {inStr} from html")
     return (statValue)

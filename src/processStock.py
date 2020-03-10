@@ -51,7 +51,7 @@ def processStock(config, stock, local):
     if (not info):
         print(f"{stock}: Retreiving latest stock info")
         info = getStockInfo(version, stock)
-        if ((newInfoReqd and info) or checkStockInfo(info) or isStockInfoBetter(currentInfo, info)):
+        if ((newInfoReqd and info) and checkStockInfo(info) and isStockInfoBetter(currentInfo, info)):
             saveStockInfo(storeConfig, stock, info, local)
         else:
             print(f"{stock}: Retreived info incomplete")
@@ -348,8 +348,9 @@ def processStockStats(info, dailyPrices):
         metrics['overheadPerc'] = 0
         metrics['netProfitPerc'] = 0
     #Altmann Z score = 1.2A + 1.4B + 3.3C + 0.6D + 1.0E
-    retainedEarnings = balanceSheet['Retained earnings'] 
-    if (totalAssets != 0 and currentAssets !=0 and currentLiabilities != 0 and netIncome != 0 and marketCap != 0 and totalDebt != 0 and tr != 0 and retainedEarnings != 0):
+    retainedEarnings = balanceSheet['Retained earnings']
+    if (not retainedEarnings): retainedEarnings = 0
+    if (totalAssets != 0 and currentAssets !=0 and currentLiabilities != 0 and netIncome != 0 and marketCap != 0 and totalDebt != 0 and tr != 0):
         # A = Working capital (Current assets - current liabilities) / Total assets
         A = (currentAssets - currentLiabilities) / totalAssets
         # B = Retained earnings / Total assets

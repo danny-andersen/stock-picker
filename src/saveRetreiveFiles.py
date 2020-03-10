@@ -146,7 +146,7 @@ def getStockScores(config, local):
 
 def addRelativePostionByStock(stocks, scores, heading):
     positionByStock = dict()
-    i = 1
+    i = 0
     for s in scores:
         positionByStock[s['stock']] = i
         i += 1
@@ -187,6 +187,12 @@ def mergeAndSaveScores(storeConfig, scores, heldStocks, local):
         saveStockScores(storeConfig, scores, 'yield', local)
         summary = tabulate(scores, headers='keys', showindex="always")
         path="/summary-by-currentYield.txt"
+        saveStringToDropbox(storeConfig, path, summary)
+        scores.sort(key=lambda score:score['avgYield'], reverse=True)
+        addRelativePostionByStock(heldDict, scores, 'yieldPosition')
+        saveStockScores(storeConfig, scores, 'avgYield', local)
+        summary = tabulate(scores, headers='keys', showindex="always")
+        path="/summary-by-avgYield.txt"
         saveStringToDropbox(storeConfig, path, summary)
         scores.sort(key=lambda score:score['incomeScore'], reverse=True)
         addRelativePostionByStock(heldDict, scores, 'incomePosition')
