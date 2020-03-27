@@ -51,7 +51,7 @@ def processStock(config, stock, local):
     if (not info):
         print(f"{stock}: Retreiving latest stock info")
         info = getStockInfo(version, stock)
-        if ((newInfoReqd and info) and checkStockInfo(info) and isStockInfoBetter(currentInfo, info)):
+        if (info and ((newInfoReqd and checkStockInfo(info)) or isStockInfoBetter(currentInfo, info))):
             saveStockInfo(storeConfig, stock, info, local)
         else:
             print(f"{stock}: Retreived info incomplete")
