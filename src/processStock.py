@@ -266,15 +266,16 @@ def processStockStats(info, dailyPrices):
         else:
             shareholderFunds = totalAssets - totalDebt - currentLiabilities
     metrics['netAssetValue'] = shareholderFunds
-    gearing = (totalDebt - currentAssets) / shareholderFunds
-    metrics['gearing'] = gearing 
     netIncome = incomeStatement['Net income']
     if (not netIncome): netIncome = 0
     if (shareholderFunds > 0):
+        gearing = (totalDebt - currentAssets) / shareholderFunds
+        metrics['gearing'] = gearing 
         metrics['returnOnEquity'] = 100*netIncome / shareholderFunds
         metrics['intrinsicWithIntangibles'] = shareholderFunds + dcf
         metrics['priceToBook'] = marketCap / shareholderFunds 
     else:
+        metrics['gearing'] = 0 
         metrics['returnOnEquity'] = 0
         metrics['intrinsicWithIntangibles'] = 0
         metrics['priceToBook'] = 0
