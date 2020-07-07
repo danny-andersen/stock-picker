@@ -12,7 +12,7 @@ from random import random
 #Chromium on Pi
 #header = {'user-agent': 'Mozilla/5.0 (X11; Linux armv7l) AppleWebKit/537.36 (KHTML, like Gecko) Raspbian Chromium/74.0.3729.157 Chrome/74.0.3729.157 Safari/537.36'}
 header = {'user-agent':'Mozilla/5.0 (Linux; Android 4.0.4; Galaxy Nexus Build/IMM76B) AppleWebKit/535.19 (KHTML, like Gecko) Chrome/18.0.1025.133 Mobile Safari/535.19'}
-baseUrl = "https://finance.yahoo.com/quote/"
+baseUrl = "https://www.advfn.com/stock-market/"
 
 def getUrlHtml(url):
     http = httplib2.Http()
@@ -20,7 +20,7 @@ def getUrlHtml(url):
     dom = BeautifulSoup(data, "html5lib")
     #dom = BeautifulSoup(data, "html.parser")
     #dom = BeautifulSoup(data, "lxml")
-    time.sleep(1 + 5 * random())  #Sleep for up to 10 seconds to limit number of gets on yahoo web site to prevent blacklisting
+    time.sleep(1 + 5 * random())  #Sleep for up to 10 seconds to limit number of gets on web site to prevent blacklisting
     return dom
 
 # pageValueMultiplier is set if some pages being processed show numbers in thousands
@@ -278,12 +278,7 @@ def findAndProcessTable(html, inStr):
             print (f"Failed to retreive table for {inStr} from html")
     return (statValue)
 
-def getKeyStatistics(stock):
-    stats = "/key-statistics?p="
-
-    url = baseUrl + stock + stats + stock
-    html = getUrlHtml(url)
-
+def getKeyStatistics(hmtl):
     stats = {}
     searchStr = "^Market Cap"
     stats["Market Cap"] = convertToValue(findAndProcessTable(html, searchStr))
@@ -318,3 +313,30 @@ def getKeyStatistics(stock):
         stats["Forward Annual Dividend Yield"] = None
     return (stats)
 
+def getAdfnData(stock):
+    if (stock.endswith(".L")):
+        market = "london"
+    else:
+        market = ""
+    stock = stock.split(".")[0]
+
+    cf = "/financials"
+    url = baseUrl + stock + cf
+    dom = getUrlHtml(url)
+    
+    dividends = getDividends(stock)
+    balanceSheet = getBalanceSheet(stock)
+    incomeStatement = getIncomeStatement(stock)
+    (cfHtml, cashFlow) = getCashFlow(stock)
+    fcf = getFreeCashFlow(cfHtml)
+    stats = getKeyStatistics(stock)
+
+    info = {'metadata': meta,
+        'dividends': dividends,
+        'balanceSheet': balanceSheet,
+        'incomeStatement': incomeStatement,
+        'cashFlow': cashFlow,
+        'freeCashFlow': fcf,
+        'stats': stats,
+        'info' : stockInfo,
+        }

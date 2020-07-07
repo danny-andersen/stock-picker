@@ -50,7 +50,7 @@ def processStock(config, stock, local):
             info = None
     if (not info):
         print(f"{stock}: Retreiving latest stock info")
-        info = getStockInfo(version, stock)
+        info = getStockInfo(config, version, stock)
         if (info and ((newInfoReqd and checkStockInfo(info)) or isStockInfoBetter(currentInfo, info))):
             saveStockInfo(storeConfig, stock, info, local)
         else:
@@ -92,6 +92,7 @@ def processStockStats(info, dailyPrices):
     now = datetime.now();
     metrics = dict()
     metrics['infoDate'] = info['metadata']['storedDate']
+    stockInfo = info['info']
     #Determine this years dividend, average and max dividend
     dividends = info['dividends']
     #Calc dividend by year
@@ -115,25 +116,32 @@ def processStockStats(info, dailyPrices):
            maxDividend = dividend
        avgDividend += dividend
     if (thisYearDividend == 0):
-        thisYearDividend = lastYearDividend
+       if (lastYearDividend):
+            thisYearDividend = lastYearDividend
+       elif (stockInfo['dividendRate']):
+           thisYearDividend = stockInfo['dividendRate']
+       else:
+           thisYearDividend = stockInfo['trailingAnnualDividendRate']
     if (len(years) != 0):
         avgDividend = avgDividend / len(years)
     else:
-        avgDividend = 0
-    
+        avgDividend = thisYearDividend
     stats = info['stats']
     exDivDate = stats['Ex-Dividend Date']
+    if (not exDivDate):
+        exDivDate = stockInfo['exDividendDate']
     if (exDivDate and exDivDate != 0):
         daysSinceExDiv = -(exDivDate - now).days
     else:
         daysSinceExDiv = 0
     forwardYield = stats['Forward Annual Dividend Yield']
     if (not forwardYield):
-        forwardYield = 0
+        forwardYield = stockInfo['dividendYield']
     eps = stats['Diluted EPS']
     if (not eps):
-        eps = 0
-        diviCover = 0
+        eps = stockInfo['trailingEps']
+    if (not eps):
+           diviCover = 0
     else:
         eps = eps / 100
         if (thisYearDividend != 0):
@@ -151,10 +159,12 @@ def processStockStats(info, dailyPrices):
     metrics['diviCover'] = diviCover
 
     marketCap = stats['Market Cap']
-    if (not marketCap): marketCap = 0
+    if (not marketCap):
+        marketCap = stockInfo['marketCap']
     metrics['marketCap'] = marketCap
     noOfShares = stats['Shares Outstanding']
-    if (not noOfShares): noOfShares = 0 
+    if (not noOfShares): 
+        noOfShares = stockInfo['sharesOutstanding']
     totalWeightedSlope = 0
     if (len(dailyPrices) > 0):
         priceDatesSorted = sorted(dailyPrices)
@@ -257,19 +267,28 @@ def processStockStats(info, dailyPrices):
     metrics['intrinsicValue'] = intrinsicValue
     intrinsicValueRange = dcf*error
     metrics['intrinsicValueRange'] = intrinsicValueRange
-    enterpriseValue = (marketCap + totalDebt - currentAssets) #Price to buy the organisation
+    if (marketCap and totalDebt and currentAssets):
+        enterpriseValue = (marketCap + totalDebt - currentAssets) #Price to buy the organisation
+    else:
+        enterpriseValue = stockInfo['enterpriseValue']
     shareholderFunds = balanceSheet['Stockholder Equity']
+    totalAssets = balanceSheet['Total Assets' ]
     if (not shareholderFunds): 
-        totalAssets = balanceSheet['Total Assets' ]
         if (not totalAssets):
-            shareholderFunds = 0
+            shareholderFunds = stockInfo['navPrice'] * noOfShares
         else:
             shareholderFunds = totalAssets - totalDebt - currentLiabilities
+    if (not totalAssets):
+        if (totalDebt > 0 and currentLiabilities > 0):
+            totalAssets = shareholderFunds + totalDebt + currentLiabilities
+        else:
+            totalAssets = 0
     metrics['netAssetValue'] = shareholderFunds
     netIncome = incomeStatement['Net income']
-    if (not netIncome): netIncome = 0
+    if (not netIncome): 
+        netIncome = stockInfo['netIncomeToCommon']
     if (shareholderFunds > 0):
-        gearing = (totalDebt - currentAssets) / shareholderFunds
+        gearing = (enterpriseValue - marketCap) / shareholderFunds
         metrics['gearing'] = gearing 
         metrics['returnOnEquity'] = 100*netIncome / shareholderFunds
         metrics['intrinsicWithIntangibles'] = shareholderFunds + dcf
@@ -278,9 +297,8 @@ def processStockStats(info, dailyPrices):
         metrics['gearing'] = 0 
         metrics['returnOnEquity'] = 0
         metrics['intrinsicWithIntangibles'] = 0
-        metrics['priceToBook'] = 0
-    totalAssets = balanceSheet['Total Assets']
-    if (totalAssets and totalAssets > 0):
+        metrics['priceToBook'] = stockInfo['priceToBook']
+    if (totalAssets > 0):
         metrics['returnOnCapitalEmployed'] = 100 * netIncome / (totalAssets - currentLiabilities)
         metrics['stockHolderEquityPerc'] = 100 * shareholderFunds / totalAssets
     else:
@@ -301,7 +319,7 @@ def processStockStats(info, dailyPrices):
         evSharePrice = 0
         metrics['intrinsicWithIntangiblesPrice'] = 0
         metrics['breakUpPrice'] = 0# Tangible assets - total liabilities
-        metrics['netAssetValuePrice'] = 0
+        metrics['netAssetValuePrice'] = stockInfo['navPrice'] 
     metrics['lowerSharePriceValue'] = lowerSharePriceValue
     metrics['upperSharePriceValue'] = upperSharePriceValue
     metrics['assetSharePriceValue'] = assetSharePriceValue
@@ -314,16 +332,11 @@ def processStockStats(info, dailyPrices):
         metrics['interestCover'] = operatingProfit / costOfDebt
     else:
         metrics['interestCover'] = 0
-    eps = stats['Diluted EPS']
-    if (not eps): 
-        eps = 0
-    else:
-        eps = eps / 100
-    metrics['EPS'] = eps
+    metrics['EPS'] = eps / 100
     if (eps != 0):
         pe = currentPrice / eps
     else:
-        pe = 0
+        pe = stockInfo['forwardPE']
     metrics['PEratio'] = pe
     tr = incomeStatement['Total revenue']
     if (not tr): tr = 0
@@ -347,7 +360,7 @@ def processStockStats(info, dailyPrices):
         metrics['grossProfitPerc'] = 0
         metrics['operatingProfitPerc'] = 0
         metrics['overheadPerc'] = 0
-        metrics['netProfitPerc'] = 0
+        metrics['netProfitPerc'] = stockInfo['profitMargins']
     #Altmann Z score = 1.2A + 1.4B + 3.3C + 0.6D + 1.0E
     retainedEarnings = balanceSheet['Retained earnings']
     if (not retainedEarnings): retainedEarnings = 0
