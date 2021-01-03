@@ -7,9 +7,11 @@ import re
 from tabulate import tabulate
 import dropbox
 
+
 def myconverter(o):
     if isinstance(o, datetime):
         return o.__str__()
+
 
 def datetime_parser(value):
     datePattern = re.compile(".*date.*", re.IGNORECASE)
@@ -23,7 +25,7 @@ def datetime_parser(value):
         for index, row in enumerate(value):
             value[index] = datetime_parser(row)
     elif isinstance(value, str) and value:
-        #print (value)
+        # print (value)
         if re.match('^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}', value):
             try:
                 value = parse(value)
@@ -31,43 +33,53 @@ def datetime_parser(value):
                 pass
     return value
 
+
 def retreiveLocal(fileName):
     jsonContent = None
     if (os.path.exists(fileName)):
         fp = open(fileName, 'r')
-        jsonContent = json.load(fp, object_hook=datetime_parser)
+        try:
+            jsonContent = json.load(fp, object_hook=datetime_parser)
+        except json.JSONDecodeError:
+            print (f"!!!!!!!!!!!! Failed to parse json in file {fileName} - ignoring file !!!!!!!")
         fp.close()
     return jsonContent
 
+
 def saveLocal(fileName, content):
     fp = open(fileName, 'w+')
-    infoJson = json.dumps(content, default = myconverter)
+    infoJson = json.dumps(content, default=myconverter)
     fp.write(infoJson)
     fp.close()
-    
+
+
 def deleteLocal(fileName):
     ret = True
     if (os.path.exists(fileName)):
         ret = os.remove(fileName)
     return ret
-    
+
+
 def retreiveHdfs(client, fileName):
     jsonContent = None
     if (client.status(fileName, strict=False) != None):
         with client.read(fileName, encoding='utf-8') as reader:
-          jsonContent = json.load(reader, object_hook=datetime_parser)
+            try:
+                jsonContent = json.load(reader, object_hook=datetime_parser)
+            except json.JSONDecodeError:
+                print (f"!!!!!!!!!!!! Failed to parse json in file {fileName} - ignoring file !!!!!!!")
     return jsonContent
 
 def saveHdfs(client, fileName, content):
     if (client.status(fileName, strict=False) != None):
-        #File is being replaced - need to delete first
+        # File is being replaced - need to delete first
         deleteHdfsFile(client,fileName)
     with client.write(fileName, encoding='utf-8') as writer:
       json.dump(content, writer, default=myconverter)
 
 def deleteHdfsFile(client, fileName):
     if (client.status(fileName, strict=False) != None):
-        #File is being replaced - need to delete first
+        # File is being replaced - need to delete first
         if (not client.delete(fileName)):
             print (f"Failed to delete file {fileName}")
     
@@ -114,7 +126,7 @@ def getStockInfoSaved(config, stock, local=True):
 
 def getStockPricesSaved(storeConfig, stock, local):
     stockPrices = getStock(storeConfig, stock, 'prices', local)
-    #Convert key from str to int, and value from list to tuple
+    # Convert key from str to int, and value from list to tuple
     if (stockPrices):
         munged = stockPrices['dailyPrices']
         unmunged = dict()
@@ -152,30 +164,30 @@ def addRelativePostionByStock(stocks, scores, heading):
         i += 1
     for s in stocks:
         stockName = s['stock']
-        #Find the position for the stock
+        # Find the position for the stock
         pos = positionByStock[stockName]
-        #Save the position against the heading
+        # Save the position against the heading
         s[heading] = pos
     
 def mergeAndSaveScores(storeConfig, scores, heldStocks, local):
     if (scores):
-        #Remove any nulls
+        # Remove any nulls
         scores = [s for s in scores if s]
-        #Get list of stocks
+        # Get list of stocks
         scoreStocks = [s['stock'] for s in scores]
-        #Create list of held stock dicts
+        # Create list of held stock dicts
         heldDict = []
         for hs in heldStocks:
             for s in scores:
                 if (hs == s['stock']):
                     heldDict.append(s)
-        #Add in ones that we already have that are missing (if any)
+        # Add in ones that we already have that are missing (if any)
         currentScores = getStockScores(storeConfig, local)
         if (currentScores):
             for cs in currentScores:
                 if (cs['stock'] not in scoreStocks):
                     scores.append(cs)
-        #Sort scores in reverse order so get highest scoring first
+        # Sort scores in reverse order so get highest scoring first
         scores.sort(key=lambda score:score['stockScore'], reverse=True)
         addRelativePostionByStock(heldDict, scores, 'stockPosition')
         saveStockScores(storeConfig, scores, 'stock', local)
