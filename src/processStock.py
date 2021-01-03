@@ -9,12 +9,14 @@ from checkStockInfo import checkStockInfo, isStockInfoBetter, countInfoNones
 from printResults import getResultsStr
 from pricePeriod import getWeightedSlope, calcPriceStatisticsForPeriod
 
+
 def processStockSpark(bcConfig, stock, local):
     return processStock(bcConfig.value, stock, local)
 
+
 def processStock(config, stock, local):
-    print (f"Processing stock: {stock}")
-    #Set config
+    print(f"Processing stock: {stock}")
+    # Set config
     version = config['stats'].getfloat('version')
     maxPriceAgeDays = config['stats'].getint('maxPriceAgeDays')
     statsMaxAgeDays = config['stats'].getint('statsMaxAgeDays')
@@ -22,10 +24,10 @@ def processStock(config, stock, local):
     maxNonesInInfo = config['stats'].getint('maxNonesInInfo')
     storeConfig = config['store']
     localeStr = config['stats']['locale']
-    locale.setlocale(locale.LC_ALL, localeStr) 
+    locale.setlocale(locale.LC_ALL, localeStr)
 
-    #Check to see if stock info needs to be updated
-    #Read info from file 
+    # Check to see if stock info needs to be updated
+    # Read info from file
     info = getStockInfoSaved(storeConfig, stock, local)
     currentInfo = info
     newInfoReqd = False
@@ -33,18 +35,19 @@ def processStock(config, stock, local):
         infoAge = datetime.now() - info['metadata']['storedDate']
         if (infoAge.days > statsMaxAgeDays or info['metadata']['version'] < version):
             newInfoReqd = True
-            print(f"{stock}: Stored info v{info['metadata']['version']} needs to be updated to v{version}")
+            print(
+                f"{stock}: Stored info v{info['metadata']['version']} needs to be updated to v{version}")
             info = None
     else:
         print(f"{stock}: No info stored")
-    #Count if info has any nulls / nones, 
+    # Count if info has any nulls / nones,
     numNones = countInfoNones(info)
-    #if it has more than a configured threshold then it will be replaced if what we get is any better
+    # if it has more than a configured threshold then it will be replaced if what we get is any better
     if (numNones > maxNonesInInfo):
-        print (f"{stock} Stored version has {numNones} nulls, which is more than the threshold ({maxNonesInInfo})")
+        print(f"{stock} Stored version has {numNones} nulls, which is more than the threshold ({maxNonesInInfo})")
         info = None
     if (info):
-        #Check info is valid
+        # Check info is valid
         if (not checkStockInfo(info)):
             print(f"{stock}: Stored info invalid - retrying")
             info = None
@@ -61,20 +64,20 @@ def processStock(config, stock, local):
         latestPriceDate = prices['endDate']
         howOld = datetime.now() - latestPriceDate
         if (howOld.days > maxPriceAgeDays):
-            #If more than a week old, refresh
-            print (f"{stock}: Refreshing prices")
+            # If more than a week old, refresh
+            print(f"{stock}: Refreshing prices")
             prices = getLatestDailyPrices(apiKey, stock, prices['dailyPrices'])
             saveStockPrices(storeConfig, stock, prices, local)
         else:
-            #Check saved prices to determine if have any prices in pounds and convert
-            #Note: This step can be removed once all old stock reprocessed
+            # Check saved prices to determine if have any prices in pounds and convert
+            # Note: This step can be removed once all old stock reprocessed
             checkedPrices = checkPrices(prices['dailyPrices'])
             if (checkedPrices):
                 prices['dailyPrices'] = checkedPrices
                 saveStockPrices(storeConfig, stock, prices, local)
     if (prices is None):
-        #Get all daily prices to save
-        print ("f{stock}: Getting stock prices")
+        # Get all daily prices to save
+        print("f{stock}: Getting stock prices")
         prices = getAllDailyPrices(apiKey, stock)
         saveStockPrices(storeConfig, stock, prices, local)
     if (info and prices):
@@ -82,51 +85,100 @@ def processStock(config, stock, local):
         saveStockMetrics(storeConfig, stock, metrics, local)
         scores = calcScore(stock, metrics)
         resultStr = getResultsStr(stock, scores, metrics)
-        saveStringToDropbox(storeConfig, "/details/{0}-results.txt".format(stock), resultStr)
+        saveStringToDropbox(
+            storeConfig, "/details/{0}-results.txt".format(stock), resultStr)
     else:
         scores = None
- 
+
     return scores
 
+
 def processStockStats(info, dailyPrices):
-    now = datetime.now();
+    now = datetime.now()
     metrics = dict()
     metrics['infoDate'] = info['metadata']['storedDate']
     stockInfo = info['info']
-    #Determine this years dividend, average and max dividend
+    stats = info['stats']
     dividends = info['dividends']
-    #Calc dividend by year
+    cashFlow = info['cashFlow']
+    incomeStatement = info['incomeStatement']
+    fcf = info['freeCashFlow']
+
+    marketCap = stats.get("Market Cap", None)
+    if (not marketCap):
+        marketCap = stockInfo.get('marketCap', 0)
+    metrics['marketCap'] = marketCap
+    noOfShares = stats.get('Shares Outstanding', None)
+    if (not noOfShares):
+        noOfShares = stockInfo.get('sharesOutstanding', 0)
+    totalWeightedSlope = 0
+    if (len(dailyPrices) > 0):
+        priceDatesSorted = sorted(dailyPrices)
+        latestPriceDate = priceDatesSorted[len(priceDatesSorted)-1]
+        metrics['currentPriceDate'] = datetime.fromtimestamp(latestPriceDate)
+        (low, high) = dailyPrices[latestPriceDate]
+        # Use the average of the last price range we have
+        currentPrice = ((high + low)/2)/100
+        if (noOfShares == 0):
+            noOfShares = marketCap / currentPrice
+        # Calculate slope as to whether price is increasing or decreasing
+        # For each harmonic determine if the current price is at a local mimima x days ago +/- 10% days
+        (totalWeightedSlope, forecastPeriod) = getWeightedSlope(dailyPrices)
+        metrics['weightedSlopePerc'] = totalWeightedSlope * 100
+        metrics['slopeForecastPeriodDays'] = forecastPeriod
+    else:
+        # Couldnt retreive the prices - use market cap
+        if (noOfShares != 0):
+            currentPrice = marketCap / noOfShares
+        else:
+            currentPrice = 0
+        metrics['weightedSlopePerc'] = 0
+    priceStats = calcPriceStatisticsForPeriod(
+        dailyPrices, now-timedelta(days=364), now)
+    metrics.update(priceStats)
+    metrics['currentPrice'] = currentPrice
+    metrics['noOfShares'] = noOfShares
+    if (currentPrice > 0):
+        metrics['currentYield'] = 100*thisYearDividend/currentPrice
+        metrics['maxYield'] = 100*maxDividend/currentPrice
+        metrics['avgYield'] = 100*avgDividend/currentPrice
+    else:
+        metrics['currentYield'] = 0
+        metrics['maxYield'] = 0
+        metrics['avgYield'] = 0
+
+    # Determine this years dividend, average and max dividend
+    # Calc dividend by year
     years = {}
     for divi in dividends:
-    	date = divi['date']
-    	dividend = divi['dividend']
-    	years[date.year] = dividend + years.get(date.year, 0)
+        date = divi['date']
+        dividend = divi['dividend']
+        years[date.year] = dividend + years.get(date.year, 0)
     avgDividend = 0
     maxDividend = 0
     thisYearDividend = 0
     lastYearDividend = 0
     lastYear = now.year - 1
     for year in years:
-       dividend = years[year] / 100
-       if (year == now.year):
-        	   thisYearDividend = dividend
-       if (year == lastYear):
-           lastYearDividend = dividend
-       if (maxDividend < dividend):
-           maxDividend = dividend
-       avgDividend += dividend
+        dividend = years[year] / 100
+        if (year == now.year):
+            thisYearDividend = dividend
+        if (year == lastYear):
+            lastYearDividend = dividend
+        if (maxDividend < dividend):
+            maxDividend = dividend
+        avgDividend += dividend
     if (thisYearDividend == 0):
-       if (lastYearDividend):
+        if (lastYearDividend):
             thisYearDividend = lastYearDividend
-       elif (stockInfo['dividendRate']):
-           thisYearDividend = stockInfo['dividendRate']
-       else:
-           thisYearDividend = stockInfo['trailingAnnualDividendRate']
+        elif (stockInfo.get('dividendRate', None)):
+            thisYearDividend = stockInfo['dividendRate'] * currentPrice
+        else:
+            thisYearDividend = 0
     if (len(years) != 0):
         avgDividend = avgDividend / len(years)
     else:
         avgDividend = thisYearDividend
-    stats = info['stats']
     exDivDate = stats['Ex-Dividend Date']
     if (not exDivDate):
         exDivDate = stockInfo['exDividendDate']
@@ -141,7 +193,7 @@ def processStockStats(info, dailyPrices):
     if (not eps):
         eps = stockInfo['trailingEps']
     if (not eps):
-           diviCover = 0
+        diviCover = 0
     else:
         eps = eps / 100
         if (thisYearDividend != 0):
@@ -156,85 +208,37 @@ def processStockStats(info, dailyPrices):
     metrics['exDivDate'] = exDivDate
     metrics['daysSinceExDiv'] = daysSinceExDiv
     metrics['eps'] = eps
-    metrics['diviCover'] = diviCover
 
-    marketCap = stats['Market Cap']
-    if (not marketCap):
-        marketCap = stockInfo['marketCap']
-    metrics['marketCap'] = marketCap
-    noOfShares = stats['Shares Outstanding']
-    if (not noOfShares): 
-        noOfShares = stockInfo['sharesOutstanding']
-    totalWeightedSlope = 0
-    if (len(dailyPrices) > 0):
-        priceDatesSorted = sorted(dailyPrices)
-        latestPriceDate = priceDatesSorted[len(priceDatesSorted)-1]
-        metrics['currentPriceDate'] = datetime.fromtimestamp(latestPriceDate)
-        (low, high) = dailyPrices[latestPriceDate]
-        #Use the average of the last price range we have
-        currentPrice = ((high + low)/2)/100
-        if (noOfShares == 0):
-            noOfShares = marketCap / currentPrice
-        #Calculate slope as to whether price is increasing or decreasing
-        #For each harmonic determine if the current price is at a local mimima x days ago +/- 10% days
-        (totalWeightedSlope, forecastPeriod) = getWeightedSlope(dailyPrices)
-        metrics['weightedSlopePerc'] = totalWeightedSlope * 100
-        metrics['slopeForecastPeriodDays'] = forecastPeriod
-    else:
-        #Couldnt retreive the prices - use market cap
-        if (noOfShares != 0):
-            currentPrice = marketCap / noOfShares
-        else:
-            currentPrice = 0
-        metrics['weightedSlopePerc'] = 0
-    priceStats = calcPriceStatisticsForPeriod(dailyPrices, now-timedelta(days=364), now)
-    metrics.update(priceStats)
-    metrics['currentPrice'] = currentPrice
-    metrics['noOfShares'] = noOfShares
-    if (currentPrice > 0):
-        metrics['currentYield'] = 100*thisYearDividend/currentPrice
-        metrics['maxYield'] = 100*maxDividend/currentPrice
-        metrics['avgYield'] = 100*avgDividend/currentPrice
-    else:
-        metrics['currentYield'] = 0
-        metrics['maxYield'] = 0
-        metrics['avgYield'] = 0
-        
     balanceSheet = info['balanceSheet']
-    totalDebt = balanceSheet['Total non-current liabilities']
-    if (not totalDebt): totalDebt = 0
+    totalDebt = balanceSheet.get('Total non-current liabilities', 0)
     metrics['totalDebt'] = totalDebt
-    totalEquity = balanceSheet['Stockholder Equity'] ##THIS IS THE WRONG STATISTIC - should be market cap
-    if (not totalEquity): totalEquity = 0
+    totalEquity = balanceSheet.get('Stockholder Equity', 0)     # THIS IS THE WRONG STATISTIC - should be market cap
     totalCapital = totalDebt + totalEquity
-    
-    cashFlow = info['cashFlow']
-    cf = cashFlow['Dividends paid']
-    if (not cf): cf = 0
+
+    cf = cashFlow.get('Dividends paid', 0)
     costOfEquity = -cf
 #    if (cf is None):
 #        costOfEquity = 0
 #    else:
 #        costOfEquity = -locale.atoi(cf) * 1000
     if (totalEquity != 0):
-        costOfEquityPerc = 100.0 * costOfEquity / totalEquity #Going to assume 0% dividend growth
+        costOfEquityPerc = 100.0 * costOfEquity / \
+            totalEquity  # Going to assume 0% dividend growth
     else:
         costOfEquityPerc = 0
-    incomeStatement = info['incomeStatement']
-    costOfDebt = incomeStatement['Interest expense']
-    if (not costOfDebt): costOfDebt = 0
+    costOfDebt = incomeStatement.get('Interest expense', 0)
     if (totalDebt != 0):
         costOfDebtPerc = 100.0 * costOfDebt / totalDebt
     else:
         costOfDebtPerc = 0
     if (totalCapital != 0):
-        wacc = (costOfEquityPerc * totalEquity / totalCapital) + (costOfDebtPerc * totalDebt / totalCapital)
+        wacc = (costOfEquityPerc * totalEquity / totalCapital) + \
+            (costOfDebtPerc * totalDebt / totalCapital)
     else:
         wacc = 0
     metrics['wacc'] = wacc
 
-    #Use to calculate DCF from FCF
-    fcf = info['freeCashFlow']
+    # Use to calculate DCF from FCF
     if (fcf and len(fcf) > 0):
         (dcf, error, fcfForecastSlope) = calculateDCF(fcf, wacc, 5)
     else:
@@ -242,17 +246,14 @@ def processStockStats(info, dailyPrices):
     metrics['discountedCashFlow'] = dcf
     metrics['dcfError'] = error
     metrics['fcfForecastSlope'] = fcfForecastSlope
-    #Intrinsic value = plant equipment + current assets + 10 year DCF
-    currentAssets = balanceSheet['Total Current Assets']
-    if (not currentAssets): currentAssets = 0
-    totalPlant = balanceSheet['Total Plant']
-    if (not totalPlant): totalPlant = 0
-    assetValue = totalPlant + currentAssets #Does not include intangibles + goodwill
-    currentLiabilities = balanceSheet['Total current liabilities']
-    if (not currentLiabilities): currentLiabilities = 0
+    # Intrinsic value = plant equipment + current assets + 10 year DCF
+    currentAssets = balanceSheet.get('Total Current Assets', 0)
+    totalPlant = balanceSheet.get('Total Plant', 0)
+    # Does not include intangibles + goodwill
+    assetValue = totalPlant + currentAssets
+    currentLiabilities = balanceSheet.get('Total current liabilities', 0)
     if (currentAssets == 0 or currentLiabilities == 0):
-        currentRatio = stats['Current Ratio']
-        if (not currentRatio): currentRatio = 0
+        currentRatio = stats.get('Current Ratio', 0)
     else:
         currentRatio = currentAssets / currentLiabilities
     metrics['currentRatio'] = currentRatio
@@ -260,7 +261,7 @@ def processStockStats(info, dailyPrices):
     breakUpValue = assetValue - totalDebt - currentLiabilities
     metrics['breakUpValue'] = breakUpValue
     if (breakUpValue != 0):
-        metrics['priceToBookNoIntangibles'] = marketCap / breakUpValue 
+        metrics['priceToBookNoIntangibles'] = marketCap / breakUpValue
     else:
         metrics['priceToBookNoIntangibles'] = 0
     intrinsicValue = breakUpValue + dcf
@@ -268,14 +269,15 @@ def processStockStats(info, dailyPrices):
     intrinsicValueRange = dcf*error
     metrics['intrinsicValueRange'] = intrinsicValueRange
     if (marketCap and totalDebt and currentAssets):
-        enterpriseValue = (marketCap + totalDebt - currentAssets) #Price to buy the organisation
+        # Price to buy the organisation
+        enterpriseValue = (marketCap + totalDebt - currentAssets)
     else:
-        enterpriseValue = stockInfo['enterpriseValue']
-    shareholderFunds = balanceSheet['Stockholder Equity']
-    totalAssets = balanceSheet['Total Assets' ]
-    if (not shareholderFunds): 
+        enterpriseValue = stockInfo.get('enterpriseValue', 0)
+    shareholderFunds = balanceSheet.get('Stockholder Equity', None)
+    totalAssets = balanceSheet.get('Total Assets', None)
+    if (not shareholderFunds):
         if (not totalAssets):
-            shareholderFunds = stockInfo['navPrice'] * noOfShares
+            shareholderFunds = stockInfo.get('navPrice', 0) * noOfShares
         else:
             shareholderFunds = totalAssets - totalDebt - currentLiabilities
     if (not totalAssets):
@@ -284,49 +286,53 @@ def processStockStats(info, dailyPrices):
         else:
             totalAssets = 0
     metrics['netAssetValue'] = shareholderFunds
-    netIncome = incomeStatement['Net income']
-    if (not netIncome): 
+    netIncome = incomeStatement.get('Net income', None)
+    if (not netIncome):
         netIncome = stockInfo['netIncomeToCommon']
     if (shareholderFunds > 0):
         gearing = (enterpriseValue - marketCap) / shareholderFunds
-        metrics['gearing'] = gearing 
+        metrics['gearing'] = gearing
         metrics['returnOnEquity'] = 100*netIncome / shareholderFunds
         metrics['intrinsicWithIntangibles'] = shareholderFunds + dcf
-        metrics['priceToBook'] = marketCap / shareholderFunds 
+        metrics['priceToBook'] = marketCap / shareholderFunds
     else:
-        metrics['gearing'] = 0 
+        metrics['gearing'] = 0
         metrics['returnOnEquity'] = 0
         metrics['intrinsicWithIntangibles'] = 0
         metrics['priceToBook'] = stockInfo['priceToBook']
     if (totalAssets > 0):
-        metrics['returnOnCapitalEmployed'] = 100 * netIncome / (totalAssets - currentLiabilities)
+        metrics['returnOnCapitalEmployed'] = 100 * \
+            netIncome / (totalAssets - currentLiabilities)
         metrics['stockHolderEquityPerc'] = 100 * shareholderFunds / totalAssets
     else:
         metrics['returnOnCapitalEmployed'] = 0
         metrics['stockHolderEquityPerc'] = 0
     if (noOfShares != 0):
-        lowerSharePriceValue = (intrinsicValue - intrinsicValueRange) / noOfShares
-        upperSharePriceValue = (intrinsicValue + intrinsicValueRange)/ noOfShares
+        lowerSharePriceValue = (
+            intrinsicValue - intrinsicValueRange) / noOfShares
+        upperSharePriceValue = (
+            intrinsicValue + intrinsicValueRange) / noOfShares
         assetSharePriceValue = assetValue / noOfShares
         evSharePrice = enterpriseValue / noOfShares
         metrics['intrinsicWithIntangiblesPrice'] = metrics['intrinsicWithIntangibles'] / noOfShares
-        metrics['breakUpPrice'] = breakUpValue / noOfShares # Tangible assets - total liabilities
-        metrics['netAssetValuePrice'] = shareholderFunds / noOfShares #Balance sheet NAV = Total assets - total liabilities (which is shareholder funds)
+        metrics['breakUpPrice'] = breakUpValue / \
+            noOfShares  # Tangible assets - total liabilities
+        # Balance sheet NAV = Total assets - total liabilities (which is shareholder funds)
+        metrics['netAssetValuePrice'] = shareholderFunds / noOfShares
     else:
         lowerSharePriceValue = 0
         upperSharePriceValue = 0
         assetSharePriceValue = 0
         evSharePrice = 0
         metrics['intrinsicWithIntangiblesPrice'] = 0
-        metrics['breakUpPrice'] = 0# Tangible assets - total liabilities
-        metrics['netAssetValuePrice'] = stockInfo['navPrice'] 
+        metrics['breakUpPrice'] = 0  # Tangible assets - total liabilities
+        metrics['netAssetValuePrice'] = stockInfo['navPrice']
     metrics['lowerSharePriceValue'] = lowerSharePriceValue
     metrics['upperSharePriceValue'] = upperSharePriceValue
     metrics['assetSharePriceValue'] = assetSharePriceValue
     metrics['enterpriseValue'] = enterpriseValue
     metrics['evSharePrice'] = evSharePrice
-    operatingProfit = incomeStatement['Operating profit']
-    if (not operatingProfit): operatingProfit = 0
+    operatingProfit = incomeStatement.get('Operating profit', 0)
     metrics['operatingProfit'] = operatingProfit
     if (costOfDebt != 0):
         metrics['interestCover'] = operatingProfit / costOfDebt
@@ -336,13 +342,13 @@ def processStockStats(info, dailyPrices):
     if (eps != 0):
         pe = currentPrice / eps
     else:
-        pe = stockInfo['forwardPE']
+        pe = stockInfo.get('forwardPE', 0)
     metrics['PEratio'] = pe
-    tr = incomeStatement['Total revenue']
-    if (not tr): tr = 0
+    metrics['PQratio'] = stockInfo.get('PQ Ratio', 0)
+    tr = incomeStatement.get('Total revenue', 0)
     if (tr != 0):
-        val = incomeStatement['Cost of revenue']
-        if (not val): 
+        val = incomeStatement.get('Cost of revenue', None)
+        if (not val):
             metrics['grossProfitPerc'] = 0
         else:
             metrics['grossProfitPerc'] = 100 * (tr - val) / tr
@@ -350,21 +356,22 @@ def processStockStats(info, dailyPrices):
             metrics['operatingProfitPerc'] = 100 * operatingProfit / tr
         else:
             metrics['operatingProfitPerc'] = 0
-        val = incomeStatement['Central overhead']
-        if (not val): val = 0
-        metrics['overheadPerc'] = 100 * val / tr
-        val = incomeStatement['Net income']
-        if (not val): val = 0
-        metrics['netProfitPerc'] = 100 * val / tr
+        val = incomeStatement.get('Central overhead', None)
+        if (val):
+            metrics['overheadPerc'] = 100 * val / tr
+        val = incomeStatement.get('Net income', None)
+        if (not val):
+            metrics['netProfitPerc'] = stockInfo['profitMargins']
+        else:
+            metrics['netProfitPerc'] = 100 * val / tr
     else:
         metrics['grossProfitPerc'] = 0
         metrics['operatingProfitPerc'] = 0
         metrics['overheadPerc'] = 0
         metrics['netProfitPerc'] = stockInfo['profitMargins']
-    #Altmann Z score = 1.2A + 1.4B + 3.3C + 0.6D + 1.0E
-    retainedEarnings = balanceSheet['Retained earnings']
-    if (not retainedEarnings): retainedEarnings = 0
-    if (totalAssets != 0 and currentAssets !=0 and currentLiabilities != 0 and netIncome != 0 and marketCap != 0 and totalDebt != 0 and tr != 0):
+    # Altmann Z score = 1.2A + 1.4B + 3.3C + 0.6D + 1.0E
+    retainedEarnings = balanceSheet.get('Retained earnings', 0)
+    if (totalAssets != 0 and currentAssets != 0 and currentLiabilities != 0 and netIncome != 0 and marketCap != 0 and totalDebt != 0 and tr != 0):
         # A = Working capital (Current assets - current liabilities) / Total assets
         A = (currentAssets - currentLiabilities) / totalAssets
         # B = Retained earnings / Total assets
@@ -379,4 +386,3 @@ def processStockStats(info, dailyPrices):
     else:
         metrics['altmannZ'] = 0
     return metrics
-    
