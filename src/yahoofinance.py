@@ -6,6 +6,7 @@ from bs4 import BeautifulSoup
 import re
 import locale
 from random import random
+import yfinance as yf
 
 #Chrome on Win 10
 #header = {'user-agent': 'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/72.0.3626.121 Safari/537.36'}
@@ -22,6 +23,16 @@ def getUrlHtml(url):
     #dom = BeautifulSoup(data, "lxml")
     time.sleep(1 + 5 * random())  #Sleep for up to 10 seconds to limit number of gets on yahoo web site to prevent blacklisting
     return dom
+
+def removeNones(d):
+    nd = dict()
+    for k in d.keys():
+        v = d[k]
+        if (not v):
+            nd[k] = 0
+        else:
+            nd[k] = v
+    return nd 
 
 # pageValueMultiplier is set if some pages being processed show numbers in thousands
 def convertToValue(valStr, pageValueMultiplier=1):
@@ -318,3 +329,29 @@ def getKeyStatistics(stock):
         stats["Forward Annual Dividend Yield"] = None
     return (stats)
 
+def getStockInfoYahoo(version, stock):
+    dividends = getDividends(stock)
+    balanceSheet = getBalanceSheet(stock)
+    incomeStatement = getIncomeStatement(stock)
+    (cfHtml, cashFlow) = getCashFlow(stock)
+    fcf = getFreeCashFlow(cfHtml)
+    stats = getKeyStatistics(stock)
+    #Get additional stats from yahooFinance API project
+    st = yf.Ticker(stock)
+    stockInfo = st.info
+    stockInfo = removeNones(stockInfo)
+    meta = { 'version': version,
+             'storedDate': datetime.now(),
+             }
+
+    info = {'metadata': meta,
+            'dividends': dividends,
+            'balanceSheet': balanceSheet,
+            'incomeStatement': incomeStatement,
+            'cashFlow': cashFlow,
+            'freeCashFlow': fcf,
+            'stats': stats,
+            'info' : stockInfo,
+            }
+    
+    return info

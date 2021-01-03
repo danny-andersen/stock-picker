@@ -20,6 +20,8 @@ def processStocks(stockFile, iniFile):
     locale.setlocale(locale.LC_ALL, localeStr) 
     configStore = config['store']
     numJobs = config['spark']['numJobs']
+    api = config['stats']['api']
+    print (f"********Using api {api}******")
 
     stocks = []
     with open(stockFile, 'r') as stockFile:
@@ -53,7 +55,7 @@ def processStocks(stockFile, iniFile):
     processedCount = 0
     while tries > 0:
         #Parallise the stock list - one spark process per stock
-        print(f"***************Attempt {attempts}: Parallelising stock processing job for {len(stocks)} stocks....standby")
+        print(f"****************Attempt {attempts}: Parallelising stock processing job for {len(stocks)} stocks....standby")
         rdd = sc.parallelize(stocks, numSlices=numJobs)
         #This does the actual work of retrieving the stock data and working out the metrics and scores
         #It returns a dict of scores

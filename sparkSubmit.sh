@@ -1,5 +1,6 @@
 cd src && python -m compileall . && zip -r ../processStock.zip .
 cd -
+python -m compileall . && zip -r processStock *.py *.ini *.txt
 /data/spark/bin/spark-submit \
 	--master yarn  \
 	--executor-memory 512M  \

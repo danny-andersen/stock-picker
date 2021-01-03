@@ -6,13 +6,14 @@ from bs4 import BeautifulSoup
 import re
 import locale
 from random import random
+import yfinance as yf
 
 #Chrome on Win 10
 #header = {'user-agent': 'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/72.0.3626.121 Safari/537.36'}
 #Chromium on Pi
 #header = {'user-agent': 'Mozilla/5.0 (X11; Linux armv7l) AppleWebKit/537.36 (KHTML, like Gecko) Raspbian Chromium/74.0.3729.157 Chrome/74.0.3729.157 Safari/537.36'}
 header = {'user-agent':'Mozilla/5.0 (Linux; Android 4.0.4; Galaxy Nexus Build/IMM76B) AppleWebKit/535.19 (KHTML, like Gecko) Chrome/18.0.1025.133 Mobile Safari/535.19'}
-baseUrl = "https://www.advfn.com/stock-market/"
+baseUrl = "https://uk.advfn.com/p.php?pid=financials&symbol=LSE"
 
 def getUrlHtml(url):
     http = httplib2.Http()
@@ -20,318 +21,230 @@ def getUrlHtml(url):
     dom = BeautifulSoup(data, "html5lib")
     #dom = BeautifulSoup(data, "html.parser")
     #dom = BeautifulSoup(data, "lxml")
-    time.sleep(1 + 5 * random())  #Sleep for up to 10 seconds to limit number of gets on web site to prevent blacklisting
+    #time.sleep(1 + 5 * random())  #Sleep for up to 10 seconds to limit number of gets on web site to prevent blacklisting
     return dom
 
-# pageValueMultiplier is set if some pages being processed show numbers in thousands
-def convertToValue(valStr, pageValueMultiplier=1):
-    multiplier = 1 # This converts M and B to the relevant values
-    value = None
-    if (valStr is not None):
-        if (valStr == 'N/A' or valStr == '-' or valStr == ''):
-            value = 0
+def removeNones(d):
+    nd = dict()
+    for k in d.keys():
+        v = d[k]
+        if (not v):
+            nd[k] = 0
         else:
-            if ('M' in valStr):
-                multiplier = 1000000
-                valStr = valStr.strip('M')
-            elif ('B' in valStr):
-                multiplier = 1000000000
-                valStr = valStr.strip('B')
-            elif ('K' in valStr):
-                multiplier = 1000
-                valStr = valStr.strip('K')
-            try:
-                value = locale.atof(valStr.replace(',','')) * pageValueMultiplier
-                value = value * multiplier
-            except ValueError:
-                value = 0
+            nd[k] = v
+    return nd 
+
+def checkValueStrNotSet(valStr):
+    return (not valStr or valStr == 'N/A' or valStr == '-' or valStr == '')
+
+# pageValueMultiplier is set if some pages being processed show numbers in thousands
+def convertToValue(valStr, multiplier):
+    if checkValueStrNotSet(valStr):
+        value = 0
+    else:
+        if (multiplier == 'm'):
+            multi = 1000000
+        elif (multiplier == 'b'):
+            multi = 1000000000
+        elif (multiplier == 'k'):
+            multi = 1000
+        else:
+            multi = 1
+        valStr = valStr.replace(',', '')
+        value = locale.atof(valStr) * multi
     return value
 
-#Note: this doesent work 
-def getLatestPrice(stock):
-    now = datetime.now()
-    start = now - timedelta(days = 15)
-    endPeriod = int(now.timestamp())
-    startPeriod = int(start.timestamp())
-    dividendHistory = f"/history?period1={startPeriod}&period2={endPeriod}&interval=1d&filter=history&frequency=1d"
-    url = baseUrl + stock + dividendHistory
-
-    html = getUrlHtml(url)
-    priceTable = html.find("table", attrs = {'data-test' :"historical-prices"});
-    priceAndDate = dict()
-    if (priceTable):
-        for tr in priceTable.find_all("tr"):
-            td = tr.find_all("td")
-            if len(td) == 2:
-                strs = td[0].stripped_strings;
-                priceDate = ''
-                for str in strs:
-                    d = priceDate + str;
-                priceDate = datetime.strptime(d, "%b %d, %Y")
-                price = ''
-                strs = td[1].stripped_strings;
-                for str in strs:
-                    price = price + str;
-                    break #first one only
-                priceAndDate.append({'date': priceDate, 'price':float(price)})
-    return (priceAndDate)
-
-def getDividends(stock):
-    endPeriod = int(datetime.now().timestamp())
-    dividendHistory = f"/history?period1=927500400&period2={endPeriod}&interval=div%7Csplit&filter=div&frequency=1d"
-    url = baseUrl + stock + dividendHistory
-
-    html = getUrlHtml(url)
-    diviTable = html.find("table", attrs = {'data-test' :"historical-prices"});
+def getDividends(dom):
+    diviTable = None
+    diviTableHeader = dom.find("h2", string=re.compile(".* Dividends"))
+    if (diviTableHeader): diviTable = diviTableHeader.next_sibling
     divi = []
     if (diviTable):
+        first = True
         for tr in diviTable.find_all("tr"):
+            if (first): 
+                first = False
+                continue
             td = tr.find_all("td")
-            if len(td) == 2:
-                strs = td[0].stripped_strings;
-                divDate = ''
-                for str in strs:
-                    d = divDate + str;
-                divDate = datetime.strptime(d, "%b %d, %Y")
-                dividend = ''
-                strs = td[1].stripped_strings;
-                for str in strs:
-                    dividend = dividend + str;
-                    break #first one only
+            if (checkValueStrNotSet(td[8]) and checkValueStrNotSet(td[3])):
+                divDate = datetime.strptime(td[8].string, "%d/%m/%Y")
+                dividend = td[3].string
                 divi.append({'date': divDate, 'dividend':float(dividend)})
     return (divi)
 
-def getFreeCashFlow(html):
+def getFreeCashFlow(dom):
     #Find line containing dates
     dates = []
     fcf = []
-    datesSpan = html.find("span", string=re.compile("Breakdown", re.IGNORECASE))
-    if (datesSpan):
-        datesSection = datesSpan.parent
-        datesSection = datesSection.next_sibling #skip ttm field
-        while datesSection is not None:
-            dateStr = datesSection.find("span").string
-            if (dateStr != 'ttm'):
-                dates.append(datetime.strptime(dateStr, "%m/%d/%Y"))
-            datesSection = datesSection.next_sibling
-        #Find 2 lines containing fcf
-        fcfSpan = html.find_all("span", string=re.compile("^Free"), limit=2);
-        #We want the second one
-        if (len(fcfSpan) > 1):
-            fcfSection = fcfSpan[1].parent.parent
-            fcfSection = fcfSection.next_sibling #Advance to values
-            fcfSection = fcfSection.next_sibling #Skip first value - trailing twelve months
-            while fcfSection is not None:
-                valueStr = fcfSection.find("span")
-                if (valueStr):
-                    fcf.append(locale.atoi(valueStr.string)*1000)
-                fcfSection = fcfSection.next_sibling
+    cfTable = dom.find("h2", string=re.compile(".* Cash Flow Statement")).next_sibling
+    rows = cfTable.find_all("tr")
+    cells = rows[0].find_all("td")
+    for cell in cells:
+        str = cell.string
+        if (str and str != ''):
+            dateStr = str.split("(")[0].strip()
+            dates.append(datetime.strptime(dateStr, "%d %b %Y"))
+    cells = rows[3].find_all("td") # Using Retained Cash Flow
+    lastCell = len(cells) - 1
+    multiplier = cells[lastCell].string
+    for cell in cells[1:lastCell]:
+        str = cell.string
+        if (str and str != ''):
+            fcf.append(convertToValue(str, multiplier))
     return list(zip(dates, fcf))
 
-def getTableValue(html, title, first=False):
-    #div = html.find("div", attrs={"title":re.compile('^' + title, re.IGNORECASE)})
-    regex = re.compile(title,  re.IGNORECASE)
-    div = html.find_all("div", attrs={"title":regex})
+def getTableValue(html, searchStr, index=0, valueCell=2, multiplier=None):
     value = None
-    if (not div or len(div) == 0):
-        span = html.find("span", string=regex)
-        if (span):
-            div = span.parent
-        else:
-            print(f"Failed to get span with content of {title}")
-    if (div is not None and len(div)>0):
-        div = div[0]
-        section = div.parent
-        section = section.next_sibling #Advance to first value
-        if (not first):
-            section = section.next_sibling #Advance to second value
-        if (section is not None):
-            span = section.find("span")
-            if (span is not None):
-                value = span.string
-            else:
-                #If no value then no span
-                value = ""
-        else:
-            print (f"Failed to retreive section of sibling of title {title} from html")
-
+    regex = re.compile(searchStr)
+    cellLinks = html.find_all("a", string=regex)
+    if (cellLinks and len(cellLinks) > index):
+        cellLink = cellLinks[index]
+        cell = cellLink.parent  #table cell (td) is parent of link <a>
+        row = cell.parent
+        cells = row.find_all("td")
+        lastCell = len(cells) - 1
+        if (not multiplier):
+            multiplier = cells[lastCell].string
+        #Get latest value
+        value = cells[lastCell - valueCell].string
+        value = convertToValue(value, multiplier)
     else:
-        print (f"Failed to retreive div with title {title} from html")
-    return convertToValue(value, 1000) #All table values in thousands
+        print(f"Failed to find table cell with content of {searchStr}")
+    return value
 
 # def hasTitle(div):
 #     return div.name == 'div' and div.has_attr('title') 
  
-def getBalanceSheet(stock):
-    cf = "/balance-sheet?p="
-    url = baseUrl + stock + cf + stock
-    html = getUrlHtml(url)
+def getBalanceSheet(dom):
 
-    #Get the start of the Balance Sheet
-    # start = html.find("span", string=re.compile("^Breakdown"))
-    # if (start):
-    #     html = start.parent.parent.parent.parent
-    #     #See if we can find Assets tag
-    #     iter = html.children
-    #     tag = next(iter)
-    #     tag = next(iter)
-    #     tag = next(next(next(tag.children).children).children)
-    #     print(tag)
-    # else:
-    #     print("Couldn't find start of Balance Sheet Breakdown") 
-    # #divs = html.find_all("div", attrs={"title":re.compile(".*")})
-    # divs = html.find_all(hasTitle)
-    # for div in divs:
-    #     print(div['title'])
-    # span = html.find("span", string="Assets")
-    # if (span):
-    #     div = span.parent
-    # else:
-    #     print(f"Failed to get span with content of Assets")
-
+    bsTable = None
+    bsTableHeader = dom.find_all("h2", string=re.compile(".* Balance Sheet"), limit=2)
+    if (bsTableHeader and len(bsTableHeader) > 1): bsTable = bsTableHeader[1].next_sibling
     balanceSheet = dict()
 
-    value = getTableValue(html, "^total.current.assets", True)
-#    if (value is None):
-#        value = getBalanceSheetValue(html, "Total Current assets")
-    if (value is None):
-        value = getTableValue(html, "Total current assets", True)
+    value1 = getTableValue(bsTable, "current assets.*", valueCell=2)
+    value2 = getTableValue(bsTable, "cash.*", valueCell=2)
+    if (value1 and value2): value = value1 + value2
+    elif (value1): value = value1
+    elif (value2): value = value2
+    else: value = None
     balanceSheet['Total Current Assets'] = value
 
-    value = getTableValue(html, "^goodwill", True)
-    value = getTableValue(html, "Inventory", True)
-    value = getTableValue(html, "Total Liabilities", True)
-
-    value = getTableValue(html, "Net property, plant and equipment", True)
+    value = getTableValue(bsTable, "^intangibles", valueCell=2)
+    balanceSheet['Intangibles'] = value
+    value = getTableValue(bsTable, "^stocks", valueCell=2)
+    balanceSheet['Inventory'] = value
+    value = getTableValue(bsTable, "fixed assets", valueCell=2)
     balanceSheet['Total Plant'] = value
-
-    value = getTableValue(html, "^total.assets", True)
+    value = getTableValue(bsTable, "^TOTAL", valueCell=2)
     balanceSheet['Total Assets'] = value
 
-    value = getTableValue(html, "Retained earnings", True)
-    balanceSheet['Retained earnings'] = value
-    
-    value = getTableValue(html, "Total Current Liabilities", True)
+    #Move to next section of table with liabilities
+    # liabilityStart = bsTable.find("span", string="LIABILITIES").parent.parent
+    # print (liabilityStart)
+    value = getTableValue(bsTable, "creditors - short", valueCell=2)
     balanceSheet['Total current liabilities'] = value
     
-    value = getTableValue(html, "Total non-current liabilities", True)
+    value1 = getTableValue(bsTable, "creditors - long", valueCell=2)
+    value2 = getTableValue(bsTable, "creditors - other", valueCell=2)
+    if (value1 and value2): value = value1 + value2
+    elif (value1): value = value1
+    elif (value2): value = value2
+    else: value = None
     balanceSheet['Total non-current liabilities'] = value
     
-    value = getTableValue(html, "Total stockholders' equity", True)
+    value = getTableValue(bsTable, "^TOTAL", index=1, valueCell=2)
+    balanceSheet['Total Liabilities'] = value
+
+    # equityStart = liabilityStart.find("span", string="EQUITY").parent
+    value = getTableValue(bsTable, "^TOTAL", index=2, valueCell=2)
     balanceSheet['Stockholder Equity'] = value
+    
     return balanceSheet
 
-def getIncomeStatement(stock):
-    cf = "/financials?p="
-    url = baseUrl + stock + cf + stock
-    html = getUrlHtml(url)
+def getKeyFigures(dom):
     income = dict()
-    income['Total revenue'] = getTableValue(html, "Total revenue")
-    income['Cost of revenue'] = getTableValue(html, "Cost of revenue")
-    income['Central overhead'] = getTableValue(html, "^Selling general.*")
-    income['Interest expense'] = getTableValue(html, "Interest Expense")
-    income['Net income'] = getTableValue(html, "Net Income")
-    income['Operating profit'] = getTableValue(html, "^Operating Income.*")
-
-    return income
-
-def getCashFlow(stock):
-    cf = "/cash-flow?p="
-    url = baseUrl + stock + cf + stock
-    html = getUrlHtml(url)
     cash = dict()
-    value = getTableValue(html, "Dividends Paid")
-    cash['Dividends paid'] = value
-    return (html, cash)
-   
-def findAndProcessTable(html, inStr):
-    regex = re.compile(inStr,  re.IGNORECASE)
-    elements = html.find_all(string=regex);
-    #print (f"No of \'{inStr}\' strings found: {len(elements)}")
-    statValue = None
-    inStr = inStr.strip('^') # remove regex control chars
-    for element in elements:
-        #print (element)
-        statsTable = element.find_parent("table")
-        if (statsTable != None):
-            for tr in statsTable.find_all("tr"):
-                statName = ''
-                td = tr.find_all("td")
-                #print (len(td))
-                if len(td) == 2:
-                    strs = td[0].stripped_strings
-                    for str in strs:
-                        statName = statName + str
-                    value = ''
-                    strs = td[1].stripped_strings
-                    for str in strs:
-                        value = value + str
-                        break #first one only
-                    if ('(' in statName):
-                        statName = statName.split('(')[0].strip()
-                    if (regex.match(statName)):
-                        statValue = value
-                        break
-            if (not statValue):
-                print (f"Failed to find table value for {inStr} from html")
-        else:
-            print (f"Failed to retreive table for {inStr} from html")
-    return (statValue)
-
-def getKeyStatistics(hmtl):
     stats = {}
-    searchStr = "^Market Cap"
-    stats["Market Cap"] = convertToValue(findAndProcessTable(html, searchStr))
-    searchStr = "^Return on Assets"
-    stats["Return on Assets"] = findAndProcessTable(html, searchStr)
-    searchStr = "^Revenue per share"
-    stats["Revenue per share"] = findAndProcessTable(html, searchStr)
-    searchStr = "^Shares outstanding"
-    stats["Shares Outstanding"] = convertToValue(findAndProcessTable(html, searchStr))
-    searchStr= "^Diluted EPS"
-    stats["Diluted EPS"] = convertToValue(findAndProcessTable(html, searchStr))
-    searchStr= "^Current Ratio"
-    stats["Current Ratio"] = convertToValue(findAndProcessTable( html, searchStr))
-    searchStr= "^Ex-Dividend Date"
-    divDate = findAndProcessTable(html, searchStr)
+
+    fundamentalTable = dom.find("a", string="turnover").parent.parent.parent
+    income['Total revenue'] = getTableValue(fundamentalTable, "turnover")
+    # income['Cost of revenue'] = getTableValue(incTable, "Cost of revenue")
+    # income['Central overhead'] = getTableValue(incTable, "^Selling general.*")
+    # income['Interest expense'] = getTableValue(incTable, "Interest Expense")
+    income['Net income'] = getTableValue(fundamentalTable, "attributable profit")
+    income['Operating profit'] = getTableValue(fundamentalTable, "pre tax profit")
+    dps = getTableValue(fundamentalTable, "dividends per share")
+ 
+    keyTable = dom.find("h2", string=re.compile(".* Key Figures")).next_sibling
+    value = getTableValue(keyTable, "Shares In Issue", valueCell=1)
+    stats["Shares Outstanding"] = value
+    # row = keyTable.find_all("tr")[2]
+    # cells = row.find_all("td")
+    # valStr = cells[1].string
+    # multiplier = cells[2].string
+    # value = convertToValue(valStr, multiplier)
+    cash['Dividends paid'] = value * dps / 100
+    stats["Market Cap"] = getTableValue(keyTable, "^Market Cap", valueCell=1)
+    stats["Revenue per share"] = getTableValue(fundamentalTable, "^eps - basic .*", valueCell=2)
+    stats["Forward Annual Dividend Yield"] = getTableValue(keyTable, "^Dividend Yield", valueCell=1)
+    stats["Return on Assets"] = getTableValue(keyTable, "Return On Equity .*", valueCell=1)
+    # searchStr= "^Diluted EPS"
+    stats["Diluted EPS"] = getTableValue(fundamentalTable, "^eps - diluted .*", valueCell=2)
+    ratioTable = dom.find("h2", string=re.compile(".* Financial Ratios")).next_sibling
+    value = getTableValue(ratioTable, "^Current Ratio", valueCell=1, multiplier=1)
+    stats["Current Ratio"] = value
+
+    diviTable = dom.find("h2", string=re.compile(".* Dividends")).next_sibling
+    row = diviTable.find_all("tr")[1]
+    divDate = row.find_all("td")[6].string
     if (divDate):
         if (divDate == 'N/A' or divDate == '-' or divDate == ''):
             value = 0
         else:
-            try:
-                value = datetime.strptime(divDate, "%b %d, %Y")
-            except ValueError:
-                value = 0
+            value = datetime.strptime(divDate, "%d/%m/%Y")
+            # except ValueError:
+            #     value = 0
     else:
         value = None
     stats["Ex-Dividend Date"] = value
-    searchStr= "^Forward Annual Dividend Yield"
-    val = findAndProcessTable(html, searchStr)
-    if (val):
-        stats["Forward Annual Dividend Yield"] = convertToValue(val.split('%')[0])
-    else:
-        stats["Forward Annual Dividend Yield"] = None
-    return (stats)
+    return (income, cash, stats)
 
-def getAdfnData(stock):
-    if (stock.endswith(".L")):
-        market = "london"
-    else:
-        market = ""
-    stock = stock.split(".")[0]
+def getStockInfo(dom, info):
+    invTable = dom.find("h2", string=re.compile(".* Investment Ratios")).next_sibling
+    ratioTable = dom.find("h2", string=re.compile(".* Financial Ratios")).next_sibling
+    operatingTable = dom.find("h2", string=re.compile(".* Operating Ratios")).next_sibling
+    keyTable = dom.find("h2", string=re.compile(".* Key Figures")).next_sibling
+    info['dividendRate'] = getTableValue(invTable, "^Dividend Yield", valueCell=1, multiplier=1)
+    info['enterpriseValue'] = getTableValue(ratioTable, "^Enterprise Value", valueCell=1)
+    info['navPrice'] = getTableValue(keyTable, "^Net Asset Value .*", valueCell=1, multiplier=1)
+    info['priceToBook'] = getTableValue(invTable, "^Market-to-Book .*", valueCell=1, multiplier=1)
+    info['PQ Ratio'] = getTableValue(invTable, "^PQ Ratio", valueCell=1, multiplier=1)
+    info['forwardPE'] = getTableValue(invTable, "^PE Ratio", valueCell=1, multiplier=1)
+    info['profitMargins'] = getTableValue(operatingTable, "^Net Profit Margin", valueCell=1, multiplier=1)
+    
+    return info
 
-    cf = "/financials"
-    url = baseUrl + stock + cf
+def getStockInfoAdfn(stockName):
+    stock = stockName.split(".")[0]
+    if (len(stock) == 2): stock += "."
+    url = baseUrl + ":" + stock
     dom = getUrlHtml(url)
     
-    dividends = getDividends(stock)
-    balanceSheet = getBalanceSheet(stock)
-    incomeStatement = getIncomeStatement(stock)
-    (cfHtml, cashFlow) = getCashFlow(stock)
-    fcf = getFreeCashFlow(cfHtml)
-    stats = getKeyStatistics(stock)
+    dividends = getDividends(dom)
+    balanceSheet = getBalanceSheet(dom)
+    (incomeStatement, cashFlow, stats) = getKeyFigures(dom)
+    fcf = getFreeCashFlow(dom)
+    
+    #Get additional stats from yahooFinance API project -doesnt work if hammered...
+    # st = yf.Ticker(stockName) #Use full name with exchange (e.g. XX.L)
+    # stockInfo = st.info
+    # stockInfo = removeNones(stockInfo)
 
-    info = {'metadata': meta,
+    #Overlay yahoo info with adfn
+    stockInfo = getStockInfo(dom, stockInfo)
+        
+    info = {
         'dividends': dividends,
         'balanceSheet': balanceSheet,
         'incomeStatement': incomeStatement,
@@ -340,3 +253,6 @@ def getAdfnData(stock):
         'stats': stats,
         'info' : stockInfo,
         }
+   
+    return info
+
