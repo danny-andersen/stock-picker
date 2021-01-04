@@ -50,7 +50,10 @@ def calcPriceStatisticsForPeriod(prices, start, end):
     if (prices):
         ts = sorted(prices)
         (times, samples) = getPriceSamples(ts, prices, start, end)
-        stats['stddevPrice'] = stdev(samples)/100
+        if (len(samples) > 1):
+            stats['stddevPrice'] = stdev(samples)/100
+        else:
+            stats['stddevPrice'] = 0
         stats['medianPrice'] = median(samples)/100
         stats['avgPrice'] = mean(samples)/100
         stats['maxPrice'] = max(samples)/100

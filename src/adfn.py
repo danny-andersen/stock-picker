@@ -76,21 +76,31 @@ def getFreeCashFlow(dom):
     #Find line containing dates
     dates = []
     fcf = []
-    cfTable = dom.find("h2", string=re.compile(".* Cash Flow Statement")).next_sibling
-    rows = cfTable.find_all("tr")
-    cells = rows[0].find_all("td")
-    for cell in cells:
-        str = cell.string
-        if (str and str != ''):
-            dateStr = str.split("(")[0].strip()
-            dates.append(datetime.strptime(dateStr, "%d %b %Y"))
-    cells = rows[3].find_all("td") # Using Retained Cash Flow
-    lastCell = len(cells) - 1
-    multiplier = cells[lastCell].string
-    for cell in cells[1:lastCell]:
-        str = cell.string
-        if (str and str != ''):
-            fcf.append(convertToValue(str, multiplier))
+    cfTableH2 = dom.find("h2", string=re.compile(".* Cash Flow Statement"))
+    if (cfTableH2):
+        cfTable = cfTableH2.next_sibling
+        rows = cfTable.find_all("tr")
+        cells = rows[0].find_all("td")
+        for cell in cells:
+            str = cell.string
+            if (str and str != ''):
+                dateStr = str.split("(")[0].strip()
+                try:
+                    dates.append(datetime.strptime(dateStr, "%d %b %Y"))
+                except:
+                    dates.append(None)
+        numRows = len(rows)
+        rowNum = 3
+        if (numRows > 1 and numRows <= 3):
+           rowNum = numRows - 1 #Use any cash flow figures available
+        if (len(rows) > 1):
+            cells = rows[rowNum].find_all("td") # Using Retained Cash Flow
+            lastCell = len(cells) - 1
+            multiplier = cells[lastCell].string
+            for cell in cells[1:lastCell]:
+                str = cell.string
+                if (str and str != ''):
+                    fcf.append(convertToValue(str, multiplier))
     return list(zip(dates, fcf))
 
 def getTableValue(html, searchStr, index=0, valueCell=2, multiplier=None):
@@ -115,50 +125,53 @@ def getTableValue(html, searchStr, index=0, valueCell=2, multiplier=None):
 # def hasTitle(div):
 #     return div.name == 'div' and div.has_attr('title') 
  
-def getBalanceSheet(dom):
+def getBalanceSheet(stock, dom):
 
     bsTable = None
     bsTableHeader = dom.find_all("h2", string=re.compile(".* Balance Sheet"), limit=2)
     if (bsTableHeader and len(bsTableHeader) > 1): bsTable = bsTableHeader[1].next_sibling
     balanceSheet = dict()
 
-    value1 = getTableValue(bsTable, "current assets.*", valueCell=2)
-    value2 = getTableValue(bsTable, "cash.*", valueCell=2)
-    if (value1 and value2): value = value1 + value2
-    elif (value1): value = value1
-    elif (value2): value = value2
-    else: value = None
-    balanceSheet['Total Current Assets'] = value
+    if (bsTable):
+        value1 = getTableValue(bsTable, "current assets.*", valueCell=2)
+        value2 = getTableValue(bsTable, "cash.*", valueCell=2)
+        if (value1 and value2): value = value1 + value2
+        elif (value1): value = value1
+        elif (value2): value = value2
+        else: value = None
+        balanceSheet['Total Current Assets'] = value
 
-    value = getTableValue(bsTable, "^intangibles", valueCell=2)
-    balanceSheet['Intangibles'] = value
-    value = getTableValue(bsTable, "^stocks", valueCell=2)
-    balanceSheet['Inventory'] = value
-    value = getTableValue(bsTable, "fixed assets", valueCell=2)
-    balanceSheet['Total Plant'] = value
-    value = getTableValue(bsTable, "^TOTAL", valueCell=2)
-    balanceSheet['Total Assets'] = value
+        value = getTableValue(bsTable, "^intangibles", valueCell=2)
+        balanceSheet['Intangibles'] = value
+        value = getTableValue(bsTable, "^stocks", valueCell=2)
+        balanceSheet['Inventory'] = value
+        value = getTableValue(bsTable, "fixed assets", valueCell=2)
+        balanceSheet['Total Plant'] = value
+        value = getTableValue(bsTable, "^TOTAL", valueCell=2)
+        balanceSheet['Total Assets'] = value
 
-    #Move to next section of table with liabilities
-    # liabilityStart = bsTable.find("span", string="LIABILITIES").parent.parent
-    # print (liabilityStart)
-    value = getTableValue(bsTable, "creditors - short", valueCell=2)
-    balanceSheet['Total current liabilities'] = value
-    
-    value1 = getTableValue(bsTable, "creditors - long", valueCell=2)
-    value2 = getTableValue(bsTable, "creditors - other", valueCell=2)
-    if (value1 and value2): value = value1 + value2
-    elif (value1): value = value1
-    elif (value2): value = value2
-    else: value = None
-    balanceSheet['Total non-current liabilities'] = value
-    
-    value = getTableValue(bsTable, "^TOTAL", index=1, valueCell=2)
-    balanceSheet['Total Liabilities'] = value
+        #Move to next section of table with liabilities
+        # liabilityStart = bsTable.find("span", string="LIABILITIES").parent.parent
+        # print (liabilityStart)
+        value = getTableValue(bsTable, "creditors - short", valueCell=2)
+        balanceSheet['Total current liabilities'] = value
+        
+        value1 = getTableValue(bsTable, "creditors - long", valueCell=2)
+        value2 = getTableValue(bsTable, "creditors - other", valueCell=2)
+        if (value1 and value2): value = value1 + value2
+        elif (value1): value = value1
+        elif (value2): value = value2
+        else: value = 0
+        balanceSheet['Total non-current liabilities'] = value
+        
+        value = getTableValue(bsTable, "^TOTAL", index=1, valueCell=2)
+        balanceSheet['Total Liabilities'] = value
 
-    # equityStart = liabilityStart.find("span", string="EQUITY").parent
-    value = getTableValue(bsTable, "^TOTAL", index=2, valueCell=2)
-    balanceSheet['Stockholder Equity'] = value
+        # equityStart = liabilityStart.find("span", string="EQUITY").parent
+        value = getTableValue(bsTable, "^TOTAL", index=2, valueCell=2)
+        balanceSheet['Stockholder Equity'] = value
+    else:
+        print(f"No Balance Sheet table for stock {stock}")
     
     return balanceSheet
 
@@ -167,62 +180,85 @@ def getKeyFigures(dom):
     cash = dict()
     stats = {}
 
-    fundamentalTable = dom.find("a", string="turnover").parent.parent.parent
-    income['Total revenue'] = getTableValue(fundamentalTable, "turnover")
-    # income['Cost of revenue'] = getTableValue(incTable, "Cost of revenue")
-    # income['Central overhead'] = getTableValue(incTable, "^Selling general.*")
-    # income['Interest expense'] = getTableValue(incTable, "Interest Expense")
-    income['Net income'] = getTableValue(fundamentalTable, "attributable profit")
-    income['Operating profit'] = getTableValue(fundamentalTable, "pre tax profit")
-    dps = getTableValue(fundamentalTable, "dividends per share")
- 
-    keyTable = dom.find("h2", string=re.compile(".* Key Figures")).next_sibling
-    value = getTableValue(keyTable, "Shares In Issue", valueCell=1)
-    stats["Shares Outstanding"] = value
-    # row = keyTable.find_all("tr")[2]
-    # cells = row.find_all("td")
-    # valStr = cells[1].string
-    # multiplier = cells[2].string
-    # value = convertToValue(valStr, multiplier)
-    cash['Dividends paid'] = value * dps / 100
-    stats["Market Cap"] = getTableValue(keyTable, "^Market Cap", valueCell=1)
-    stats["Revenue per share"] = getTableValue(fundamentalTable, "^eps - basic .*", valueCell=2)
-    stats["Forward Annual Dividend Yield"] = getTableValue(keyTable, "^Dividend Yield", valueCell=1)
-    stats["Return on Assets"] = getTableValue(keyTable, "Return On Equity .*", valueCell=1)
-    # searchStr= "^Diluted EPS"
-    stats["Diluted EPS"] = getTableValue(fundamentalTable, "^eps - diluted .*", valueCell=2)
-    ratioTable = dom.find("h2", string=re.compile(".* Financial Ratios")).next_sibling
-    value = getTableValue(ratioTable, "^Current Ratio", valueCell=1, multiplier=1)
-    stats["Current Ratio"] = value
-
-    diviTable = dom.find("h2", string=re.compile(".* Dividends")).next_sibling
-    row = diviTable.find_all("tr")[1]
-    divDate = row.find_all("td")[6].string
-    if (divDate):
-        if (divDate == 'N/A' or divDate == '-' or divDate == ''):
-            value = 0
-        else:
-            value = datetime.strptime(divDate, "%d/%m/%Y")
-            # except ValueError:
-            #     value = 0
+    fundamentalTableLink = dom.find("a", string="turnover")
+    if (fundamentalTableLink):
+        fundamentalTable = fundamentalTableLink.parent.parent.parent
+        income['Total revenue'] = getTableValue(fundamentalTable, "turnover")
+        # income['Cost of revenue'] = getTableValue(incTable, "Cost of revenue")
+        # income['Central overhead'] = getTableValue(incTable, "^Selling general.*")
+        # income['Interest expense'] = getTableValue(incTable, "Interest Expense")
+        income['Net income'] = getTableValue(fundamentalTable, "attributable profit")
+        income['Operating profit'] = getTableValue(fundamentalTable, "pre tax profit")
+        dps = getTableValue(fundamentalTable, "dividends per share")
+        stats["Revenue per share"] = getTableValue(fundamentalTable, "^eps - basic .*", valueCell=2)
+        stats["Diluted EPS"] = getTableValue(fundamentalTable, "^eps - diluted .*", valueCell=2)
     else:
-        value = None
+        dps = 0
+ 
+    keyTableH2 = dom.find("h2", string=re.compile(".* Key Figures"))
+    if (keyTableH2):
+        keyTable = keyTableH2.next_sibling
+        value = getTableValue(keyTable, "Shares In Issue", valueCell=1)
+        stats["Shares Outstanding"] = value
+        # row = keyTable.find_all("tr")[2]
+        # cells = row.find_all("td")
+        # valStr = cells[1].string
+        # multiplier = cells[2].string
+        # value = convertToValue(valStr, multiplier)
+        cash['Dividends paid'] = value * dps / 100
+        stats["Market Cap"] = getTableValue(keyTable, "^Market Cap", valueCell=1)
+        stats["Forward Annual Dividend Yield"] = getTableValue(keyTable, "^Dividend Yield", valueCell=1)
+        stats["Return on Assets"] = getTableValue(keyTable, "Return On Equity .*", valueCell=1)
+    
+    ratioTableH2 = dom.find("h2", string=re.compile(".* Financial Ratios"))
+    if (ratioTableH2):
+        ratioTable = ratioTableH2.next_sibling
+        value = getTableValue(ratioTable, "^Current Ratio", valueCell=1, multiplier=1)
+        stats["Current Ratio"] = value
+
+    value = None
+    diviTableH2 = dom.find("h2", string=re.compile(".* Dividends"))
+    if (diviTableH2):
+        diviTable = diviTableH2.next_sibling
+        rows = diviTable.find_all("tr")
+        if (rows and len(rows) > 1):
+            row = rows[1]
+            divDate = row.find_all("td")[6].string
+            if (divDate):
+                if (divDate == 'N/A' or divDate == '-' or divDate == ''):
+                    value = None
+                else:
+                    value = datetime.strptime(divDate, "%d/%m/%Y")
     stats["Ex-Dividend Date"] = value
     return (income, cash, stats)
 
 def getStockInfo(dom, info):
-    invTable = dom.find("h2", string=re.compile(".* Investment Ratios")).next_sibling
-    ratioTable = dom.find("h2", string=re.compile(".* Financial Ratios")).next_sibling
-    operatingTable = dom.find("h2", string=re.compile(".* Operating Ratios")).next_sibling
-    keyTable = dom.find("h2", string=re.compile(".* Key Figures")).next_sibling
-    info['dividendRate'] = getTableValue(invTable, "^Dividend Yield", valueCell=1, multiplier=1)
-    info['enterpriseValue'] = getTableValue(ratioTable, "^Enterprise Value", valueCell=1)
-    info['navPrice'] = getTableValue(keyTable, "^Net Asset Value .*", valueCell=1, multiplier=1)
-    info['priceToBook'] = getTableValue(invTable, "^Market-to-Book .*", valueCell=1, multiplier=1)
-    info['PQ Ratio'] = getTableValue(invTable, "^PQ Ratio", valueCell=1, multiplier=1)
-    info['forwardPE'] = getTableValue(invTable, "^PE Ratio", valueCell=1, multiplier=1)
-    info['profitMargins'] = getTableValue(operatingTable, "^Net Profit Margin", valueCell=1, multiplier=1)
-    
+    invTableH2 = dom.find("h2", string=re.compile(".* Investment Ratios"))
+    if (invTableH2):
+        invTable = invTableH2.next_sibling
+        info['dividendRate'] = getTableValue(invTable, "^Dividend Yield", valueCell=1, multiplier=1)
+        info['priceToBook'] = getTableValue(invTable, "^Market-to-Book .*", valueCell=1, multiplier=1)
+        info['PQ Ratio'] = getTableValue(invTable, "^PQ Ratio", valueCell=1, multiplier=1)
+        info['forwardPE'] = getTableValue(invTable, "^PE Ratio", valueCell=1, multiplier=1)
+        info['priceToBook'] = getTableValue(invTable, "^Market-to-Book Ratio", valueCell=1, multiplier=1)
+        
+    ratioTableH2 = dom.find("h2", string=re.compile(".* Financial Ratios"))
+    if (ratioTableH2):
+        ratioTable = ratioTableH2.next_sibling
+        info['enterpriseValue'] = getTableValue(ratioTable, "^Enterprise Value", valueCell=1)
+        
+    operatingTableH2 = dom.find("h2", string=re.compile(".* Operating Ratios"))
+    if (operatingTableH2):
+        operatingTable = operatingTableH2.next_sibling
+        info['profitMargins'] = getTableValue(operatingTable, "^Net Profit Margin", valueCell=1, multiplier=1)
+        info['returnOnEquity'] = getTableValue(operatingTable, "^Return On Equity .*", valueCell=1, multiplier=1)
+
+    keyTableH2 = dom.find("h2", string=re.compile(".* Key Figures"))
+    if (keyTableH2):
+        keyTable = keyTableH2.next_sibling
+        info['navPrice'] = getTableValue(keyTable, "^Net Asset Value .*", valueCell=1, multiplier=1)
+        info['diviCover'] = getTableValue(keyTable, "^Dividend Cover", valueCell=1, multiplier=1)
+  
     return info
 
 def getStockInfoAdfn(stockName):
@@ -232,10 +268,11 @@ def getStockInfoAdfn(stockName):
     dom = getUrlHtml(url)
     
     dividends = getDividends(dom)
-    balanceSheet = getBalanceSheet(dom)
+    balanceSheet = getBalanceSheet(stock, dom)
     (incomeStatement, cashFlow, stats) = getKeyFigures(dom)
     fcf = getFreeCashFlow(dom)
     
+    stockInfo = dict()
     #Get additional stats from yahooFinance API project -doesnt work if hammered...
     # st = yf.Ticker(stockName) #Use full name with exchange (e.g. XX.L)
     # stockInfo = st.info

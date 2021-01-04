@@ -4,8 +4,8 @@ from datetime import datetime
 
 def countNones(d):
     retVal = False
+    zeroCnt = 0
     if (d):
-        zeroCnt = 0
         v = 0
         for (key, value) in d.items():
             if (value == None):

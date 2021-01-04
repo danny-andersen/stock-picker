@@ -109,6 +109,7 @@ def processStockStats(info, dailyPrices):
         marketCap = stockInfo.get('marketCap', 0)
     metrics['marketCap'] = marketCap
     noOfShares = stats.get('Shares Outstanding', None)
+    metrics['noOfShares'] = noOfShares
     if (not noOfShares):
         noOfShares = stockInfo.get('sharesOutstanding', 0)
     totalWeightedSlope = 0
@@ -137,15 +138,6 @@ def processStockStats(info, dailyPrices):
         dailyPrices, now-timedelta(days=364), now)
     metrics.update(priceStats)
     metrics['currentPrice'] = currentPrice
-    metrics['noOfShares'] = noOfShares
-    if (currentPrice > 0):
-        metrics['currentYield'] = 100*thisYearDividend/currentPrice
-        metrics['maxYield'] = 100*maxDividend/currentPrice
-        metrics['avgYield'] = 100*avgDividend/currentPrice
-    else:
-        metrics['currentYield'] = 0
-        metrics['maxYield'] = 0
-        metrics['avgYield'] = 0
 
     # Determine this years dividend, average and max dividend
     # Calc dividend by year
@@ -181,25 +173,22 @@ def processStockStats(info, dailyPrices):
         avgDividend = thisYearDividend
     exDivDate = stats['Ex-Dividend Date']
     if (not exDivDate):
-        exDivDate = stockInfo['exDividendDate']
+        exDivDate = stockInfo.get('exDividendDate', None)
     if (exDivDate and exDivDate != 0):
         daysSinceExDiv = -(exDivDate - now).days
     else:
         daysSinceExDiv = 0
-    forwardYield = stats['Forward Annual Dividend Yield']
+    forwardYield = stats.get('Forward Annual Dividend Yield', None)
     if (not forwardYield):
-        forwardYield = stockInfo['dividendYield']
-    eps = stats['Diluted EPS']
+        forwardYield = stockInfo.get('dividendYield', 0)
+    eps = stats.get('Diluted EPS', stats.get("Revenue per share", None))
     if (not eps):
-        eps = stockInfo['trailingEps']
-    if (not eps):
-        diviCover = 0
+        eps = stockInfo.get('trailingEps', 0)
+    eps = eps / 100.0
+    if (thisYearDividend != 0 and eps != 0):
+        diviCover = eps / thisYearDividend
     else:
-        eps = eps / 100
-        if (thisYearDividend != 0):
-            diviCover = eps / thisYearDividend
-        else:
-            diviCover = 0
+        diviCover = stockInfo.get('diviCover', 0)
 
     metrics['thisYearDividend'] = thisYearDividend
     metrics['maxDividend'] = maxDividend
@@ -208,11 +197,23 @@ def processStockStats(info, dailyPrices):
     metrics['exDivDate'] = exDivDate
     metrics['daysSinceExDiv'] = daysSinceExDiv
     metrics['eps'] = eps
+    metrics['diviCover'] = diviCover
+
+    if (currentPrice > 0):
+        metrics['currentYield'] = 100*thisYearDividend/currentPrice
+        metrics['maxYield'] = 100*maxDividend/currentPrice
+        metrics['avgYield'] = 100*avgDividend/currentPrice
+    else:
+        metrics['currentYield'] = 0
+        metrics['maxYield'] = 0
+        metrics['avgYield'] = 0
 
     balanceSheet = info['balanceSheet']
     totalDebt = balanceSheet.get('Total non-current liabilities', 0)
+    if (not totalDebt): totalDebt = 0
     metrics['totalDebt'] = totalDebt
     totalEquity = balanceSheet.get('Stockholder Equity', 0)     # THIS IS THE WRONG STATISTIC - should be market cap
+    if (not totalEquity): totalEquity = 0
     totalCapital = totalDebt + totalEquity
 
     cf = cashFlow.get('Dividends paid', 0)
@@ -248,16 +249,18 @@ def processStockStats(info, dailyPrices):
     metrics['fcfForecastSlope'] = fcfForecastSlope
     # Intrinsic value = plant equipment + current assets + 10 year DCF
     currentAssets = balanceSheet.get('Total Current Assets', 0)
+    if (not currentAssets): currentAssets = 0
     totalPlant = balanceSheet.get('Total Plant', 0)
+    if (not totalPlant): totalPlant = 0
     # Does not include intangibles + goodwill
     assetValue = totalPlant + currentAssets
     currentLiabilities = balanceSheet.get('Total current liabilities', 0)
+    if (not currentLiabilities): currentLiabilities = 0
     if (currentAssets == 0 or currentLiabilities == 0):
         currentRatio = stats.get('Current Ratio', 0)
     else:
         currentRatio = currentAssets / currentLiabilities
     metrics['currentRatio'] = currentRatio
-
     breakUpValue = assetValue - totalDebt - currentLiabilities
     metrics['breakUpValue'] = breakUpValue
     if (breakUpValue != 0):
@@ -288,18 +291,22 @@ def processStockStats(info, dailyPrices):
     metrics['netAssetValue'] = shareholderFunds
     netIncome = incomeStatement.get('Net income', None)
     if (not netIncome):
-        netIncome = stockInfo['netIncomeToCommon']
+        netIncome = stockInfo.get('netIncomeToCommon', 0)
     if (shareholderFunds > 0):
         gearing = (enterpriseValue - marketCap) / shareholderFunds
         metrics['gearing'] = gearing
-        metrics['returnOnEquity'] = 100*netIncome / shareholderFunds
+        if (netIncome != 0):
+            metrics['returnOnEquity'] = 100*netIncome / shareholderFunds
+        else:
+            metrics['returnOnEquity'] = stockInfo.get('returnOnEquity', 0)
+            netIncome = metrics['returnOnEquity'] * shareholderFunds / 100
         metrics['intrinsicWithIntangibles'] = shareholderFunds + dcf
         metrics['priceToBook'] = marketCap / shareholderFunds
     else:
         metrics['gearing'] = 0
-        metrics['returnOnEquity'] = 0
+        metrics['returnOnEquity'] = stockInfo.get('returnOnEquity', 0)
         metrics['intrinsicWithIntangibles'] = 0
-        metrics['priceToBook'] = stockInfo['priceToBook']
+        metrics['priceToBook'] = stockInfo.get('priceToBook', 0)
     if (totalAssets > 0):
         metrics['returnOnCapitalEmployed'] = 100 * \
             netIncome / (totalAssets - currentLiabilities)
@@ -326,7 +333,7 @@ def processStockStats(info, dailyPrices):
         evSharePrice = 0
         metrics['intrinsicWithIntangiblesPrice'] = 0
         metrics['breakUpPrice'] = 0  # Tangible assets - total liabilities
-        metrics['netAssetValuePrice'] = stockInfo['navPrice']
+        metrics['netAssetValuePrice'] = stockInfo.get('navPrice', 0)
     metrics['lowerSharePriceValue'] = lowerSharePriceValue
     metrics['upperSharePriceValue'] = upperSharePriceValue
     metrics['assetSharePriceValue'] = assetSharePriceValue
@@ -347,31 +354,29 @@ def processStockStats(info, dailyPrices):
     metrics['PQratio'] = stockInfo.get('PQ Ratio', 0)
     tr = incomeStatement.get('Total revenue', 0)
     if (tr != 0):
-        val = incomeStatement.get('Cost of revenue', None)
-        if (not val):
-            metrics['grossProfitPerc'] = 0
-        else:
-            metrics['grossProfitPerc'] = 100 * (tr - val) / tr
-        if (operatingProfit != 0):
-            metrics['operatingProfitPerc'] = 100 * operatingProfit / tr
-        else:
-            metrics['operatingProfitPerc'] = 0
-        val = incomeStatement.get('Central overhead', None)
-        if (val):
-            metrics['overheadPerc'] = 100 * val / tr
+        val = incomeStatement.get('Cost of revenue', 0)
+        metrics['grossProfitPerc'] = 100 * (tr - val) / tr
+
+        metrics['operatingProfitPerc'] = 100 * operatingProfit / tr
+
+        val = incomeStatement.get('Central overhead', 0)
+        metrics['overheadPerc'] = 100 * val / tr
+
         val = incomeStatement.get('Net income', None)
         if (not val):
-            metrics['netProfitPerc'] = stockInfo['profitMargins']
+            metrics['netProfitPerc'] = stockInfo.get('profitMargins', 0)
         else:
             metrics['netProfitPerc'] = 100 * val / tr
     else:
         metrics['grossProfitPerc'] = 0
         metrics['operatingProfitPerc'] = 0
         metrics['overheadPerc'] = 0
-        metrics['netProfitPerc'] = stockInfo['profitMargins']
+        metrics['netProfitPerc'] = stockInfo.get('profitMargins', 0)
     # Altmann Z score = 1.2A + 1.4B + 3.3C + 0.6D + 1.0E
     retainedEarnings = balanceSheet.get('Retained earnings', 0)
-    if (totalAssets != 0 and currentAssets != 0 and currentLiabilities != 0 and netIncome != 0 and marketCap != 0 and totalDebt != 0 and tr != 0):
+    if (totalAssets != 0 and currentAssets != 0 and \
+            currentLiabilities != 0 and netIncome != 0 and \
+            marketCap != 0 and totalDebt != 0 and tr != 0):
         # A = Working capital (Current assets - current liabilities) / Total assets
         A = (currentAssets - currentLiabilities) / totalAssets
         # B = Retained earnings / Total assets
