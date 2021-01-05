@@ -92,6 +92,10 @@ def processStock(config, stock, local):
 
     return scores
 
+def getValue(dictHolder, name, default):
+    val = dictHolder.get(name, default)
+    if (not val): val = default
+    return val
 
 def processStockStats(info, dailyPrices):
     now = datetime.now()
@@ -103,15 +107,16 @@ def processStockStats(info, dailyPrices):
     cashFlow = info['cashFlow']
     incomeStatement = info['incomeStatement']
     fcf = info['freeCashFlow']
+    balanceSheet = info['balanceSheet']
 
-    marketCap = stats.get("Market Cap", None)
+    marketCap = getValue(stats, "Market Cap", None)
     if (not marketCap):
-        marketCap = stockInfo.get('marketCap', 0)
+        marketCap = getValue(stockInfo, 'marketCap', 0)
     metrics['marketCap'] = marketCap
-    noOfShares = stats.get('Shares Outstanding', None)
-    metrics['noOfShares'] = noOfShares
+    noOfShares = getValue(stats, 'Shares Outstanding', None)
     if (not noOfShares):
-        noOfShares = stockInfo.get('sharesOutstanding', 0)
+        noOfShares = getValue(stockInfo, 'sharesOutstanding', 0)
+    metrics['noOfShares'] = noOfShares
     totalWeightedSlope = 0
     if (len(dailyPrices) > 0):
         priceDatesSorted = sorted(dailyPrices)
@@ -139,6 +144,11 @@ def processStockStats(info, dailyPrices):
     metrics.update(priceStats)
     metrics['currentPrice'] = currentPrice
 
+    forwardYield = getValue(stats, 'Forward Annual Dividend Yield', None)
+    if (not forwardYield):
+        forwardYield = getValue(stockInfo, 'dividendYield', 0)
+    metrics['forwardYield'] = forwardYield
+
     # Determine this years dividend, average and max dividend
     # Calc dividend by year
     years = {}
@@ -152,7 +162,7 @@ def processStockStats(info, dailyPrices):
     lastYearDividend = 0
     lastYear = now.year - 1
     for year in years:
-        dividend = years[year] / 100
+        dividend = years[year]
         if (year == now.year):
             thisYearDividend = dividend
         if (year == lastYear):
@@ -163,57 +173,42 @@ def processStockStats(info, dailyPrices):
     if (thisYearDividend == 0):
         if (lastYearDividend):
             thisYearDividend = lastYearDividend
-        elif (stockInfo.get('dividendRate', None)):
-            thisYearDividend = stockInfo['dividendRate'] * currentPrice
         else:
-            thisYearDividend = 0
+            thisYearDividend = forwardYield * currentPrice
+    metrics['thisYearDividend'] = thisYearDividend
     if (len(years) != 0):
         avgDividend = avgDividend / len(years)
     else:
         avgDividend = thisYearDividend
-    exDivDate = stats['Ex-Dividend Date']
-    if (not exDivDate):
-        exDivDate = stockInfo.get('exDividendDate', None)
-    if (exDivDate and exDivDate != 0):
+    metrics['maxDividend'] = maxDividend
+    metrics['avgDividend'] = avgDividend
+    exDivDate = getValue(stats, 'Ex-Dividend Date', getValue(stockInfo, 'exDividendDate', None))
+    metrics['exDivDate'] = exDivDate
+    if (exDivDate):
         daysSinceExDiv = -(exDivDate - now).days
     else:
         daysSinceExDiv = 0
-    forwardYield = stats.get('Forward Annual Dividend Yield', None)
-    if (not forwardYield):
-        forwardYield = stockInfo.get('dividendYield', 0)
-    eps = stats.get('Diluted EPS', stats.get("Revenue per share", None))
-    if (not eps):
-        eps = stockInfo.get('trailingEps', 0)
-    eps = eps / 100.0
+    metrics['daysSinceExDiv'] = daysSinceExDiv
+    eps = getValue(stats, 'Diluted EPS', getValue(stats, "Revenue per share", getValue(stockInfo, 'trailingEps', 0)))
+    metrics['eps'] = eps
     if (thisYearDividend != 0 and eps != 0):
         diviCover = eps / thisYearDividend
     else:
-        diviCover = stockInfo.get('diviCover', 0)
-
-    metrics['thisYearDividend'] = thisYearDividend
-    metrics['maxDividend'] = maxDividend
-    metrics['avgDividend'] = avgDividend
-    metrics['forwardYield'] = forwardYield
-    metrics['exDivDate'] = exDivDate
-    metrics['daysSinceExDiv'] = daysSinceExDiv
-    metrics['eps'] = eps
+        diviCover = getValue(stockInfo,'diviCover', 0)
     metrics['diviCover'] = diviCover
 
     if (currentPrice > 0):
-        metrics['currentYield'] = 100*thisYearDividend/currentPrice
-        metrics['maxYield'] = 100*maxDividend/currentPrice
-        metrics['avgYield'] = 100*avgDividend/currentPrice
+        metrics['currentYield'] = thisYearDividend/currentPrice
+        metrics['maxYield'] = maxDividend/currentPrice
+        metrics['avgYield'] = avgDividend/currentPrice
     else:
         metrics['currentYield'] = 0
         metrics['maxYield'] = 0
         metrics['avgYield'] = 0
 
-    balanceSheet = info['balanceSheet']
-    totalDebt = balanceSheet.get('Total non-current liabilities', 0)
-    if (not totalDebt): totalDebt = 0
+    totalDebt = getValue(balanceSheet, 'Total non-current liabilities', 0)
     metrics['totalDebt'] = totalDebt
-    totalEquity = balanceSheet.get('Stockholder Equity', 0)     # THIS IS THE WRONG STATISTIC - should be market cap
-    if (not totalEquity): totalEquity = 0
+    totalEquity = getValue(balanceSheet, 'Stockholder Equity', 0)     # THIS IS THE WRONG STATISTIC - should be market cap
     totalCapital = totalDebt + totalEquity
 
     cf = cashFlow.get('Dividends paid', 0)
@@ -248,18 +243,18 @@ def processStockStats(info, dailyPrices):
     metrics['dcfError'] = error
     metrics['fcfForecastSlope'] = fcfForecastSlope
     # Intrinsic value = plant equipment + current assets + 10 year DCF
-    currentAssets = balanceSheet.get('Total Current Assets', 0)
-    if (not currentAssets): currentAssets = 0
-    totalPlant = balanceSheet.get('Total Plant', 0)
-    if (not totalPlant): totalPlant = 0
-    # Does not include intangibles + goodwill
+    currentAssets = getValue(balanceSheet, 'Total Current Assets', 0)
+    totalPlant = getValue(balanceSheet, 'Total Plant', 0)
+    investments = getValue(balanceSheet, 'Investments', 0)
+    inventory = getValue(balanceSheet, 'Inventory', 0)
+    debtors = getValue(balanceSheet, 'Debtors', 0)
+    # Dont include intangibles + goodwill
     assetValue = totalPlant + currentAssets
-    currentLiabilities = balanceSheet.get('Total current liabilities', 0)
-    if (not currentLiabilities): currentLiabilities = 0
+    currentLiabilities = getValue(balanceSheet,'Total current liabilities', 0)
     if (currentAssets == 0 or currentLiabilities == 0):
         currentRatio = stats.get('Current Ratio', 0)
     else:
-        currentRatio = currentAssets / currentLiabilities
+        currentRatio = (currentAssets + debtors + inventory) / currentLiabilities
     metrics['currentRatio'] = currentRatio
     breakUpValue = assetValue - totalDebt - currentLiabilities
     metrics['breakUpValue'] = breakUpValue
@@ -322,8 +317,7 @@ def processStockStats(info, dailyPrices):
         assetSharePriceValue = assetValue / noOfShares
         evSharePrice = enterpriseValue / noOfShares
         metrics['intrinsicWithIntangiblesPrice'] = metrics['intrinsicWithIntangibles'] / noOfShares
-        metrics['breakUpPrice'] = breakUpValue / \
-            noOfShares  # Tangible assets - total liabilities
+        metrics['breakUpPrice'] = breakUpValue / noOfShares  # Tangible assets - total liabilities
         # Balance sheet NAV = Total assets - total liabilities (which is shareholder funds)
         metrics['netAssetValuePrice'] = shareholderFunds / noOfShares
     else:
