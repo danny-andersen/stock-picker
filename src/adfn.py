@@ -66,9 +66,13 @@ def getDividends(dom):
                 first = False
                 continue
             td = tr.find_all("td")
-            if (checkValueStrNotSet(td[8]) and checkValueStrNotSet(td[3])):
-                divDate = datetime.strptime(td[8].string, "%d/%m/%Y")
-                dividend = td[3].string
+            if (not checkValueStrNotSet(td[8]) and not checkValueStrNotSet(td[3])):
+                try:
+                    divDate = datetime.strptime(td[8].string, "%d/%m/%Y")
+                    dividend = float(td[3].string)
+                except:
+                    #Invalid date or value - ignore
+                    continue
                 divi.append({'date': divDate, 'dividend':float(dividend)})
     return (divi)
 
@@ -103,8 +107,8 @@ def getFreeCashFlow(dom):
                     fcf.append(convertToValue(str, multiplier))
     return list(zip(dates, fcf))
 
-def getTableValue(html, searchStr, index=0, valueCell=2, multiplier=None):
-    value = None
+def getTableValue(html, searchStr, index=0, valueCell=2, multiplier=None, default=None):
+    value = default #default return value of None means that no value was available
     regex = re.compile(searchStr)
     cellLinks = html.find_all("a", string=regex)
     if (cellLinks and len(cellLinks) > index):
@@ -133,18 +137,20 @@ def getBalanceSheet(stock, dom):
     balanceSheet = dict()
 
     if (bsTable):
-        value1 = getTableValue(bsTable, "current assets.*", valueCell=2)
-        value2 = getTableValue(bsTable, "cash.*", valueCell=2)
-        if (value1 and value2): value = value1 + value2
-        elif (value1): value = value1
-        elif (value2): value = value2
-        else: value = None
-        balanceSheet['Total Current Assets'] = value
+        currentAssets = getTableValue(bsTable, "current assets.*", valueCell=2, default=0)
+        currentAssets += getTableValue(bsTable, "cash.*", valueCell=2, default=0)
+        value = getTableValue(bsTable, "^debtors", valueCell=2, default=0)
+        balanceSheet['Debtors'] = value
+        currentAssets += value
+        value = getTableValue(bsTable, "^stocks", valueCell=2, default=0)
+        balanceSheet['Inventory'] = value
+        currentAssets += value
+        balanceSheet['Total Current Assets'] = currentAssets 
 
         value = getTableValue(bsTable, "^intangibles", valueCell=2)
         balanceSheet['Intangibles'] = value
-        value = getTableValue(bsTable, "^stocks", valueCell=2)
-        balanceSheet['Inventory'] = value
+        value = getTableValue(bsTable, "^investments", valueCell=2)
+        balanceSheet['Investments'] = value
         value = getTableValue(bsTable, "fixed assets", valueCell=2)
         balanceSheet['Total Plant'] = value
         value = getTableValue(bsTable, "^TOTAL", valueCell=2)
@@ -292,4 +298,3 @@ def getStockInfoAdfn(stockName):
         }
    
     return info
-
