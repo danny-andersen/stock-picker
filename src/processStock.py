@@ -249,7 +249,7 @@ def processStockStats(info, dailyPrices):
     inventory = getValue(balanceSheet, 'Inventory', 0)
     debtors = getValue(balanceSheet, 'Debtors', 0)
     # Dont include intangibles + goodwill
-    assetValue = totalPlant + currentAssets
+    assetValue = totalPlant + currentAssets + investments
     currentLiabilities = getValue(balanceSheet,'Total current liabilities', 0)
     if (currentAssets == 0 or currentLiabilities == 0):
         currentRatio = stats.get('Current Ratio', 0)
