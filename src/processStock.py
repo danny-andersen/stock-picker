@@ -5,7 +5,7 @@ from retreiveStockInfo import getStockInfo
 from scoreStock import calcScore
 from saveRetreiveFiles import getStockInfoSaved, saveStockInfo, saveStockMetrics, getStockPricesSaved, saveStockPrices, saveStringToDropbox
 from alphaAdvantage import getLatestDailyPrices, getAllDailyPrices, checkPrices
-from checkStockInfo import checkStockInfo, isStockInfoBetter, countInfoNones
+from checkStockInfo import checkStockInfo, isNewStockInfoBetter, countInfoNones
 from printResults import getResultsStr
 from pricePeriod import getWeightedSlope, calcPriceStatisticsForPeriod
 
@@ -54,10 +54,13 @@ def processStock(config, stock, local):
     if (not info):
         print(f"{stock}: Retreiving latest stock info")
         info = getStockInfo(config, version, stock)
-        if (info and ((newInfoReqd and checkStockInfo(info)) or isStockInfoBetter(currentInfo, info))):
+        goodNewInfo = checkStockInfo(info)
+        betterInfo = isNewStockInfoBetter(currentInfo, info)
+        if ((goodNewInfo and newInfoReqd) or betterInfo):
+            #Save if we needed new info and its good or the old stuff could be improved and is better or same (but more recent)
             saveStockInfo(storeConfig, stock, info, local)
         else:
-            print(f"{stock}: Retreived info incomplete")
+            print(f"{stock}: Retreived info not any better: good new Info: {goodNewInfo}, is better info: {betterInfo}")
             info = None
     prices = getStockPricesSaved(storeConfig, stock, local)
     if (prices):
@@ -77,7 +80,7 @@ def processStock(config, stock, local):
                 saveStockPrices(storeConfig, stock, prices, local)
     if (prices is None):
         # Get all daily prices to save
-        print("f{stock}: Getting stock prices")
+        print(f"{stock}: Getting stock prices")
         prices = getAllDailyPrices(apiKey, stock)
         saveStockPrices(storeConfig, stock, prices, local)
     if (info and prices):
@@ -246,33 +249,35 @@ def processStockStats(info, dailyPrices):
     currentAssets = getValue(balanceSheet, 'Total Current Assets', 0)
     totalPlant = getValue(balanceSheet, 'Total Plant', 0)
     investments = getValue(balanceSheet, 'Investments', 0)
-    inventory = getValue(balanceSheet, 'Inventory', 0)
-    debtors = getValue(balanceSheet, 'Debtors', 0)
     # Dont include intangibles + goodwill
     assetValue = totalPlant + currentAssets + investments
     currentLiabilities = getValue(balanceSheet,'Total current liabilities', 0)
     if (currentAssets == 0 or currentLiabilities == 0):
         currentRatio = stats.get('Current Ratio', 0)
     else:
-        currentRatio = (currentAssets + debtors + inventory) / currentLiabilities
+        currentRatio = currentAssets / currentLiabilities
     metrics['currentRatio'] = currentRatio
-    breakUpValue = assetValue - totalDebt - currentLiabilities
-    metrics['breakUpValue'] = breakUpValue
-    if (breakUpValue != 0):
-        metrics['priceToBookNoIntangibles'] = marketCap / breakUpValue
+    totalAssets = getValue(balanceSheet, 'Total Assets', 0) 
+    totalLiabilities = getValue(balanceSheet, 'Total Liabilities', 0)
+    intangibles = getValue(balanceSheet, 'Intangibles', 0)
+    gearing = totalLiabilities / (totalAssets - intangibles)
+    metrics['gearing'] = gearing
+    bookValue = totalAssets - intangibles - totalLiabilities
+    metrics['bookValue'] = bookValue
+    if (bookValue != 0):
+        metrics['priceToBookNoIntangibles'] = marketCap / bookValue
     else:
         metrics['priceToBookNoIntangibles'] = 0
-    intrinsicValue = breakUpValue + dcf
+    intrinsicValue = bookValue + dcf
     metrics['intrinsicValue'] = intrinsicValue
     intrinsicValueRange = dcf*error
     metrics['intrinsicValueRange'] = intrinsicValueRange
-    if (marketCap and totalDebt and currentAssets):
+    if (marketCap and totalLiabilities and currentAssets):
         # Price to buy the organisation
-        enterpriseValue = (marketCap + totalDebt - currentAssets)
+        enterpriseValue = marketCap + totalLiabilities - (currentAssets + investments)
     else:
         enterpriseValue = stockInfo.get('enterpriseValue', 0)
     shareholderFunds = balanceSheet.get('Stockholder Equity', None)
-    totalAssets = balanceSheet.get('Total Assets', None)
     if (not shareholderFunds):
         if (not totalAssets):
             shareholderFunds = stockInfo.get('navPrice', 0) * noOfShares
@@ -284,12 +289,12 @@ def processStockStats(info, dailyPrices):
         else:
             totalAssets = 0
     metrics['netAssetValue'] = shareholderFunds
+    preTaxProfit = incomeStatement.get('Pre-tax profit', 0)
+    metrics['preTaxProfit'] = preTaxProfit
     netIncome = incomeStatement.get('Net income', None)
     if (not netIncome):
         netIncome = stockInfo.get('netIncomeToCommon', 0)
     if (shareholderFunds > 0):
-        gearing = (enterpriseValue - marketCap) / shareholderFunds
-        metrics['gearing'] = gearing
         if (netIncome != 0):
             metrics['returnOnEquity'] = 100*netIncome / shareholderFunds
         else:
@@ -298,13 +303,12 @@ def processStockStats(info, dailyPrices):
         metrics['intrinsicWithIntangibles'] = shareholderFunds + dcf
         metrics['priceToBook'] = marketCap / shareholderFunds
     else:
-        metrics['gearing'] = 0
         metrics['returnOnEquity'] = stockInfo.get('returnOnEquity', 0)
         metrics['intrinsicWithIntangibles'] = 0
         metrics['priceToBook'] = stockInfo.get('priceToBook', 0)
     if (totalAssets > 0):
         metrics['returnOnCapitalEmployed'] = 100 * \
-            netIncome / (totalAssets - currentLiabilities)
+            preTaxProfit / (totalAssets - currentLiabilities)
         metrics['stockHolderEquityPerc'] = 100 * shareholderFunds / totalAssets
     else:
         metrics['returnOnCapitalEmployed'] = 0
@@ -317,7 +321,7 @@ def processStockStats(info, dailyPrices):
         assetSharePriceValue = assetValue / noOfShares
         evSharePrice = enterpriseValue / noOfShares
         metrics['intrinsicWithIntangiblesPrice'] = metrics['intrinsicWithIntangibles'] / noOfShares
-        metrics['breakUpPrice'] = breakUpValue / noOfShares  # Tangible assets - total liabilities
+        metrics['bookPrice'] = bookValue / noOfShares  # Tangible assets - total liabilities
         # Balance sheet NAV = Total assets - total liabilities (which is shareholder funds)
         metrics['netAssetValuePrice'] = shareholderFunds / noOfShares
     else:
@@ -326,22 +330,20 @@ def processStockStats(info, dailyPrices):
         assetSharePriceValue = 0
         evSharePrice = 0
         metrics['intrinsicWithIntangiblesPrice'] = 0
-        metrics['breakUpPrice'] = 0  # Tangible assets - total liabilities
+        metrics['bookPrice'] = 0  # Tangible assets - total liabilities
         metrics['netAssetValuePrice'] = stockInfo.get('navPrice', 0)
     metrics['lowerSharePriceValue'] = lowerSharePriceValue
     metrics['upperSharePriceValue'] = upperSharePriceValue
     metrics['assetSharePriceValue'] = assetSharePriceValue
     metrics['enterpriseValue'] = enterpriseValue
     metrics['evSharePrice'] = evSharePrice
-    operatingProfit = incomeStatement.get('Operating profit', 0)
-    metrics['operatingProfit'] = operatingProfit
     if (costOfDebt != 0):
-        metrics['interestCover'] = operatingProfit / costOfDebt
+        metrics['interestCover'] = preTaxProfit / costOfDebt
     else:
         metrics['interestCover'] = 0
     metrics['EPS'] = eps / 100
     if (eps != 0):
-        pe = currentPrice / eps
+        pe = 100 * currentPrice / eps
     else:
         pe = stockInfo.get('forwardPE', 0)
     metrics['PEratio'] = pe
@@ -351,7 +353,7 @@ def processStockStats(info, dailyPrices):
         val = incomeStatement.get('Cost of revenue', 0)
         metrics['grossProfitPerc'] = 100 * (tr - val) / tr
 
-        metrics['operatingProfitPerc'] = 100 * operatingProfit / tr
+        metrics['preTaxProfitPerc'] = 100 * preTaxProfit / tr
 
         val = incomeStatement.get('Central overhead', 0)
         metrics['overheadPerc'] = 100 * val / tr
@@ -363,7 +365,7 @@ def processStockStats(info, dailyPrices):
             metrics['netProfitPerc'] = 100 * val / tr
     else:
         metrics['grossProfitPerc'] = 0
-        metrics['operatingProfitPerc'] = 0
+        metrics['preTaxProfitPerc'] = 0
         metrics['overheadPerc'] = 0
         metrics['netProfitPerc'] = stockInfo.get('profitMargins', 0)
     # Altmann Z score = 1.2A + 1.4B + 3.3C + 0.6D + 1.0E
@@ -378,7 +380,7 @@ def processStockStats(info, dailyPrices):
         # C = Net income  / total Assets
         C = netIncome / totalAssets
         # D = Capitilisation / total liabilities
-        D = marketCap / (totalDebt + currentLiabilities)
+        D = marketCap / totalLiabilities
         # E = Sales / total assets
         E = tr / totalAssets
         metrics['altmannZ'] = 1.2*A + 1.4*B + 3.3*C + 0.6*D + 1.0*E

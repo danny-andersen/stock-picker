@@ -87,7 +87,7 @@ def getStock(storeConfig, stock, name, local):
     content = None
     if (local):
         baseDir = storeConfig['baseDir']
-        fileName = baseDir + name + "\\" + stock + '.json'
+        fileName = baseDir + name + "/" + stock + '.json'
         content = retreiveLocal(fileName)
     else: #load from HDFS
         hdfsBaseDir = storeConfig['hdfsBaseDir']
@@ -100,7 +100,7 @@ def getStock(storeConfig, stock, name, local):
 def saveStock(storeConfig, stock, name, content, local):
     if (local):
         baseDir = storeConfig['baseDir']
-        fileName = baseDir + name + "\\" + stock + '.json' 
+        fileName = baseDir + name + "/" + stock + '.json' 
         saveLocal(fileName, content)
     else: #load from HDFS
         hdfsBaseDir = storeConfig['hdfsBaseDir']

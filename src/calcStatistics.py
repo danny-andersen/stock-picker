@@ -14,7 +14,7 @@ import math
 
 def calcRMSE(x, cfarray, fitIntercept=True):
     y = np.array(cfarray)
-    model = LinearRegression(fitIntercept).fit(x,y)
+    model = LinearRegression(fit_intercept=fitIntercept).fit(x,y)
     #Determine accuracy
     cfcheck = model.predict(x)
     #print( cfarray, cfcheck)

@@ -52,7 +52,7 @@ def processStocks(stockFile, iniFile):
     attempts = 1
     startStocksNum = len(stocks)
     lastCount = startStocksNum
-    processedCount = 0
+    # processedCount = 0
     while tries > 0:
         #Parallise the stock list - one spark process per stock
         print(f"****************Attempt {attempts}: Parallelising stock processing job for {len(stocks)} stocks....standby")

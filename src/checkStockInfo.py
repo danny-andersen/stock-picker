@@ -46,10 +46,10 @@ def countInfoNones(info):
         cnt += countNones(d)[0]
     return cnt
 
-def isStockInfoBetter(currentInfo, newInfo):
+def isNewStockInfoBetter(currentInfo, newInfo):
     cnt = countInfoNones(currentInfo)
     newCnt = countInfoNones(newInfo)
-    return newCnt > cnt
+    return newCnt >= cnt
 
 def checkStockSpark(bconfig, stock, local):
     info = getStockInfoSaved(bconfig.value['store'], stock, local)

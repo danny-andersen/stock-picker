@@ -21,7 +21,7 @@ def getUrlHtml(url):
     dom = BeautifulSoup(data, "html5lib")
     #dom = BeautifulSoup(data, "html.parser")
     #dom = BeautifulSoup(data, "lxml")
-    #time.sleep(1 + 5 * random())  #Sleep for up to 10 seconds to limit number of gets on web site to prevent blacklisting
+    time.sleep(1 + 2 * random())  #Sleep for up to 3 seconds to limit number of gets on web site to prevent blacklisting
     return dom
 
 def removeNones(d):
@@ -149,7 +149,7 @@ def getBalanceSheet(stock, dom):
 
         value = getTableValue(bsTable, "^intangibles", valueCell=2)
         balanceSheet['Intangibles'] = value
-        value = getTableValue(bsTable, "^investments", valueCell=2)
+        value = getTableValue(bsTable, ".*investments", valueCell=2)
         balanceSheet['Investments'] = value
         value = getTableValue(bsTable, "fixed assets", valueCell=2)
         balanceSheet['Total Plant'] = value
@@ -194,10 +194,10 @@ def getKeyFigures(dom):
         # income['Central overhead'] = getTableValue(incTable, "^Selling general.*")
         # income['Interest expense'] = getTableValue(incTable, "Interest Expense")
         income['Net income'] = getTableValue(fundamentalTable, "attributable profit")
-        income['Operating profit'] = getTableValue(fundamentalTable, "pre tax profit")
+        income['Pre-tax profit'] = getTableValue(fundamentalTable, "pre tax profit")
         dps = getTableValue(fundamentalTable, "dividends per share")
-        stats["Revenue per share"] = getTableValue(fundamentalTable, "^eps - basic .*", valueCell=2)
-        stats["Diluted EPS"] = getTableValue(fundamentalTable, "^eps - diluted .*", valueCell=2)
+        stats["Revenue per share"] = getTableValue(fundamentalTable, "^eps - basic.*", valueCell=2)
+        stats["Diluted EPS"] = getTableValue(fundamentalTable, "^eps - diluted.*", valueCell=2)
     else:
         dps = 0
  

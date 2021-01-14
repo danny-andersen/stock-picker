@@ -30,9 +30,9 @@ def calcScore(stock, metrics):
     else:
         incomeScorePerc = 0
     currentPrice = metrics['currentPrice']
-    if (metrics['breakUpPrice'] > currentPrice): 
+    if (metrics['bookPrice'] > currentPrice): 
         score += 1
-    elif (metrics['breakUpPrice'] < 0):
+    elif (metrics['bookPrice'] < 0):
         score -= 1 # penalise stock that has negative break up value, i.e. net asset value less intangibles
     if (metrics['assetSharePriceValue'] > currentPrice): score += 1
     if (metrics['lowerSharePriceValue'] > currentPrice): score += 1
