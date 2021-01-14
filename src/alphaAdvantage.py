@@ -45,7 +45,7 @@ def getPrices(apiKey, stock, outputSize, existingPrices):
 
     http = httplib2.Http()
     data = http.request(url, method="GET", headers=header)[1]
-    time.sleep(30 + 30 * random())  #Sleep for up to 60 seconds to limit number of gets to prevent blacklisting
+    time.sleep(1 + 2 * random())  #Sleep for up to 3 seconds to limit number of gets to prevent blacklisting
     
 #    response = urlopen(url)
 #    data = response.read().decode("utf-8")
