@@ -127,8 +127,8 @@ def getStockInfoSaved(config, stock, local=True):
 def getStockPricesSaved(storeConfig, stock, local):
     stockPrices = getStock(storeConfig, stock, 'prices', local)
     # Convert key from str to int, and value from list to tuple
-    if (stockPrices):
-        munged = stockPrices['dailyPrices']
+    if (stockPrices and stockPrices['dailyPrices'] != None):
+        munged = stockPrices['dailyPrices'] 
         unmunged = dict()
         for k,v in munged.items():
             unmunged[int(k)] = (v[0], v[1]) #timestamp = (min, max)

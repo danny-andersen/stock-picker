@@ -2,7 +2,7 @@ from calcStatistics import calculateDCF
 from datetime import datetime, timedelta
 import locale
 from retreiveStockInfo import getStockInfo
-from scoreStock import calcScore
+from scoreStock import calcScore, calcPiotroskiFScore
 from saveRetreiveFiles import getStockInfoSaved, saveStockInfo, saveStockMetrics, getStockPricesSaved, saveStockPrices, saveStringToDropbox
 from alphaAdvantage import getLatestDailyPrices, getAllDailyPrices, checkPrices
 from checkStockInfo import checkStockInfo, isNewStockInfoBetter, countInfoNones
@@ -63,28 +63,40 @@ def processStock(config, stock, local):
             print(f"{stock}: Retreived info not any better: good new Info: {goodNewInfo}, is better info: {betterInfo}")
             info = None
     prices = getStockPricesSaved(storeConfig, stock, local)
+    dailyPrices = None
+    refreshPrices = False
     if (prices):
+        dailyPrices = prices['dailyPrices']
         latestPriceDate = prices['endDate']
-        howOld = datetime.now() - latestPriceDate
-        if (howOld.days > maxPriceAgeDays):
-            # If more than a week old, refresh
-            print(f"{stock}: Refreshing prices")
-            prices = getLatestDailyPrices(apiKey, stock, prices['dailyPrices'])
+        if (latestPriceDate):
+            howOld = datetime.now() - latestPriceDate
+        if (not latestPriceDate):
+            refreshPrices = True
+        elif (howOld.days > maxPriceAgeDays):
+            refreshPrices = True
+        elif (not prices['dailyPrices']):
+            refreshPrices = True
+    else:
+        refreshPrices = True
+    if (refreshPrices):
+        # If no latest price data or more than max age, refresh
+        print(f"{stock}: Refreshing prices")
+        newPrices = getLatestDailyPrices(apiKey, stock, dailyPrices)
+        if (newPrices and newPrices['dailyPrices']):
+            prices = newPrices
             saveStockPrices(storeConfig, stock, prices, local)
         else:
-            # Check saved prices to determine if have any prices in pounds and convert
-            # Note: This step can be removed once all old stock reprocessed
-            checkedPrices = checkPrices(prices['dailyPrices'])
-            if (checkedPrices):
-                prices['dailyPrices'] = checkedPrices
+            # Get all daily prices to save
+            print(f"{stock}: Getting all stock prices")
+            newPrices = getAllDailyPrices(apiKey, stock)
+            if (newPrices and newPrices['dailyPrices']):
+                prices = newPrices
                 saveStockPrices(storeConfig, stock, prices, local)
-    if (prices is None):
-        # Get all daily prices to save
-        print(f"{stock}: Getting stock prices")
-        prices = getAllDailyPrices(apiKey, stock)
-        saveStockPrices(storeConfig, stock, prices, local)
-    if (info and prices):
+            else:
+                print(f"{stock}: Failed to get any stock prices")
+    if (info and prices and prices['dailyPrices']):
         metrics = processStockStats(info, prices['dailyPrices'])
+        calcPiotroskiFScore(stock, info, metrics)
         saveStockMetrics(storeConfig, stock, metrics, local)
         scores = calcScore(stock, metrics)
         resultStr = getResultsStr(stock, scores, metrics)
@@ -154,21 +166,21 @@ def processStockStats(info, dailyPrices):
 
     # Determine this years dividend, average and max dividend
     # Calc dividend by year
-    years = {}
+    yearsAgo = {}
     for divi in dividends:
-        date = divi['date']
+        divDate = divi['date']
         dividend = divi['dividend']
-        years[date.year] = dividend + years.get(date.year, 0)
+        numYears = int((now - divDate).days / 365) 
+        yearsAgo[numYears] = dividend + yearsAgo.get(numYears, 0)
     avgDividend = 0
     maxDividend = 0
     thisYearDividend = 0
     lastYearDividend = 0
-    lastYear = now.year - 1
-    for year in years:
-        dividend = years[year]
-        if (year == now.year):
+    for year in yearsAgo:
+        dividend = yearsAgo[year]
+        if (year == 0):
             thisYearDividend = dividend
-        if (year == lastYear):
+        if (year == 1):
             lastYearDividend = dividend
         if (maxDividend < dividend):
             maxDividend = dividend
@@ -179,8 +191,8 @@ def processStockStats(info, dailyPrices):
         else:
             thisYearDividend = forwardYield * currentPrice
     metrics['thisYearDividend'] = thisYearDividend
-    if (len(years) != 0):
-        avgDividend = avgDividend / len(years)
+    if (len(yearsAgo) != 0):
+        avgDividend = avgDividend / len(yearsAgo)
     else:
         avgDividend = thisYearDividend
     metrics['maxDividend'] = maxDividend
@@ -192,7 +204,7 @@ def processStockStats(info, dailyPrices):
     else:
         daysSinceExDiv = 0
     metrics['daysSinceExDiv'] = daysSinceExDiv
-    eps = getValue(stats, 'Diluted EPS', getValue(stats, "Revenue per share", getValue(stockInfo, 'trailingEps', 0)))
+    eps = getValue(incomeStatement, 'Diluted EPS', getValue(incomeStatement, "Revenue per share", getValue(stockInfo, 'trailingEps', 0)))
     metrics['eps'] = eps
     if (thisYearDividend != 0 and eps != 0):
         diviCover = eps / thisYearDividend
@@ -260,7 +272,11 @@ def processStockStats(info, dailyPrices):
     totalAssets = getValue(balanceSheet, 'Total Assets', 0) 
     totalLiabilities = getValue(balanceSheet, 'Total Liabilities', 0)
     intangibles = getValue(balanceSheet, 'Intangibles', 0)
-    gearing = totalLiabilities / (totalAssets - intangibles)
+    netAssets = (totalAssets - intangibles)
+    if (netAssets != 0):
+        gearing = totalLiabilities / netAssets
+    else:
+        gearing = 0
     metrics['gearing'] = gearing
     bookValue = totalAssets - intangibles - totalLiabilities
     metrics['bookValue'] = bookValue

@@ -90,7 +90,10 @@ def getResultsStr(stock, scores, metrics):
     retStr += str.format(f"Return on Equity (RoE) = {metrics['returnOnEquity']:0.2f}%\n")
     retStr += str.format(f"Return on Capital Employed (RoCE) = {metrics['returnOnCapitalEmployed']:0.2f}%\n")
     retStr += str.format(f"Percentage of Liabilities are Stockholder funds: {metrics['stockHolderEquityPerc']:0.1f}%\n")
+
+    retStr += str.format(f"------Investment Scores:-------------------\n")
     retStr += str.format(f"AltmannZ score (<1.8 is bad, >3 is good): {metrics['altmannZ']:0.2f}\n")
+    retStr += str.format(f"Piotroski F score (<3 is bad, 8 or 9 - get it bought!): {metrics['piotroskiFScore']:0.2f}\n")
     
     retStr += str.format(f"------Summary:----------------------\n")
     retStr += str.format(f"Buy signal weighted slope forecast = {metrics['weightedSlopePerc']:0.0f}%\n")

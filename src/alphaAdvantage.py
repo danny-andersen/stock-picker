@@ -13,23 +13,24 @@ def checkPrices(prices):
      #Check prices dont vary wildy between days, if they do, delete the day
      newPrices = dict()
      changed = False #Use to indicate if changes made - if none made then return None
-     pricedates = sorted(prices)
-     (priceLow, priceHigh) = prices[pricedates[0]]
-     lastPrice = (priceLow + priceHigh) / 2
-     for pricedate in pricedates:
-         (priceLow, priceHigh) = prices[pricedate]
-         price = (priceLow + priceHigh) /2
-         if (abs(int(log10(price)) - int(log10(lastPrice))) >= 2):
-             if (lastPrice > price):
-                 price *= 100  # price in pounds - convert to pence
-                 priceLow *= 100
-                 priceHigh *= 100
-                 changed = True
-#         reldelta = abs(price - lastPrice) / price
-#         if (reldelta > 0.5): 
+     if (prices):
+        pricedates = sorted(prices)
+        (priceLow, priceHigh) = prices[pricedates[0]]
+        lastPrice = (priceLow + priceHigh) / 2
+        for pricedate in pricedates:
+            (priceLow, priceHigh) = prices[pricedate]
+            price = (priceLow + priceHigh) /2
+            if (abs(int(log10(price)) - int(log10(lastPrice))) >= 2):
+                if (lastPrice > price):
+                    price *= 100  # price in pounds - convert to pence
+                    priceLow *= 100
+                    priceHigh *= 100
+                    changed = True
+    #         reldelta = abs(price - lastPrice) / price
+    #         if (reldelta > 0.5): 
 
-         newPrices[pricedate] = (priceLow, priceHigh)
-         lastPrice = price
+            newPrices[pricedate] = (priceLow, priceHigh)
+            lastPrice = price
      if (changed):
          return newPrices
      else:
@@ -45,7 +46,7 @@ def getPrices(apiKey, stock, outputSize, existingPrices):
 
     http = httplib2.Http()
     data = http.request(url, method="GET", headers=header)[1]
-    time.sleep(1 + 2 * random())  #Sleep for up to 3 seconds to limit number of gets to prevent blacklisting
+    time.sleep(3 + 2 * random())  #Sleep for up to 5 seconds to limit number of gets to prevent blacklisting
     
 #    response = urlopen(url)
 #    data = response.read().decode("utf-8")
