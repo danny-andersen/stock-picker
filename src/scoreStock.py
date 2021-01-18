@@ -92,24 +92,27 @@ def calcScore(stock, metrics):
 def calcPiotroskiFScore(stock, info, metrics):
     score = 0
     latestIncome = info['incomeStatement']         
-    if (latestIncome['Net income'] > 0): score +=1
+    latestNet = latestIncome.get('Net income', 0)
+    if (latestNet and latestNet > 0): score +=1
 
     ocf = info['operatingCashFlow']
-    sortedocf = sorted(ocf, key=lambda d: d[0])
-    latestOcf = sortedocf[len(sortedocf)-1][1]
-    if (latestOcf > 0): score +=1
-    if (latestOcf > latestIncome['Net income']): score +=1
+    if (ocf and len(ocf) > 0):
+        sortedocf = sorted(ocf, key=lambda d: d[0])
+        latestOcf = sortedocf[len(sortedocf)-1][1]
+        if (latestOcf > 0): score +=1
+        if (latestNet and latestNet != 0 and latestOcf > latestNet): score +=1
     
     stats = info['stats']
-    if (stats['Return on Assets'] > 0): score +=1
+    if (stats.get('Return on Assets', 0) > 0): score +=1
     
     currentBalanceSheet = info['balanceSheet']
     prevYearBalanceSheet = info['prevYearBalanceSheet']
-    if (currentBalanceSheet['Total non-current liabilities'] < prevYearBalanceSheet['Total non-current liabilities']): score +=1
-    prevLiabilities = prevYearBalanceSheet['Total current liabilities']
-    if (prevLiabilities != 0):
-        prevCurrentRatio = prevYearBalanceSheet['Total Current Assets'] / prevLiabilities
-        if (metrics['currentRatio'] > prevCurrentRatio): score += 1
+    if (currentBalanceSheet.get('Total non-current liabilities', 0) < prevYearBalanceSheet.get('Total non-current liabilities', 0)): score +=1
+    prevLiabilities = prevYearBalanceSheet.get('Total current liabilities', 0)
+    prevAssets = prevYearBalanceSheet.get('Total Current Assets', 0) 
+    if (prevAssets and prevLiabilities and prevLiabilities != 0):
+        prevCurrentRatio = prevAssets / prevLiabilities
+        if (metrics['currentRatio'] > prevCurrentRatio and prevCurrentRatio > 0): score += 1
     
     score += 1 #Assume no change in shares issued in past year (dont have the data)
 
@@ -117,23 +120,23 @@ def calcPiotroskiFScore(stock, info, metrics):
     latestTurnover = latestIncome.get('Total revenue', 0)
     prevIncome = info['prevYearIncomeStatement']         
     prevTurnover = prevIncome.get('Total revenue', 0)
-    if (prevTurnover > 0):
+    if (prevTurnover and prevTurnover > 0):
         prevGM = prevIncome.get('Pre-tax profit', 0) / prevTurnover
     else:
         prevGM = 0
     if (latestGM >= prevGM): score += 1
 
     latestAssets = currentBalanceSheet.get('Total Assets', 0)
-    if (latestAssets > 0):
+    if (latestAssets and latestAssets > 0):
         latestAssetTurnover = latestTurnover / latestAssets
     else:
         latestAssetTurnover = 0
     prevAssets = prevYearBalanceSheet.get('Total Assets', 0)
-    if (prevAssets > 0):
+    if (prevAssets and prevAssets > 0):
         prevAssetTurnover = prevTurnover / prevAssets
     else:
         prevAssetTurnover = 0
-    if (latestAssetTurnover >= prevAssetTurnover): score += 1
+    if (latestAssetTurnover > 0 and latestAssetTurnover >= prevAssetTurnover): score += 1
 
     metrics['piotroskiFScore'] = score
 

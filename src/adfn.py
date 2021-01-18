@@ -117,9 +117,10 @@ def getTableValue(html, searchStr, index=0, valueCell=2, multiplier=None, defaul
         lastCell = len(cells) - 1
         if (not multiplier):
             multiplier = cells[lastCell].string
-        #Get latest value
-        value = cells[lastCell - valueCell].string
-        value = convertToValue(value, multiplier)
+        #Get value pointed to by the valueCell (default value = 2, which is the last one)
+        if (lastCell - valueCell > 0):
+            value = cells[lastCell - valueCell].string
+            value = convertToValue(value, multiplier)
     else:
         print(f"Failed to find table cell with content of {searchStr}")
     return value
@@ -275,7 +276,7 @@ def getStockInfoAdfn(stockName):
     dividends = getDividends(dom)
     latestYearCell = 2 
     balanceSheet = getBalanceSheet(stock, dom, latestYearCell)
-    previousYearCell = 3 
+    previousYearCell = 5
     prevBalanceSheet = getBalanceSheet(stock, dom, previousYearCell)
     latestIncomeStatement = getIncomeStatement(dom, latestYearCell)
     prevIncomeStatement = getIncomeStatement(dom, previousYearCell)
