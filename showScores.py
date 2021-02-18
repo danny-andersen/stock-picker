@@ -5,6 +5,7 @@ from scoreStock import calcScore
 from printResults import printResults
 from tabulate import tabulate
 
+
 def scoresOnTheDoors(storeConfig, scores, numToShow, local):
     scores.sort(key=lambda score:score['scorePerc'], reverse=True)
     numScores = len(scores)
