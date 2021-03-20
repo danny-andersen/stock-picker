@@ -10,7 +10,7 @@ config.read('../stockpicker.ini')
 localeStr = config['stats']['locale']
 locale.setlocale( locale.LC_ALL, localeStr) 
 
-stock = "IAG.L"
+stock = "BP.L"
 local = True  #Use filesystem to store data, so dont need to fire up hdfs cluster
 
 score = processStock(config, stock, local)

@@ -10,10 +10,10 @@ from checkStockInfo import checkStockSpark
 import configparser
 import locale
 from pyspark import SparkConf, SparkContext
+from getLatestPrices import getLatestPrices
 
 
 def processStocks(stockFile, iniFile):
-    local = False
     config = configparser.ConfigParser()
     config.read(iniFile)
     localeStr = config['stats']['locale']
@@ -22,6 +22,7 @@ def processStocks(stockFile, iniFile):
     numJobs = config['spark']['numJobs']
     api = config['stats']['api']
     print (f"********Using api {api}******")
+    priceRateLimit = config['stats'].getint('priceRateLimit')
 
     stocks = []
     with open(stockFile, 'r') as stockFile:
@@ -40,7 +41,12 @@ def processStocks(stockFile, iniFile):
             stock = stock.strip(' \n\r')
             if (stock != ''):
                 heldStocks.append(stock)
-        
+    
+    if (priceRateLimit):
+        #Rate limit (sigh) so need to do single threaded
+        print(f"Getting latest prices with a rate limit of {priceRateLimit} per min, please wait")
+        getLatestPrices(config, priceRateLimit, stocks)
+
     conf = SparkConf().setAppName("StockPicker")
     #         .setMaster("local")
     #         .set("spark.executor.memory", "1g")
@@ -59,15 +65,15 @@ def processStocks(stockFile, iniFile):
         rdd = sc.parallelize(stocks, numSlices=numJobs)
         #This does the actual work of retrieving the stock data and working out the metrics and scores
         #It returns a dict of scores
-        mrdd = rdd.map(lambda stock: processStockSpark(broadCastConfig, stock, local))
+        mrdd = rdd.map(lambda stock: processStockSpark(broadCastConfig, stock))
         #Reduce the scores by combining the returned dicts holding the scores, this triggers the map operation
         scores = mrdd.collect()
         scores = [s for s in scores if s] 
         print (f"*************Attempt {attempts}: Collected {len(scores)} scores out of {len(stocks)} stocks")
-        mergeAndSaveScores(configStore, scores, heldStocks, local)
+        mergeAndSaveScores(configStore, scores, heldStocks)
         #Check that we have all the info 
         print (f"***************Attempt {attempts}: Checking all info retreived")
-        mrdd = rdd.map(lambda stock: checkStockSpark(broadCastConfig, stock, local))
+        mrdd = rdd.map(lambda stock: checkStockSpark(broadCastConfig, stock))
         stocks = mrdd.collect()
         #Remove Nones 
         stocks = [s for s in stocks if s] 

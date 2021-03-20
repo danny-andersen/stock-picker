@@ -63,7 +63,8 @@ def getResultsStr(stock, scores, metrics):
     retStr += str.format(f"Enterprise value (to buy org) Share price: {metrics['evSharePrice']:0.2f}\n")
 
     retStr += str.format(f"------Dividends:--------------------\n")
-    retStr += str.format(f"This year dividend: {metrics['thisYearDividend']:0.2f}p({metrics['currentYield']:0.2f}%), Max Dividend: {metrics['maxDividend']:0.2f}p ({metrics['maxYield']:0.2f}%), Avg Dividend: {metrics['avgDividend']:0.2f} ({metrics['avgYield']:0.2f}%)\n")
+    retStr += str.format(f"Dividend: Latest: {metrics['thisYearDividend']:0.2f}p Max: {metrics['maxDividend']:0.2f}p Avg: {metrics['avgDividend']:0.2f}p Median: {metrics['medianDividend']:0.2f}p\n")
+    retStr += str.format(f"Yield: Max: {metrics['maxYield']:0.2f}%, Avg: {metrics['avgYield']:0.2f}%\n")
     if (metrics['exDivDate']):
         retStr += str.format(f"Days since Ex-Dividend = {metrics['daysSinceExDiv']} Date: {metrics['exDivDate'].strftime('%Y-%m-%d')}\n")
     retStr += str.format(f"Current Year Yield = {metrics['currentYield']:0.2f}%\n")

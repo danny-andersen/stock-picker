@@ -1,5 +1,8 @@
 import sys
-sys.path.insert(0, './src')
+if (os.path.exists('processStock.zip')):
+    sys.path.insert(0, 'processStock.zip')
+else:
+    sys.path.insert(0, './src')
 from saveRetreiveFiles import getStockScores, getStockMetricsSaved
 from scoreStock import calcScore
 from printResults import printResults

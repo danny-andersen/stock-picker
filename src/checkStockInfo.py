@@ -51,8 +51,8 @@ def isNewStockInfoBetter(currentInfo, newInfo):
     newCnt = countInfoNones(newInfo)
     return newCnt >= cnt
 
-def checkStockSpark(bconfig, stock, local):
-    info = getStockInfoSaved(bconfig.value['store'], stock, local)
+def checkStockSpark(bconfig, stock):
+    info = getStockInfoSaved(bconfig.value['store'], stock)
     return stock if not checkStockInfo(info) else None
    
 if __name__ == "__main__":
@@ -72,9 +72,9 @@ if __name__ == "__main__":
     storeConfig = config['store']
     version = config['stats'].getfloat('version')
     statsMaxAgeDays = config['stats'].getint('statsMaxAgeDays')
-   
+    if (args.local): storeConfig['localStore'] = 'true'  #override ini file if set on command line
     #Read score file
-    scores = getStockScores(storeConfig, args.local)
+    scores = getStockScores(storeConfig)
     if (not scores):
         print("Failed to retreive saved scores - please check filesystem or re-run scoring")
         sys.exit(1)
@@ -82,7 +82,7 @@ if __name__ == "__main__":
     staleStocks = []
     for score in scores:
         stock = score['stock']
-        info = getStockInfoSaved(storeConfig, stock, args.local)
+        info = getStockInfoSaved(storeConfig, stock)
         infoAge = datetime.now() - info['metadata']['storedDate']
         if (infoAge.days > statsMaxAgeDays or info['metadata']['version'] < version):
             staleStocks.append(stock)

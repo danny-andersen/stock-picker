@@ -69,7 +69,7 @@ def getLatestPrice(stock):
 
     html = getUrlHtml(url)
     priceTable = html.find("table", attrs = {'data-test' :"historical-prices"});
-    priceAndDate = dict()
+    priceAndDate = []
     if (priceTable):
         for tr in priceTable.find_all("tr"):
             td = tr.find_all("td")
@@ -329,7 +329,7 @@ def getKeyStatistics(stock):
         stats["Forward Annual Dividend Yield"] = None
     return (stats)
 
-def getStockInfoYahoo(version, stock):
+def getStockInfoYahoo(stock):
     dividends = getDividends(stock)
     balanceSheet = getBalanceSheet(stock)
     incomeStatement = getIncomeStatement(stock)
@@ -340,11 +340,7 @@ def getStockInfoYahoo(version, stock):
     st = yf.Ticker(stock)
     stockInfo = st.info
     stockInfo = removeNones(stockInfo)
-    meta = { 'version': version,
-             'storedDate': datetime.now(),
-             }
-
-    info = {'metadata': meta,
+    info = {
             'dividends': dividends,
             'balanceSheet': balanceSheet,
             'incomeStatement': incomeStatement,

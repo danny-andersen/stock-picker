@@ -8,13 +8,13 @@ from alphaAdvantage import getLatestDailyPrices, getAllDailyPrices, checkPrices
 from checkStockInfo import checkStockInfo, isNewStockInfoBetter, countInfoNones
 from printResults import getResultsStr
 from pricePeriod import getWeightedSlope, calcPriceStatisticsForPeriod
+from statistics import mean, median
+
+def processStockSpark(bcConfig, stock):
+    return processStock(bcConfig.value, stock)
 
 
-def processStockSpark(bcConfig, stock, local):
-    return processStock(bcConfig.value, stock, local)
-
-
-def processStock(config, stock, local):
+def processStock(config, stock):
     print(f"Processing stock: {stock}")
     # Set config
     version = config['stats'].getfloat('version')
@@ -28,7 +28,7 @@ def processStock(config, stock, local):
 
     # Check to see if stock info needs to be updated
     # Read info from file
-    info = getStockInfoSaved(storeConfig, stock, local)
+    info = getStockInfoSaved(storeConfig, stock)
     currentInfo = info
     newInfoReqd = False
     if (info):
@@ -58,11 +58,11 @@ def processStock(config, stock, local):
         betterInfo = isNewStockInfoBetter(currentInfo, info)
         if ((goodNewInfo and newInfoReqd) or betterInfo):
             #Save if we needed new info and its good or the old stuff could be improved and is better or same (but more recent)
-            saveStockInfo(storeConfig, stock, info, local)
+            saveStockInfo(storeConfig, stock, info)
         else:
             print(f"{stock}: Retreived info not any better: good new Info: {goodNewInfo}, is better info: {betterInfo}")
             info = None
-    prices = getStockPricesSaved(storeConfig, stock, local)
+    prices = getStockPricesSaved(storeConfig, stock)
     dailyPrices = None
     refreshPrices = False
     if (prices):
@@ -84,20 +84,20 @@ def processStock(config, stock, local):
         newPrices = getLatestDailyPrices(apiKey, stock, dailyPrices)
         if (newPrices and newPrices['dailyPrices']):
             prices = newPrices
-            saveStockPrices(storeConfig, stock, prices, local)
+            saveStockPrices(storeConfig, stock, prices)
         else:
             # Get all daily prices to save
             print(f"{stock}: Getting all stock prices")
             newPrices = getAllDailyPrices(apiKey, stock)
             if (newPrices and newPrices['dailyPrices']):
                 prices = newPrices
-                saveStockPrices(storeConfig, stock, prices, local)
+                saveStockPrices(storeConfig, stock, prices)
             else:
                 print(f"{stock}: Failed to get any stock prices")
     if (info and prices and prices['dailyPrices']):
         metrics = processStockStats(info, prices['dailyPrices'])
         calcPiotroskiFScore(stock, info, metrics)
-        saveStockMetrics(storeConfig, stock, metrics, local)
+        saveStockMetrics(storeConfig, stock, metrics)
         scores = calcScore(stock, metrics)
         resultStr = getResultsStr(stock, scores, metrics)
         saveStringToDropbox(
@@ -172,31 +172,35 @@ def processStockStats(info, dailyPrices):
         dividend = divi['dividend']
         numYears = int((now - divDate).days / 365) 
         yearsAgo[numYears] = dividend + yearsAgo.get(numYears, 0)
-    avgDividend = 0
-    maxDividend = 0
     thisYearDividend = 0
     lastYearDividend = 0
+    dividends = []
     for year in yearsAgo:
         dividend = yearsAgo[year]
+        dividends.append(dividend)
         if (year == 0):
             thisYearDividend = dividend
         if (year == 1):
             lastYearDividend = dividend
-        if (maxDividend < dividend):
-            maxDividend = dividend
-        avgDividend += dividend
+        # if (maxDividend < dividend):
+        #     maxDividend = dividend
+        # avgDividend += dividend
     if (thisYearDividend == 0):
         if (lastYearDividend):
             thisYearDividend = lastYearDividend
         else:
             thisYearDividend = forwardYield * currentPrice
     metrics['thisYearDividend'] = thisYearDividend
-    if (len(yearsAgo) != 0):
-        avgDividend = avgDividend / len(yearsAgo)
-    else:
-        avgDividend = thisYearDividend
-    metrics['maxDividend'] = maxDividend
+    maxDividend = max(dividends)
+    avgDividend = mean(dividends)
     metrics['avgDividend'] = avgDividend
+    metrics['maxDividend'] = maxDividend
+    metrics['medianDividend'] = median(dividends)
+
+    # if (len(yearsAgo) != 0):
+    #     avgDividend = avgDividend / len(yearsAgo)
+    # else:
+    #     avgDividend = thisYearDividend
     exDivDate = getValue(stats, 'Ex-Dividend Date', getValue(stockInfo, 'exDividendDate', None))
     metrics['exDivDate'] = exDivDate
     if (exDivDate):
@@ -216,10 +220,12 @@ def processStockStats(info, dailyPrices):
         metrics['currentYield'] = thisYearDividend/currentPrice
         metrics['maxYield'] = maxDividend/currentPrice
         metrics['avgYield'] = avgDividend/currentPrice
+        metrics['medianYield'] = metrics['medianDividend']/currentPrice
     else:
         metrics['currentYield'] = 0
         metrics['maxYield'] = 0
         metrics['avgYield'] = 0
+        metrics['medianYield'] = 0
 
     totalDebt = getValue(balanceSheet, 'Total non-current liabilities', 0)
     metrics['totalDebt'] = totalDebt
