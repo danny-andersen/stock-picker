@@ -62,6 +62,20 @@ def getResultsStr(stock, scores, metrics):
     retStr += str.format(f"Net asset value Share price: {metrics['netAssetValuePrice']:0.2f}\n")
     retStr += str.format(f"Enterprise value (to buy org) Share price: {metrics['evSharePrice']:0.2f}\n")
 
+    retStr += str.format(f"------Price Movement:--------------------\n")
+    (priceDeltaPerc, maxPrice, minPrice, stdPrice) = metrics['priceChangeLastWeek'] 
+    retStr += str.format(f"Past Week: %change: {priceDeltaPerc:0.2f} Max: {maxPrice:0.2f} Min: {minPrice:0.2f} Std Dev: {stdPrice:0.2f}\n")
+    (priceDeltaPerc, maxPrice, minPrice, stdPrice) = metrics['priceChangeLastMonth'] 
+    retStr += str.format(f"Past Month: %change: {priceDeltaPerc:0.2f} Max: {maxPrice:0.2f} Min: {minPrice:0.2f} Std Dev: {stdPrice:0.2f}\n")
+    (priceDeltaPerc, maxPrice, minPrice, stdPrice) = metrics['priceChangeLast3Month'] 
+    retStr += str.format(f"Past 3 Months: %change: {priceDeltaPerc:0.2f} Max: {maxPrice:0.2f} Min: {minPrice:0.2f} Std Dev: {stdPrice:0.2f}\n")
+    (priceDeltaPerc, maxPrice, minPrice, stdPrice) = metrics['priceChangeLast6Month'] 
+    retStr += str.format(f"Past 6 Months: %change: {priceDeltaPerc:0.2f} Max: {maxPrice:0.2f} Min: {minPrice:0.2f} Std Dev: {stdPrice:0.2f}\n")
+    (priceDeltaPerc, maxPrice, minPrice, stdPrice) = metrics['priceChangeLastYear'] 
+    retStr += str.format(f"Past Year: %change: {priceDeltaPerc:0.2f} Max: {maxPrice:0.2f} Min: {minPrice:0.2f} Std Dev: {stdPrice:0.2f}\n")
+    (priceDeltaPerc, maxPrice, minPrice, stdPrice) = metrics['priceChangeLast2Year'] 
+    retStr += str.format(f"Past 2 Years: %change: {priceDeltaPerc:0.2f} Max: {maxPrice:0.2f} Min: {minPrice:0.2f} Std Dev: {stdPrice:0.2f}\n")
+
     retStr += str.format(f"------Dividends:--------------------\n")
     retStr += str.format(f"Dividend: Latest: {metrics['thisYearDividend']:0.2f}p Max: {metrics['maxDividend']:0.2f}p Avg: {metrics['avgDividend']:0.2f}p Median: {metrics['medianDividend']:0.2f}p\n")
     retStr += str.format(f"Yield: Max: {metrics['maxYield']:0.2f}%, Avg: {metrics['avgYield']:0.2f}%\n")

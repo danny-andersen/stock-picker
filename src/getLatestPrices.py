@@ -6,12 +6,13 @@ from alphaAdvantage import getLatestDailyPrices, getAllDailyPrices, checkPrices
 
 def getLatestPrices(config, rateLimit, stocks):
     maxPriceAgeDays = config['stats'].getint('maxPriceAgeDays')
-    apiKey = config['keys']['alhaAdvantageApiKey']
+    apiKey = config['keys']['alphaAdvantageApiKey']
     storeConfig = config['store']
     localeStr = config['stats']['locale']
     locale.setlocale(locale.LC_ALL, localeStr)
     periodBetweenCalls = 60.0 / rateLimit
-    lastTime = datetime.now() - timedelta(seconds = periodBetweenCalls + 1)
+    nowTime = datetime.now()
+    lastTime = nowTime - timedelta(seconds = periodBetweenCalls + 1)
     for stock in stocks:
         prices = getStockPricesSaved(storeConfig, stock)
         dailyPrices = None
@@ -19,19 +20,22 @@ def getLatestPrices(config, rateLimit, stocks):
         if (prices):
             dailyPrices = prices['dailyPrices']
             latestPriceDate = prices['endDate']
+            lastAttemptDate = prices.get('lastRetrievalDate', nowTime)
             if (latestPriceDate):
-                howOld = datetime.now() - latestPriceDate
+                howOld = nowTime - latestPriceDate
             if (not latestPriceDate):
                 refreshPrices = True
             elif (howOld.days > maxPriceAgeDays):
-                refreshPrices = True
+                howLongSinceLastRetrieval = nowTime - lastAttemptDate
+                if (howLongSinceLastRetrieval.days > 1):
+                    refreshPrices = True
             elif (not prices['dailyPrices']):
                 refreshPrices = True
         else:
             refreshPrices = True
         if (refreshPrices):
             # If no latest price data or more than max age, refresh
-            sleepTime = periodBetweenCalls - (datetime.now() - lastTime).seconds
+            sleepTime = periodBetweenCalls - (datetime.now() - lastTime).seconds + 1
             if (sleepTime > 0):
                 time.sleep(sleepTime)
             print(f"{stock}: Refreshing prices")

@@ -8,7 +8,7 @@ from alphaAdvantage import getLatestDailyPrices, getAllDailyPrices, checkPrices
 from checkStockInfo import checkStockInfo, isNewStockInfoBetter, countInfoNones
 from printResults import getResultsStr
 from pricePeriod import getWeightedSlope, calcPriceStatisticsForPeriod
-from statistics import mean, median
+from statistics import mean, median, pstdev
 
 def processStockSpark(bcConfig, stock):
     return processStock(bcConfig.value, stock)
@@ -20,7 +20,7 @@ def processStock(config, stock):
     version = config['stats'].getfloat('version')
     maxPriceAgeDays = config['stats'].getint('maxPriceAgeDays')
     statsMaxAgeDays = config['stats'].getint('statsMaxAgeDays')
-    apiKey = config['keys']['alhaAdvantageApiKey']
+    apiKey = config['keys']['alphaAdvantageApiKey']
     maxNonesInInfo = config['stats'].getint('maxNonesInInfo')
     storeConfig = config['store']
     localeStr = config['stats']['locale']
@@ -112,6 +112,38 @@ def getValue(dictHolder, name, default):
     if (not val): val = default
     return val
 
+def priceChange(timeStamps, dailyPrices, currentTimeStamp, currentPrice, daysAgo):
+    currentDate = datetime.fromtimestamp(currentTimeStamp)
+    end = len(timeStamps) - 1
+    dateDaysAgo = currentDate - timedelta(days=daysAgo)
+    jump = end-daysAgo-10
+    if (jump < 0): jump = 0
+    #Find closest date to required date 
+    minDelta = timedelta(weeks=52)
+    entry = 0
+    low = 0
+    high = 0
+    for i in range(jump, end):
+        d = datetime.fromtimestamp(timeStamps[i]) - dateDaysAgo
+        if (d < minDelta):
+            minDelta = d
+            entry = i
+            (low, high) = dailyPrices[timeStamps[i]]
+    priceDeltaPerc = 100*(currentPrice - ((low + high)/2)) / currentPrice
+    priceDates = timeStamps[entry:]
+    prices = [dailyPrices[x] for x in priceDates]
+    avgPrices = [(low+high)/2 for (low, high) in prices]
+    if (len(avgPrices) > 0):
+        maxPrice = max(avgPrices)
+        minPrice = min(avgPrices)
+        stdPrice = pstdev(avgPrices)
+    else:
+        maxPrice = 0
+        minPrice = 0
+        stdPrice = 0
+
+    return (priceDeltaPerc, maxPrice, minPrice, stdPrice)
+
 def processStockStats(info, dailyPrices):
     now = datetime.now()
     metrics = dict()
@@ -139,7 +171,15 @@ def processStockStats(info, dailyPrices):
         metrics['currentPriceDate'] = datetime.fromtimestamp(latestPriceDate)
         (low, high) = dailyPrices[latestPriceDate]
         # Use the average of the last price range we have
-        currentPrice = ((high + low)/2)/100
+        currentPricePence = (high + low)/2
+        # Work out % change since last week
+        metrics['priceChangeLastWeek'] = priceChange(priceDatesSorted, dailyPrices, latestPriceDate, currentPricePence, 7)
+        metrics['priceChangeLastMonth'] = priceChange(priceDatesSorted, dailyPrices, latestPriceDate, currentPricePence, 30)
+        metrics['priceChangeLast3Month'] = priceChange(priceDatesSorted, dailyPrices, latestPriceDate, currentPricePence, 90)
+        metrics['priceChangeLast6Month'] = priceChange(priceDatesSorted, dailyPrices, latestPriceDate, currentPricePence, 182)
+        metrics['priceChangeLastYear'] = priceChange(priceDatesSorted, dailyPrices, latestPriceDate, currentPricePence, 364)
+        metrics['priceChangeLast2Year'] = priceChange(priceDatesSorted, dailyPrices, latestPriceDate, currentPricePence, 728)
+        currentPrice = currentPricePence/100
         if (noOfShares == 0):
             noOfShares = marketCap / currentPrice
         # Calculate slope as to whether price is increasing or decreasing
@@ -191,11 +231,18 @@ def processStockStats(info, dailyPrices):
         else:
             thisYearDividend = forwardYield * currentPrice
     metrics['thisYearDividend'] = thisYearDividend
-    maxDividend = max(dividends)
-    avgDividend = mean(dividends)
+    if (len(dividends)):
+        maxDividend = max(dividends)
+        avgDividend = mean(dividends)
+        medianDividend = median(dividends)
+    else:
+        maxDividend = 0
+        avgDividend = 0
+        medianDividend = 0
+
     metrics['avgDividend'] = avgDividend
     metrics['maxDividend'] = maxDividend
-    metrics['medianDividend'] = median(dividends)
+    metrics['medianDividend'] = medianDividend
 
     # if (len(yearsAgo) != 0):
     #     avgDividend = avgDividend / len(yearsAgo)
