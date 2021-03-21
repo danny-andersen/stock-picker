@@ -1,14 +1,15 @@
 from calcStatistics import calculateDCF
 from datetime import datetime, timedelta
+from statistics import mean, median, pstdev
 import locale
+
 from retreiveStockInfo import getStockInfo
 from scoreStock import calcScore, calcPiotroskiFScore
-from saveRetreiveFiles import getStockInfoSaved, saveStockInfo, saveStockMetrics, getStockPricesSaved, saveStockPrices, saveStringToDropbox
-from alphaAdvantage import getLatestDailyPrices, getAllDailyPrices, checkPrices
+from saveRetreiveFiles import getStockInfoSaved, saveStockInfo, saveStockMetrics, saveStringToDropbox
 from checkStockInfo import checkStockInfo, isNewStockInfoBetter, countInfoNones
+from getLatestPrices import getAndSaveStockPrices
 from printResults import getResultsStr
 from pricePeriod import getWeightedSlope, calcPriceStatisticsForPeriod
-from statistics import mean, median, pstdev
 
 def processStockSpark(bcConfig, stock):
     return processStock(bcConfig.value, stock)
@@ -18,9 +19,7 @@ def processStock(config, stock):
     print(f"Processing stock: {stock}")
     # Set config
     version = config['stats'].getfloat('version')
-    maxPriceAgeDays = config['stats'].getint('maxPriceAgeDays')
     statsMaxAgeDays = config['stats'].getint('statsMaxAgeDays')
-    apiKey = config['keys']['alphaAdvantageApiKey']
     maxNonesInInfo = config['stats'].getint('maxNonesInInfo')
     storeConfig = config['store']
     localeStr = config['stats']['locale']
@@ -62,38 +61,7 @@ def processStock(config, stock):
         else:
             print(f"{stock}: Retreived info not any better: good new Info: {goodNewInfo}, is better info: {betterInfo}")
             info = None
-    prices = getStockPricesSaved(storeConfig, stock)
-    dailyPrices = None
-    refreshPrices = False
-    if (prices):
-        dailyPrices = prices['dailyPrices']
-        latestPriceDate = prices['endDate']
-        if (latestPriceDate):
-            howOld = datetime.now() - latestPriceDate
-        if (not latestPriceDate):
-            refreshPrices = True
-        elif (howOld.days > maxPriceAgeDays):
-            refreshPrices = True
-        elif (not prices['dailyPrices']):
-            refreshPrices = True
-    else:
-        refreshPrices = True
-    if (refreshPrices):
-        # If no latest price data or more than max age, refresh
-        print(f"{stock}: Refreshing prices")
-        newPrices = getLatestDailyPrices(apiKey, stock, dailyPrices)
-        if (newPrices and newPrices['dailyPrices']):
-            prices = newPrices
-            saveStockPrices(storeConfig, stock, prices)
-        else:
-            # Get all daily prices to save
-            print(f"{stock}: Getting all stock prices")
-            newPrices = getAllDailyPrices(apiKey, stock)
-            if (newPrices and newPrices['dailyPrices']):
-                prices = newPrices
-                saveStockPrices(storeConfig, stock, prices)
-            else:
-                print(f"{stock}: Failed to get any stock prices")
+    (prices, retrieveDate) = getAndSaveStockPrices(config, stock)
     if (info and prices and prices['dailyPrices']):
         metrics = processStockStats(info, prices['dailyPrices'])
         calcPiotroskiFScore(stock, info, metrics)
@@ -136,13 +104,15 @@ def priceChange(timeStamps, dailyPrices, currentTimeStamp, currentPrice, daysAgo
     if (len(avgPrices) > 0):
         maxPrice = max(avgPrices)
         minPrice = min(avgPrices)
+        medianPrice = median(avgPrices)
         stdPrice = pstdev(avgPrices)
     else:
         maxPrice = 0
         minPrice = 0
+        medianPrice = 0
         stdPrice = 0
 
-    return (priceDeltaPerc, maxPrice, minPrice, stdPrice)
+    return (priceDeltaPerc, maxPrice, minPrice, medianPrice, stdPrice)
 
 def processStockStats(info, dailyPrices):
     now = datetime.now()

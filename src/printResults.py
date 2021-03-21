@@ -63,26 +63,25 @@ def getResultsStr(stock, scores, metrics):
     retStr += str.format(f"Enterprise value (to buy org) Share price: {metrics['evSharePrice']:0.2f}\n")
 
     retStr += str.format(f"------Price Movement:--------------------\n")
-    (priceDeltaPerc, maxPrice, minPrice, stdPrice) = metrics['priceChangeLastWeek'] 
-    retStr += str.format(f"Past Week: %change: {priceDeltaPerc:0.2f} Max: {maxPrice:0.2f} Min: {minPrice:0.2f} Std Dev: {stdPrice:0.2f}\n")
-    (priceDeltaPerc, maxPrice, minPrice, stdPrice) = metrics['priceChangeLastMonth'] 
-    retStr += str.format(f"Past Month: %change: {priceDeltaPerc:0.2f} Max: {maxPrice:0.2f} Min: {minPrice:0.2f} Std Dev: {stdPrice:0.2f}\n")
-    (priceDeltaPerc, maxPrice, minPrice, stdPrice) = metrics['priceChangeLast3Month'] 
-    retStr += str.format(f"Past 3 Months: %change: {priceDeltaPerc:0.2f} Max: {maxPrice:0.2f} Min: {minPrice:0.2f} Std Dev: {stdPrice:0.2f}\n")
-    (priceDeltaPerc, maxPrice, minPrice, stdPrice) = metrics['priceChangeLast6Month'] 
-    retStr += str.format(f"Past 6 Months: %change: {priceDeltaPerc:0.2f} Max: {maxPrice:0.2f} Min: {minPrice:0.2f} Std Dev: {stdPrice:0.2f}\n")
-    (priceDeltaPerc, maxPrice, minPrice, stdPrice) = metrics['priceChangeLastYear'] 
-    retStr += str.format(f"Past Year: %change: {priceDeltaPerc:0.2f} Max: {maxPrice:0.2f} Min: {minPrice:0.2f} Std Dev: {stdPrice:0.2f}\n")
-    (priceDeltaPerc, maxPrice, minPrice, stdPrice) = metrics['priceChangeLast2Year'] 
-    retStr += str.format(f"Past 2 Years: %change: {priceDeltaPerc:0.2f} Max: {maxPrice:0.2f} Min: {minPrice:0.2f} Std Dev: {stdPrice:0.2f}\n")
+    (priceDeltaPerc, maxPrice, minPrice, medianPrice, stdPrice) = metrics['priceChangeLastWeek'] 
+    retStr += str.format(f"Past Week: %change: {priceDeltaPerc:0.2f} Max: {maxPrice:0.2f} Min: {minPrice:0.2f} Median: {medianPrice:0.2f} Std Dev: {stdPrice:0.2f}\n")
+    (priceDeltaPerc, maxPrice, minPrice, medianPrice, stdPrice) = metrics['priceChangeLastMonth'] 
+    retStr += str.format(f"Past Month: %change: {priceDeltaPerc:0.2f} Max: {maxPrice:0.2f} Min: {minPrice:0.2f} Median: {medianPrice:0.2f} Std Dev: {stdPrice:0.2f}\n")
+    (priceDeltaPerc, maxPrice, minPrice, medianPrice, stdPrice) = metrics['priceChangeLast3Month'] 
+    retStr += str.format(f"Past 3 Months: %change: {priceDeltaPerc:0.2f} Max: {maxPrice:0.2f} Min: {minPrice:0.2f} Median: {medianPrice:0.2f} Std Dev: {stdPrice:0.2f}\n")
+    (priceDeltaPerc, maxPrice, minPrice, medianPrice, stdPrice) = metrics['priceChangeLast6Month'] 
+    retStr += str.format(f"Past 6 Months: %change: {priceDeltaPerc:0.2f} Max: {maxPrice:0.2f} Min: {minPrice:0.2f} Median: {medianPrice:0.2f} Std Dev: {stdPrice:0.2f}\n")
+    (priceDeltaPerc, maxPrice, minPrice, medianPrice, stdPrice) = metrics['priceChangeLastYear'] 
+    retStr += str.format(f"Past Year: %change: {priceDeltaPerc:0.2f} Max: {maxPrice:0.2f} Min: {minPrice:0.2f} Median: {medianPrice:0.2f} Std Dev: {stdPrice:0.2f}\n")
+    (priceDeltaPerc, maxPrice, minPrice, medianPrice, stdPrice) = metrics['priceChangeLast2Year'] 
+    retStr += str.format(f"Past 2 Years: %change: {priceDeltaPerc:0.2f} Max: {maxPrice:0.2f} Min: {minPrice:0.2f} Median: {medianPrice:0.2f} Std Dev: {stdPrice:0.2f}\n")
 
     retStr += str.format(f"------Dividends:--------------------\n")
-    retStr += str.format(f"Dividend: Latest: {metrics['thisYearDividend']:0.2f}p Max: {metrics['maxDividend']:0.2f}p Avg: {metrics['avgDividend']:0.2f}p Median: {metrics['medianDividend']:0.2f}p\n")
-    retStr += str.format(f"Yield: Max: {metrics['maxYield']:0.2f}%, Avg: {metrics['avgYield']:0.2f}%\n")
+    retStr += str.format(f"Dividend: Last Year: {metrics['thisYearDividend']:0.2f}p Max: {metrics['maxDividend']:0.2f}p Avg: {metrics['avgDividend']:0.2f}p Median: {metrics['medianDividend']:0.2f}p\n")
+    retStr += str.format(f"Yield: Last Year: {metrics['currentYield']:0.2f}% Max: {metrics['maxYield']:0.2f}% Avg: {metrics['avgYield']:0.2f}% Median: {metrics['medianYield']:0.2f}% \n")
+    retStr += str.format(f"Forward Dividend Yield = {metrics['forwardYield']:0.2f}%\n")
     if (metrics['exDivDate']):
         retStr += str.format(f"Days since Ex-Dividend = {metrics['daysSinceExDiv']} Date: {metrics['exDivDate'].strftime('%Y-%m-%d')}\n")
-    retStr += str.format(f"Current Year Yield = {metrics['currentYield']:0.2f}%\n")
-    retStr += str.format(f"Forward Dividend Yield = {metrics['forwardYield']:0.2f}%\n")
 
     retStr += str.format(f"------Profitability:----------------\n")
     retStr += str.format(f"Gross Profit {metrics['grossProfitPerc']:0.2f}%\n")

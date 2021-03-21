@@ -37,7 +37,11 @@ def checkPrices(prices):
          return None
              
      
-def getPrices(apiKey, stock, outputSize, existingPrices):
+def getPrices(apiKey, stock, outputSize, priceData):
+    existingPrices = priceData['dailyPrices']
+    # latestPriceDate = priceData['endDate']
+    nowTime = datetime.now()
+    lastAttemptDate = priceData.get('lastRetrievalDate', nowTime)
     function="TIME_SERIES_DAILY"
     baseUrl = "https://www.alphavantage.co/query?"
     #outputSize = "full"
@@ -52,6 +56,7 @@ def getPrices(apiKey, stock, outputSize, existingPrices):
 #    data = response.read().decode("utf-8")
     if (data and data != ""):
         priceArray = json.loads(data).get("Time Series (Daily)", [])
+        lastAttemptDate = nowTime
     else:
         print(f"Failed to load latest prices for {stock}")
         priceArray = None
@@ -82,6 +87,7 @@ def getPrices(apiKey, stock, outputSize, existingPrices):
         existingPrices = checkedPrices
     stockPrices = { "stock": stock, 
                    "startDate" : startDate,
+                   "lastRetrievalDate" : lastAttemptDate,
                    "endDate": endDate,
                    "dailyPrices": existingPrices}
 
