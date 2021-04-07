@@ -87,8 +87,8 @@ def getPrices(apiKey, stock, outputSize, priceData):
         existingPrices = checkedPrices
     stockPrices = { "stock": stock, 
                    "startDate" : startDate,
-                   "lastRetrievalDate" : lastAttemptDate,
                    "endDate": endDate,
+                   "lastRetrievalDate" : lastAttemptDate,
                    "dailyPrices": existingPrices}
 
     return stockPrices

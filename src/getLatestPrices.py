@@ -14,7 +14,8 @@ def getAndSaveStockPrices(config, stock, periodBetweenCalls=0, lastTime=0):
     refreshPrices = False
     if (prices):
         latestPriceDate = prices['endDate']
-        lastAttemptDate = prices.get('lastRetrievalDate', nowTime)
+        #Determine the last attempt date - if not in stats then assume 2 days ago to get the latest
+        lastAttemptDate = prices.get('lastRetrievalDate', nowTime - timedelta(days=2))
         if (latestPriceDate):
             howOld = nowTime - latestPriceDate
         if (not latestPriceDate):
