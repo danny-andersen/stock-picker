@@ -4,10 +4,16 @@ import locale
 from saveRetreiveFiles import getStockPricesSaved, saveStockPrices
 from alphaAdvantage import getLatestDailyPrices, getAllDailyPrices, checkPrices
 
+def getAndSaveStockPricesSpark(bcConfig, stock):
+    return getAndSaveStockPrices(bcConfig.value, stock)
+
 def getAndSaveStockPrices(config, stock, periodBetweenCalls=0, lastTime=0):
     maxPriceAgeDays = config['stats'].getint('maxPriceAgeDays')
     apiKey = config['keys']['alphaAdvantageApiKey']
     storeConfig = config['store']
+    localeStr = config['stats']['locale']
+
+    locale.setlocale(locale.LC_ALL, localeStr)
     nowTime = datetime.now()
 
     prices = getStockPricesSaved(storeConfig, stock)
