@@ -11,7 +11,7 @@ localeStr = config['stats']['locale']
 locale.setlocale( locale.LC_ALL, localeStr) 
 
 stock = "BP.L"
-local = True  #Use filesystem to store data, so dont need to fire up hdfs cluster
+local = False  #Use filesystem to store data, so dont need to fire up hdfs cluster
 
-score = processStock(config, stock, local)
+score = processStock(config, stock)
 print (score)

@@ -95,21 +95,23 @@ def processStockStats(info, dailyPrices):
     if (not noOfShares):
         noOfShares = getValue(stockInfo, 'sharesOutstanding', 0)
     metrics['noOfShares'] = noOfShares
+    latestPriceDate = datetime(1970, 1, 1)
+    currentPrice = 0
     totalWeightedSlope = 0
     if (len(dailyPrices) > 0):
         priceDatesSorted = sorted(dailyPrices)
-        latestPriceDate = priceDatesSorted[len(priceDatesSorted)-1]
-        metrics['currentPriceDate'] = datetime.fromtimestamp(latestPriceDate)
-        (low, high) = dailyPrices[latestPriceDate]
+        latestPriceDateStamp = priceDatesSorted[len(priceDatesSorted)-1]
+        latestPriceDate = datetime.fromtimestamp(latestPriceDateStamp)
+        (low, high) = dailyPrices[latestPriceDateStamp]
         # Use the average of the last price range we have
         currentPricePence = (high + low)/2
         # Work out % change since last week
-        metrics['priceChangeLastWeek'] = priceChange(priceDatesSorted, dailyPrices, latestPriceDate, currentPricePence, 7)
-        metrics['priceChangeLastMonth'] = priceChange(priceDatesSorted, dailyPrices, latestPriceDate, currentPricePence, 30)
-        metrics['priceChangeLast3Month'] = priceChange(priceDatesSorted, dailyPrices, latestPriceDate, currentPricePence, 90)
-        metrics['priceChangeLast6Month'] = priceChange(priceDatesSorted, dailyPrices, latestPriceDate, currentPricePence, 182)
-        metrics['priceChangeLastYear'] = priceChange(priceDatesSorted, dailyPrices, latestPriceDate, currentPricePence, 364)
-        metrics['priceChangeLast2Year'] = priceChange(priceDatesSorted, dailyPrices, latestPriceDate, currentPricePence, 728)
+        metrics['priceChangeLastWeek'] = priceChange(priceDatesSorted, dailyPrices, latestPriceDateStamp, currentPricePence, 7)
+        metrics['priceChangeLastMonth'] = priceChange(priceDatesSorted, dailyPrices, latestPriceDateStamp, currentPricePence, 30)
+        metrics['priceChangeLast3Month'] = priceChange(priceDatesSorted, dailyPrices, latestPriceDateStamp, currentPricePence, 90)
+        metrics['priceChangeLast6Month'] = priceChange(priceDatesSorted, dailyPrices, latestPriceDateStamp, currentPricePence, 182)
+        metrics['priceChangeLastYear'] = priceChange(priceDatesSorted, dailyPrices, latestPriceDateStamp, currentPricePence, 364)
+        metrics['priceChangeLast2Year'] = priceChange(priceDatesSorted, dailyPrices, latestPriceDateStamp, currentPricePence, 728)
         currentPrice = currentPricePence/100
         if (noOfShares == 0):
             noOfShares = marketCap / currentPrice
@@ -118,16 +120,20 @@ def processStockStats(info, dailyPrices):
         (totalWeightedSlope, forecastPeriod) = getWeightedSlope(dailyPrices)
         metrics['weightedSlopePerc'] = totalWeightedSlope * 100
         metrics['slopeForecastPeriodDays'] = forecastPeriod
+        priceStats = calcPriceStatisticsForPeriod(
+            dailyPrices, now-timedelta(days=364), now)
+        metrics.update(priceStats)
     else:
-        # Couldnt retreive the prices - use market cap
-        if (noOfShares != 0):
-            currentPrice = marketCap / noOfShares
-        else:
-            currentPrice = 0
         metrics['weightedSlopePerc'] = 0
-    priceStats = calcPriceStatisticsForPeriod(
-        dailyPrices, now-timedelta(days=364), now)
-    metrics.update(priceStats)
+    if (now - latestPriceDate > timedelta(days = 7)):
+        if (stockInfo['lastWeekHighPrice']):
+            # Couldnt retreive the prices - use last week's highest price
+            currentPrice = stockInfo['lastWeekHighPrice']
+            latestPriceDate = now - timedelta(days = 7)
+        elif (noOfShares != 0):
+            #Use capitalisation value
+            currentPrice = marketCap / noOfShares
+    metrics['currentPriceDate'] = latestPriceDate
     metrics['currentPrice'] = currentPrice
 
     forwardYield = getValue(stats, 'Forward Annual Dividend Yield', None)

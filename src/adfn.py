@@ -125,6 +125,25 @@ def getTableValue(html, searchStr, index=0, valueCell=2, multiplier=None, defaul
         print(f"Failed to find table cell with content of {searchStr}")
     return value
 
+def getTableValueNoLink(html, searchStr, index=0, valueCell=2, multiplier=None, default=None):
+    value = default #default return value of None means that no value was available
+    regex = re.compile(searchStr)
+    matchingCells = html.find_all("td", string=regex)
+    if (matchingCells and len(matchingCells) > index):
+        cell = matchingCells[index]
+        row = cell.parent
+        cells = row.find_all("td")  #Retrieve all cells in matching row
+        lastCell = len(cells) - 1
+        if (not multiplier):
+            multiplier = cells[lastCell].string
+        #Get value pointed to by the valueCell (default value = 2, which is the last one)
+        if (lastCell - valueCell > 0):
+            value = cells[lastCell - valueCell].string
+            value = convertToValue(value, multiplier)
+    else:
+        print(f"Failed to find table cell with content of {searchStr}")
+    return value
+
 # def hasTitle(div):
 #     return div.name == 'div' and div.has_attr('title') 
  
@@ -265,6 +284,10 @@ def getStockInfo(dom, info):
         info['navPrice'] = getTableValue(keyTable, "^Net Asset Value .*", valueCell=1, multiplier=1)
         info['diviCover'] = getTableValue(keyTable, "^Dividend Cover", valueCell=1, multiplier=1)
   
+    keyTableH2 = dom.find("h2", string=re.compile("^Share Price Performance"))
+    if (keyTableH2):
+        keyTable = keyTableH2.next_sibling
+        info['lastWeekHighPrice'] = getTableValueNoLink(keyTable, "^1 week", valueCell=1, multiplier=1)
     return info
 
 def getStockInfoAdfn(stockName):
@@ -295,7 +318,7 @@ def getStockInfoAdfn(stockName):
     # stockInfo = st.info
     # stockInfo = removeNones(stockInfo)
 
-    #Overlay yahoo info with adfn
+    #Get pre-calculated info
     stockInfo = getStockInfo(dom, stockInfo)
         
     info = {
