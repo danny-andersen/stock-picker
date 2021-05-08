@@ -1,0 +1,1 @@
+./sparkSubmit.sh stockPricesSpark.py
