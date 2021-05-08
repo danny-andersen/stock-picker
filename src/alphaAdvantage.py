@@ -38,10 +38,14 @@ def checkPrices(prices):
              
      
 def getPrices(apiKey, stock, outputSize, priceData):
-    existingPrices = priceData['dailyPrices']
-    # latestPriceDate = priceData['endDate']
     nowTime = datetime.now()
-    lastAttemptDate = priceData.get('lastRetrievalDate', nowTime)
+    if (priceData):
+        existingPrices = priceData['dailyPrices']
+        lastAttemptDate = priceData.get('lastRetrievalDate', nowTime)
+    else:
+        existingPrices = None
+        lastAttemptDate = nowTime
+    # latestPriceDate = priceData['endDate']
     function="TIME_SERIES_DAILY"
     baseUrl = "https://www.alphavantage.co/query?"
     #outputSize = "full"
