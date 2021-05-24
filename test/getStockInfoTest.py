@@ -10,7 +10,7 @@ from printResults import printResults
 from datetime import datetime
 import argparse
 from checkStockInfo import checkStockInfo
-from retreiveStockInfo import getStockInfo
+from retrieveStockInfo import getStockInfo
 
 parser = argparse.ArgumentParser(description='Re-calculate and display metrics and scores of given stock symbols')
 parser.add_argument('stocks', metavar='sym', type=str, nargs='+',

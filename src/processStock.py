@@ -1,10 +1,11 @@
 from calcStatistics import calculateDCF
 from datetime import datetime, timedelta
 from statistics import mean, median, pstdev
+import math
 import locale
 
 from retrieveStockInfo import retrieveStockInfo
-from scoreStock import calcScore, calcPiotroskiFScore
+from scoreStock import determineOverallScore
 from saveRetreiveFiles import saveStockMetrics, saveStringToDropbox
 from getLatestPrices import getAndSaveStockPrices
 from printResults import getResultsStr
@@ -27,7 +28,7 @@ def processStock(config, stock):
         metrics = processStockStats(info, prices['dailyPrices'])
         calcPiotroskiFScore(stock, info, metrics)
         saveStockMetrics(storeConfig, stock, metrics)
-        scores = calcScore(stock, metrics)
+        scores = determineOverallScore(stock, metrics)
         resultStr = getResultsStr(stock, scores, metrics)
         saveStringToDropbox(
             storeConfig, "/details/{0}-results.txt".format(stock), resultStr)
@@ -75,9 +76,18 @@ def priceChange(timeStamps, dailyPrices, currentTimeStamp, currentPrice, daysAgo
 
     return (priceDeltaPerc, maxPrice, minPrice, medianPrice, stdPrice)
 
+def calcScore(lowScore, highScore, val):
+    inv = 1
+    if (lowScore > highScore): inv = -1 #Inverted curve - the lower the value the higher the score
+    scale = 12/(highScore-lowScore)
+    mid = (lowScore + highScore) / 2
+    score = 1/(1+math.exp(inv*scale*(-val+mid)))
+    return score
+
 def processStockStats(info, dailyPrices):
     now = datetime.now()
     metrics = dict()
+    scores = dict()
     metrics['infoDate'] = info['metadata']['storedDate']
     stockInfo = info['info']
     stats = info['stats']
@@ -140,6 +150,7 @@ def processStockStats(info, dailyPrices):
     if (not forwardYield):
         forwardYield = getValue(stockInfo, 'dividendYield', 0)
     metrics['forwardYield'] = forwardYield
+    scores['forwardYield'] = calcScore(0, 8, forwardYield)
 
     # Determine this years dividend, average and max dividend
     # Calc dividend by year
@@ -199,6 +210,7 @@ def processStockStats(info, dailyPrices):
     else:
         diviCover = getValue(stockInfo,'diviCover', 0)
     metrics['diviCover'] = diviCover
+    scores['diviCover'] = calcScore(0.5, 1.5, diviCover)
 
     if (currentPrice > 0):
         metrics['currentYield'] = thisYearDividend/currentPrice
@@ -211,6 +223,8 @@ def processStockStats(info, dailyPrices):
         metrics['avgYield'] = 0
         metrics['medianYield'] = 0
 
+    scores['avgYield'] = calcScore(0, 8, metrics['avgYield'])
+    scores['medianYield'] = calcScore(0, 8, metrics['medianYield'])
     totalDebt = getValue(balanceSheet, 'Total non-current liabilities', 0)
     metrics['totalDebt'] = totalDebt
     totalEquity = getValue(balanceSheet, 'Stockholder Equity', 0)     # THIS IS THE WRONG STATISTIC - should be market cap
@@ -247,6 +261,7 @@ def processStockStats(info, dailyPrices):
     metrics['discountedCashFlow'] = dcf
     metrics['dcfError'] = error
     metrics['fcfForecastSlope'] = fcfForecastSlope
+    scores['fcfForecastSlope'] = calcScore(0, 1, fcfForecastSlope)
     # Intrinsic value = plant equipment + current assets + 10 year DCF
     currentAssets = getValue(balanceSheet, 'Total Current Assets', 0)
     totalPlant = getValue(balanceSheet, 'Total Plant', 0)
@@ -259,6 +274,7 @@ def processStockStats(info, dailyPrices):
     else:
         currentRatio = currentAssets / currentLiabilities
     metrics['currentRatio'] = currentRatio
+    scores['currentRatio'] = calcScore(0.5, 1.5, currentRatio)
     totalAssets = getValue(balanceSheet, 'Total Assets', 0) 
     totalLiabilities = getValue(balanceSheet, 'Total Liabilities', 0)
     intangibles = getValue(balanceSheet, 'Intangibles', 0)
@@ -268,6 +284,7 @@ def processStockStats(info, dailyPrices):
     else:
         gearing = 0
     metrics['gearing'] = gearing
+    scores['gearing'] = calcScore(1/1.4, 1/0.7, 1/gearing)
     bookValue = totalAssets - intangibles - totalLiabilities
     metrics['bookValue'] = bookValue
     if (bookValue != 0):
@@ -319,6 +336,8 @@ def processStockStats(info, dailyPrices):
     else:
         metrics['returnOnCapitalEmployed'] = 0
         metrics['stockHolderEquityPerc'] = 0
+    scores['returnOnCapitalEmployed'] = calcScore(5, 11, metrics['returnOnCapitalEmployed'])
+    scores['stockHolderEquityPerc'] = calcScore(30, 60, metrics['stockHolderEquityPerc'])
     if (noOfShares != 0):
         lowerSharePriceValue = (
             intrinsicValue - intrinsicValueRange) / noOfShares
@@ -327,6 +346,7 @@ def processStockStats(info, dailyPrices):
         assetSharePriceValue = assetValue / noOfShares
         evSharePrice = enterpriseValue / noOfShares
         metrics['intrinsicWithIntangiblesPrice'] = metrics['intrinsicWithIntangibles'] / noOfShares
+        metrics['intrinsicValuePrice'] = metrics['intrinsicValue'] / noOfShares
         metrics['bookPrice'] = bookValue / noOfShares  # Tangible assets - total liabilities
         # Balance sheet NAV = Total assets - total liabilities (which is shareholder funds)
         metrics['netAssetValuePrice'] = shareholderFunds / noOfShares
@@ -343,16 +363,25 @@ def processStockStats(info, dailyPrices):
     metrics['assetSharePriceValue'] = assetSharePriceValue
     metrics['enterpriseValue'] = enterpriseValue
     metrics['evSharePrice'] = evSharePrice
+    scores['priceToBook'] = calcScore(1/2.0, 1/0.9, 1/metrics['priceToBook'])
+    scores['priceToBookNoIntangibles'] = calcScore(1/1.5, 1/0.9, 1/ metrics['priceToBookNoIntangibles'])
+    scores['bookPrice'] = calcScore(0.6, 1.5, metrics['bookPrice']/metrics['currentPrice'] )
+    scores['intrinsicValuePrice'] = calcScore(0.7, 1.5, metrics['intrinsicValuePrice'] / metrics['currentPrice'] )
+    scores['intrinsicWithIntangiblesPrice'] = calcScore(1.0, 2.0, metrics['intrinsicWithIntangiblesPrice'] / metrics['currentPrice'] )
+    scores['netAssetValuePrice'] = calcScore(0.4, 0.9, metrics['netAssetValuePrice'] / metrics['currentPrice'])
+    scores['evSharePrice'] = calcScore(0.7, 1.5, metrics['evSharePrice'] / metrics['currentPrice'] )
     if (costOfDebt != 0):
         metrics['interestCover'] = preTaxProfit / costOfDebt
     else:
         metrics['interestCover'] = 0
+    scores['interestCover'] = calcScore(0.5, 1.2, metrics['interestCover'])
     metrics['EPS'] = eps / 100
     if (eps != 0):
         pe = 100 * currentPrice / eps
     else:
         pe = stockInfo.get('forwardPE', 0)
     metrics['PEratio'] = pe
+    scores['PEratio'] = calcScore(1/25, 1/10, 1/pe)
     metrics['PQratio'] = stockInfo.get('PQ Ratio', 0)
     tr = incomeStatement.get('Total revenue', 0)
     if (tr != 0):
@@ -392,4 +421,59 @@ def processStockStats(info, dailyPrices):
         metrics['altmannZ'] = 1.2*A + 1.4*B + 3.3*C + 0.6*D + 1.0*E
     else:
         metrics['altmannZ'] = 0
+    scores['altmannZ'] = calcScore(1.5, 2.8, metrics['altmannZ'] )
+    metrics['scores'] = scores
     return metrics
+
+def calcPiotroskiFScore(stock, info, metrics):
+    score = 0
+    latestIncome = info['incomeStatement']         
+    latestNet = latestIncome.get('Net income', 0)
+    if (latestNet and latestNet > 0): score +=1
+
+    ocf = info['operatingCashFlow']
+    if (ocf and len(ocf) > 0):
+        sortedocf = sorted(ocf, key=lambda d: d[0])
+        latestOcf = sortedocf[len(sortedocf)-1][1]
+        if (latestOcf > 0): score +=1
+        if (latestNet and latestNet != 0 and latestOcf > latestNet): score +=1
+    
+    stats = info['stats']
+    if (stats.get('Return on Assets', 0) > 0): score +=1
+    
+    currentBalanceSheet = info['balanceSheet']
+    prevYearBalanceSheet = info['prevYearBalanceSheet']
+    if (currentBalanceSheet.get('Total non-current liabilities', 0) < prevYearBalanceSheet.get('Total non-current liabilities', 0)): score +=1
+    prevLiabilities = prevYearBalanceSheet.get('Total current liabilities', 0)
+    prevAssets = prevYearBalanceSheet.get('Total Current Assets', 0) 
+    if (prevAssets and prevLiabilities and prevLiabilities != 0):
+        prevCurrentRatio = prevAssets / prevLiabilities
+        if (metrics['currentRatio'] > prevCurrentRatio and prevCurrentRatio > 0): score += 1
+    
+    score += 1 #Assume no change in shares issued in past year (dont have the data)
+
+    latestGM = metrics['preTaxProfitPerc']
+    latestTurnover = latestIncome.get('Total revenue', 0)
+    prevIncome = info['prevYearIncomeStatement']         
+    prevTurnover = prevIncome.get('Total revenue', 0)
+    if (prevTurnover and prevTurnover > 0):
+        prevGM = prevIncome.get('Pre-tax profit', 0) / prevTurnover
+    else:
+        prevGM = 0
+    if (latestGM >= prevGM): score += 1
+
+    latestAssets = currentBalanceSheet.get('Total Assets', 0)
+    if (latestAssets and latestAssets > 0):
+        latestAssetTurnover = latestTurnover / latestAssets
+    else:
+        latestAssetTurnover = 0
+    prevAssets = prevYearBalanceSheet.get('Total Assets', 0)
+    if (prevAssets and prevAssets > 0):
+        prevAssetTurnover = prevTurnover / prevAssets
+    else:
+        prevAssetTurnover = 0
+    if (latestAssetTurnover > 0 and latestAssetTurnover >= prevAssetTurnover): score += 1
+
+    metrics['piotroskiFScore'] = score
+    metrics['scores']['piotroskiFScore'] = calcScore(2.8, 8, score)
+
