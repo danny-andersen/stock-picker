@@ -209,12 +209,12 @@ def mergeAndSaveScores(storeConfig, scores, heldStocks):
         summary = tabulate(scores, headers='keys', showindex="always")
         path="/summary-by-avgYield.txt"
         saveStringToDropbox(storeConfig, path, summary)
-        scores.sort(key=lambda score:score['incomeScore'], reverse=True)
-        addRelativePostionByStock(heldDict, scores, 'incomePosition')
-        saveStockScores(storeConfig, scores, 'income')
-        summary = tabulate(scores, headers='keys', showindex="always")
-        path="/summary-by-incomeScore.txt"
-        saveStringToDropbox(storeConfig, path, summary)
+        # scores.sort(key=lambda score:score['incomeScore'], reverse=True)
+        # addRelativePostionByStock(heldDict, scores, 'incomePosition')
+        # saveStockScores(storeConfig, scores, 'income')
+        # summary = tabulate(scores, headers='keys', showindex="always")
+        # path="/summary-by-incomeScore.txt"
+        # saveStringToDropbox(storeConfig, path, summary)
 
         heldDict.sort(key=lambda h:h['stockPosition'], reverse=False)
         saveStockScores(storeConfig, heldDict, 'held')

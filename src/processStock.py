@@ -79,9 +79,14 @@ def priceChange(timeStamps, dailyPrices, currentTimeStamp, currentPrice, daysAgo
 def calcScore(lowScore, highScore, val):
     inv = 1
     if (lowScore > highScore): inv = -1 #Inverted curve - the lower the value the higher the score
-    scale = 12/(highScore-lowScore)
-    mid = (lowScore + highScore) / 2
-    score = 1/(1+math.exp(inv*scale*(-val+mid)))
+    if (val < lowScore):
+        score = 0 if inv == 1 else 1
+    elif (val > highScore) : 
+        score = 1 if inv == 1 else 0
+    else:
+        scale = 12/(highScore-lowScore)
+        mid = (lowScore + highScore) / 2
+        score = 1/(1+math.exp(inv*scale*(-val+mid)))
     return score
 
 def processStockStats(info, dailyPrices):
@@ -284,7 +289,7 @@ def processStockStats(info, dailyPrices):
     else:
         gearing = 0
     metrics['gearing'] = gearing
-    scores['gearing'] = calcScore(1/1.4, 1/0.7, 1/gearing)
+    scores['gearing'] = calcScore(1/1.4, 1/0.7, 1/gearing if gearing != 0 else 0)
     bookValue = totalAssets - intangibles - totalLiabilities
     metrics['bookValue'] = bookValue
     if (bookValue != 0):
@@ -363,8 +368,8 @@ def processStockStats(info, dailyPrices):
     metrics['assetSharePriceValue'] = assetSharePriceValue
     metrics['enterpriseValue'] = enterpriseValue
     metrics['evSharePrice'] = evSharePrice
-    scores['priceToBook'] = calcScore(1/2.0, 1/0.9, 1/metrics['priceToBook'])
-    scores['priceToBookNoIntangibles'] = calcScore(1/1.5, 1/0.9, 1/ metrics['priceToBookNoIntangibles'])
+    scores['priceToBook'] = calcScore(1/2.0, 1/0.9, 1/metrics['priceToBook'] if metrics['priceToBook'] != 0 else 0)
+    scores['priceToBookNoIntangibles'] = calcScore(1/1.5, 1/0.9, 1/ metrics['priceToBookNoIntangibles'] if metrics['priceToBookNoIntangibles'] != 0 else 0)
     scores['bookPrice'] = calcScore(0.6, 1.5, metrics['bookPrice']/metrics['currentPrice'] )
     scores['intrinsicValuePrice'] = calcScore(0.7, 1.5, metrics['intrinsicValuePrice'] / metrics['currentPrice'] )
     scores['intrinsicWithIntangiblesPrice'] = calcScore(1.0, 2.0, metrics['intrinsicWithIntangiblesPrice'] / metrics['currentPrice'] )
@@ -381,7 +386,7 @@ def processStockStats(info, dailyPrices):
     else:
         pe = stockInfo.get('forwardPE', 0)
     metrics['PEratio'] = pe
-    scores['PEratio'] = calcScore(1/25, 1/10, 1/pe)
+    scores['PEratio'] = calcScore(1/25, 1/10, 1/pe if pe !=0 else 0)
     metrics['PQratio'] = stockInfo.get('PQ Ratio', 0)
     tr = incomeStatement.get('Total revenue', 0)
     if (tr != 0):
