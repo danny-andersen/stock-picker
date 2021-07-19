@@ -1,0 +1,16 @@
+---
+# Source: airflow/templates/config/secret-config.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: stockpicker-config
+  namespace: airflow-on-k8s
+  labels:
+    app: stockpicker
+data:
+  ## ================
+  ## User Configs
+  ## ================
+  SP_HDFS_NODE: "pi4desktop"
+  SP_HDFS_USER: "hdfs"
+
