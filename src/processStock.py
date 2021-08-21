@@ -89,19 +89,10 @@ def calcScore(lowScore, highScore, val):
         score = 1/(1+math.exp(inv*scale*(-val+mid)))
     return score
 
-def processStockStats(info, dailyPrices):
+def calcPriceData(metrics, info, dailyPrices):
     now = datetime.now()
-    metrics = dict()
-    scores = dict()
-    metrics['infoDate'] = info['metadata']['storedDate']
     stockInfo = info['info']
     stats = info['stats']
-    dividends = info['dividends']
-    cashFlow = info['cashFlow']
-    incomeStatement = info['incomeStatement']
-    fcf = info['freeCashFlow']
-    balanceSheet = info['balanceSheet']
-
     marketCap = getValue(stats, "Market Cap", None)
     if (not marketCap):
         marketCap = getValue(stockInfo, 'marketCap', 0)
@@ -150,6 +141,25 @@ def processStockStats(info, dailyPrices):
             currentPrice = marketCap / noOfShares
     metrics['currentPriceDate'] = latestPriceDate
     metrics['currentPrice'] = currentPrice
+
+
+def processStockStats(info, dailyPrices):
+    now = datetime.now()
+    metrics = dict()
+    scores = dict()
+    metrics['infoDate'] = info['metadata']['storedDate']
+    stockInfo = info['info']
+    stats = info['stats']
+    dividends = info['dividends']
+    cashFlow = info['cashFlow']
+    incomeStatement = info['incomeStatement']
+    fcf = info['freeCashFlow']
+    balanceSheet = info['balanceSheet']
+
+    calcPriceData(metrics, info, dailyPrices)
+    currentPrice = metrics['currentPrice']
+    marketCap = metrics['marketCap']
+    noOfShares = metrics['noOfShares']
 
     forwardYield = getValue(stats, 'Forward Annual Dividend Yield', None)
     if (not forwardYield):

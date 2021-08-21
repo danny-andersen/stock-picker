@@ -6,7 +6,7 @@ from dateutil.parser import parse
 import re
 from tabulate import tabulate
 import dropbox
-
+from getStockLedgerStr import getStockLedgerStr, getAccountSummaryStr
 
 def myconverter(o):
     if isinstance(o, datetime):
@@ -127,6 +127,9 @@ def deleteStockFile(storeConfig, stock, name):
 def getStockInfoSaved(config, stock):
     return getStock(config, stock, 'info')
 
+def getStockTxnSaved(config, accountName, stock):
+    return getStock(config, stock, f'{accountName}/transactions')
+
 def getStockPricesSaved(storeConfig, stock):
     stockPrices = getStock(storeConfig, stock, 'prices')
     # Convert key from str to int, and value from list to tuple
@@ -143,6 +146,9 @@ def getStockMetricsSaved(storeConfig, stock):
 
 def saveStockInfo(config, stock, info):
     saveStock(config, stock, 'info', info)
+
+def saveStockTransactions(config, accountName, stock, txns):
+    saveStock(config, stock, f'{accountName}/transactions', txns)
 
 def saveStockMetrics(config, stock, metrics):
     saveStock(config, stock, 'metrics', metrics)
@@ -221,6 +227,13 @@ def mergeAndSaveScores(storeConfig, scores, heldStocks):
         summary = tabulate(heldDict, headers='keys', showindex="always")
         path="/held-scores-summary.txt"
         saveStringToDropbox(storeConfig, path, summary)
+
+def saveStockLedger(config, account, accountSummary, stockLedger):
+    accSummary = getAccountSummaryStr(account, accountSummary)
+    saveStringToDropbox(config, f"/performance/{account}-Summary.txt", accSummary)
+    for stock, details in stockLedger.items():
+        detailsStr = getStockLedgerStr(details)
+        saveStringToDropbox(config, f"/performance/{account}/{stock}.txt", details)
 
 def saveStringToDropbox(config, path, dataStr):
     dropboxAccessToken = config['dropboxAccessToken']
