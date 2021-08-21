@@ -2,8 +2,6 @@
 from tabulate import tabulate
 from datetime import datetime, timedelta
 
-from retrieveStockInfo import retrieveStockInfoSpark
-
 def getTaxYear(inDate):
     taxYearStart = datetime.date(year=2021, month=4, day=6)
     d = datetime.date(year=2021, month=inDate.month, day=inDate.day)
@@ -80,6 +78,4 @@ def getStockLedgerStr(details):
     retStr += "Dealing Costs Per Year:"
     retStr += tabulate(details['dealingCostsPerYear'], headers='keys')
 
-    
-   
     return retStr

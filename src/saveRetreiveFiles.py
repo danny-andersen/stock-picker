@@ -148,7 +148,7 @@ def saveStockInfo(config, stock, info):
     saveStock(config, stock, 'info', info)
 
 def saveStockTransactions(config, accountName, stock, txns):
-    saveStock(config, stock, f'{accountName}/transactions', txns)
+    saveStock(config, stock, f'{accountName}/transactions/', txns)
 
 def saveStockMetrics(config, stock, metrics):
     saveStock(config, stock, 'metrics', metrics)

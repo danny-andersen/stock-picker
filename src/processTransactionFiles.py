@@ -4,7 +4,7 @@ import os
 from dataclasses import dataclass, asdict
 from datetime import datetime
 from statistics import mean
-from saveRetreiveFiles import getStockTxnSaved, saveStockTransactions, getStockPricesSaved, getStockInfoSaved, storeStockLedger
+from saveRetreiveFiles import getStockInfoSaved, getStockTxnSaved, saveStockTransactions, getStockPricesSaved, saveStockLedger
 from processStock import calcPriceData
 from getStockLedgerStr import getTaxYear
 
@@ -60,7 +60,7 @@ def getExistingTxns(config, accountName, stockList, stock):
         stockList[stock] = txns
     return txns
 
-def processAccountTxns(txns):
+def processAccountTxns(summary, txns):
     cashInPerYear = dict()
     cashOutPerYear = dict()
     feesPerYear = dict()
@@ -76,7 +76,6 @@ def processAccountTxns(txns):
             cashOutPerYear = cashOutPerYear.get(taxYear, 0) + txn.debit
         elif type == FEES:
             feesPerYear = feesPerYear.get(taxYear, 0) + txn.debit
-    summary = dict()
     summary['dateOpened'] = dateOpened
     summary['cashInPerYear'] = cashInPerYear
     summary['cashOutPerYear'] = cashOutPerYear
@@ -192,13 +191,13 @@ def summarisePerformance(accountSummary, stockSummary):
             totalDealingCosts[year] = totalDealingCosts.get(year, 0) + costs
         for year,divi in details['dividendsPerYear'].items():
             totalDivi[year] = totalDivi.get(year, 0) + divi
-        byYear = details['cashInPerYear'].keys().sort()
-        sumInvested = 0
-        for year in byYear:
-            sumInvested += accountSummary['cashInPerYear'].get(year, 0)
-            aggInvestedByYear[year] = sumInvested
-            if sumInvested > 0:
-                totalDiviYieldByYear[year] = totalDivi.get(year, 0)
+    byYear = accountSummary['cashInPerYear'].keys().sort()
+    sumInvested = 0
+    for year in byYear:
+        sumInvested += accountSummary['cashInPerYear'].get(year, 0)
+        aggInvestedByYear[year] = sumInvested
+        if sumInvested > 0:
+            totalDiviYieldByYear[year] = totalDivi.get(year, 0)
 
     accountSummary['totalInvested'] = sum(accountSummary['cashInPerYear'].values) - sum(accountSummary['cashOutPerYear'].values)
     accountSummary['totalFees'] = sum(accountSummary['feesPerYear'].values)
@@ -214,7 +213,7 @@ def summarisePerformance(accountSummary, stockSummary):
     accountSummary['dividendYieldPerYear']  = totalDiviYieldByYear
 
 def processTxnFiles(config):
-    stockListByAcc = [] #Dict of stocks by accountname, stocks are a dict of stock txns keyed by symbol
+    stockListByAcc = dict() #Dict of stocks by accountname, stocks are a dict of stock txns keyed by symbol
     changedStockTxnsByAcc = dict() #Dict keyed by account with Set of stocks whose transactions have been appended to and so need to be saved back to HDFS
     #List transactions directory for account history files
     txnFiles = os.listdir('transactions/')
@@ -222,14 +221,14 @@ def processTxnFiles(config):
     #For each trading and isa account file, read in transactions into list
     for txnFile in txnFiles:
         # Extract account name
-        accountName = txnFile.name.split('_')[0]
+        accountName = txnFile.split('_')[0]
         stockList = stockListByAcc.get(accountName, None)
         if (not stockList):
             stockList = dict()
             stockListByAcc[accountName] = stockList
 
         lineCount = 0
-        with open(txnFile) as csvFile:
+        with open('transactions/' + txnFile) as csvFile:
             csv_reader = csv.DictReader(csvFile)
             line_count = 0
             for row in csv_reader:
@@ -247,7 +246,7 @@ def processTxnFiles(config):
                         credit = 0 if row['Credit'] == '' else row['Credit']
                         )
                     if (txn.sedol == '' and txn.stock == ''):
-                        stock = NONE
+                        txn.stock = NONE
                         if (txn.desc.startsWith("Debit card")):
                             if (txn.credit != 0):
                                 txnType = CASH_IN
@@ -291,12 +290,13 @@ def processTxnFiles(config):
     totalCosts = 0
     for account, stocks in stockListByAcc.items():
         stockLedger = dict()
+        accountSummary = dict()
         for stock, txns in stocks:
             if (stock != NONE):
                 stockLedger[stock] = processStockTxns(config, stock, txns) 
             else:
-                accountSummary = processAccountTxns(txns)
+                processAccountTxns(accountSummary, txns)
         #Summarise transactions and yields etc
         summarisePerformance(accountSummary, stockLedger)
         #Save to Dropbox file
-        storeStockLedger(config, account, accountSummary, stockLedger)
+        saveStockLedger(config, account, accountSummary, stockLedger)
