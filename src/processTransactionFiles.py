@@ -14,6 +14,7 @@ SELL = 'Sell'
 BUY = 'Buy'
 DIVIDEND = 'Dividend'
 FEES = 'Fees'
+REFUND ='Refund'
 NONE = 'No stock'
 
 @dataclass
@@ -48,15 +49,13 @@ class CapitalGain:
     def calcTotalCurrentGain(self, sellDate, sellPrice):
         return self.calcTotalGain(datetime.now(), sellPrice)
 
-def getExistingTxns(config, accountName, stockList, stock):
+def getExistingTxns(config, stockList, stock):
     txns = stockList.get(stock, None)
     if (not txns):
-        txns = getStockTxnSaved(config, accountName, stock)
+        #Get previous ones saved
+        txns = getStockTxnSaved(config, stock)
         if (not txns or len(txns) == 0):
-            #Check those saved against current stocklist
-            txns = stockList.get(stock, None)
-            if (not txns):
-                txns = list()
+            txns = dict()
         stockList[stock] = txns
     return txns
 
@@ -76,6 +75,8 @@ def processAccountTxns(summary, txns):
             cashOutPerYear = cashOutPerYear.get(taxYear, 0) + txn.debit
         elif type == FEES:
             feesPerYear = feesPerYear.get(taxYear, 0) + txn.debit
+        elif type == REFUND:
+            feesPerYear = feesPerYear.get(taxYear, 0) - txn.credit
     summary['dateOpened'] = dateOpened
     summary['cashInPerYear'] = cashInPerYear
     summary['cashOutPerYear'] = cashOutPerYear
@@ -227,56 +228,63 @@ def processTxnFiles(config):
             stockList = dict()
             stockListByAcc[accountName] = stockList
 
-        lineCount = 0
         with open('transactions/' + txnFile) as csvFile:
             csv_reader = csv.DictReader(csvFile)
-            line_count = 0
             for row in csv_reader:
-                if (lineCount != 0):
-                    txn = Transaction(
-                        date = datetime.strptime(row['Date'], "%d/%m/%y"),
-                        ref = row['Reference'],
-                        stock = row['Symbol'],
-                        sedol = row['Sedol'],
-                        isin = row['ISIN'],
-                        qty = 0 if row['Quantity'] == '' else row['Quantity'],
-                        price = 0 if row['Price'] == '' else row['Price'],
-                        desc = row['Description'],
-                        debit = 0 if row['Debit'] == '' else row['Debit'],
-                        credit = 0 if row['Credit'] == '' else row['Credit']
-                        )
-                    if (txn.sedol == '' and txn.stock == ''):
-                        txn.stock = NONE
-                        if (txn.desc.startsWith("Debit card")):
-                            if (txn.credit != 0):
-                                txnType = CASH_IN
-                            else:
-                                txnType = CASH_OUT 
-                        elif (txn.debit != 0):
-                            txnType == FEES
+                txn = Transaction(
+                    date = datetime.strptime(row['Date'], "%d/%m/%Y"),
+                    ref = row['Reference'],
+                    stock = row['Symbol'],
+                    sedol = row['Sedol'],
+                    isin = row['ISIN'],
+                    qty = 0 if row['Quantity'] == '' else row['Quantity'],
+                    price = 0 if row['Price'] == '' else row['Price'],
+                    desc = row['Description'],
+                    debit = 0 if row['Debit'] == '' else row['Debit'],
+                    credit = 0 if row['Credit'] == '' else row['Credit']
+                    )
+                if (txn.desc.startswith('Div')
+                        or 'dividend' in txn.desc.lower()):
+                    txn.type = DIVIDEND
+                elif (txn.sedol == '' and txn.stock == ''):
+                    txn.stock = NONE
+                    if (txn.desc.startswith("Debit card") 
+                            or 'subscription' in txn.desc.lower() 
+                            or txn.desc.startswith("Trf")
+                            or 'transfer' in txn.desc.lower()):
+                        if (txn.credit != 0):
+                            txnType = CASH_IN
                         else:
-                            print(f"Unknown transaction type {txn}")
-                    elif (txn.qty != ''):
-                        if (txn.credit != 0): 
-                            txn.type = SELL
-                        else:
-                            txn.type = BUY
-                    elif (txn.desc.startswith('Div')):
-                        txn.type = DIVIDEND
+                            txnType = CASH_OUT 
+                    elif (('fee' in txn.desc.lower()
+                            or 'payment' in txn.desc.lower())
+                                and txn.debit != 0):
+                        txnType = FEES
+                    elif ('refund' in txn.desc.lower()
+                            and txn.credit != 0):
+                        txnType = REFUND
                     else:
                         print(f"Unknown transaction type {txn}")
-                    # Retrieve transactions
-                    existingTxns = getExistingTxns(config, accountName, stockList, txn.stock)
-                    txnKey = f"{accountName}-{txn.date}-{txn.ref}" 
-                    # check transaction in current list, if not add
-                    if (not any(existingTxn.get(txnKey, None) for existingTxn in existingTxns)):
-                        #Add new transaction to existing list
-                        existingTxns.append(txn)
-                        changed = changedStockTxnsByAcc.get(accountName, None)
-                        if not changed:
-                            changed = set()
-                            changedStockTxnsByAcc = changed
-                        changed.add(txn.stock)
+                elif (txn.qty != 0):
+                    if (txn.credit != 0): 
+                        txn.type = SELL
+                    else:
+                        txn.type = BUY
+                else:
+                    print(f"Unknown transaction type {txn}")
+                # Retrieve transactions by stock symbol
+                existingTxns = getExistingTxns(config, stockList, txn.stock)
+                txnKey = f"{accountName}-{txn.date}-{txn.ref}" 
+                # check transaction in current list, if not add
+                if (not existingTxns.get(txnKey, None)):
+                    #Add new transaction to existing list
+                    existingTxns[txnKey] = txn
+                    #Set stock to be saved
+                    changed = changedStockTxnsByAcc.get(accountName, None)
+                    if not changed:
+                        changed = set()
+                        changedStockTxnsByAcc[accountName] = changed
+                    changed.add(txn.stock)
 
     #Save any changed transactions
     for account, stocks in changedStockTxnsByAcc.items():

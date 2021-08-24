@@ -127,8 +127,8 @@ def deleteStockFile(storeConfig, stock, name):
 def getStockInfoSaved(config, stock):
     return getStock(config, stock, 'info')
 
-def getStockTxnSaved(config, accountName, stock):
-    return getStock(config, stock, f'{accountName}/transactions')
+def getStockTxnSaved(config, stock):
+    return getStock(config, stock, 'transactions')
 
 def getStockPricesSaved(storeConfig, stock):
     stockPrices = getStock(storeConfig, stock, 'prices')
