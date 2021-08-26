@@ -22,7 +22,7 @@ class Transaction:
     #An investment transaction of some sort
     date: datetime
     ref: str
-    stock: str
+    symbol: str
     sedol: str
     isin: str
     desc: str
@@ -96,6 +96,7 @@ def processStockTxns(config, stock, txns):
     adjIinvestmentHistory = list[CapitalGain]
     fullIinvestmentHistory = list[CapitalGain]
     stockName = None
+    stockSymbol = None
     firstBought = datetime.now()
     for txn in txns:
         type = txn.type
@@ -103,6 +104,8 @@ def processStockTxns(config, stock, txns):
         if type == BUY:
             if not stockName:
                 stockName = txn.desc
+            if not stockSymbol:
+                stockSymbol = txn.symbol
             if (txn.date < firstBought):
                 firstBought = txn.date
             totalStock += txn.qty
@@ -234,7 +237,7 @@ def processTxnFiles(config):
                 txn = Transaction(
                     date = datetime.strptime(row['Date'], "%d/%m/%Y"),
                     ref = row['Reference'],
-                    stock = row['Symbol'],
+                    symbol = row['Symbol'],
                     sedol = row['Sedol'],
                     isin = row['ISIN'],
                     qty = 0 if row['Quantity'] == '' else row['Quantity'],
@@ -243,11 +246,12 @@ def processTxnFiles(config):
                     debit = 0 if row['Debit'] == '' else row['Debit'],
                     credit = 0 if row['Credit'] == '' else row['Credit']
                     )
-                if (txn.desc.startswith('Div')
+                if (txn.desc.startswith('Div') 
+                        or txn.desc.lower().startswith('equalisation')
                         or 'dividend' in txn.desc.lower()):
                     txn.type = DIVIDEND
-                elif (txn.sedol == '' and txn.stock == ''):
-                    txn.stock = NONE
+                elif (txn.isin == '' and txn.symbol == ''):
+                    txn.isin = NONE
                     if (txn.desc.startswith("Debit card") 
                             or 'subscription' in txn.desc.lower() 
                             or txn.desc.startswith("Trf")
@@ -273,7 +277,7 @@ def processTxnFiles(config):
                 else:
                     print(f"Unknown transaction type {txn}")
                 # Retrieve transactions by stock symbol
-                existingTxns = getExistingTxns(config, stockList, txn.stock)
+                existingTxns = getExistingTxns(config, stockList, txn.isin)
                 txnKey = f"{accountName}-{txn.date}-{txn.ref}" 
                 # check transaction in current list, if not add
                 if (not existingTxns.get(txnKey, None)):
@@ -284,14 +288,12 @@ def processTxnFiles(config):
                     if not changed:
                         changed = set()
                         changedStockTxnsByAcc[accountName] = changed
-                    changed.add(txn.stock)
+                    changed.add(txn.isin)
 
     #Save any changed transactions
     for account, stocks in changedStockTxnsByAcc.items():
         for stock in stocks:
             #Sort transactions by date
-            txns = stockListByAcc[account][stock]
-            stockListByAcc[account][stock] = txns.sort(key= lambda txn: txn.date)
             saveStockTransactions(config, accountName, stock, stockListByAcc[account][stock])
     
     #For each account process each stock transactions to work out cash flow and share ledger
@@ -299,7 +301,8 @@ def processTxnFiles(config):
     for account, stocks in stockListByAcc.items():
         stockLedger = dict()
         accountSummary = dict()
-        for stock, txns in stocks:
+        for stock in stocks:
+            txns = list(stocks[stock].values()).sort(key= lambda txn: txn.date)
             if (stock != NONE):
                 stockLedger[stock] = processStockTxns(config, stock, txns) 
             else:
