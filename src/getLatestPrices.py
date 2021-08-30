@@ -2,14 +2,14 @@ from datetime import datetime, timedelta
 import time
 import locale
 from saveRetreiveFiles import getStockPricesSaved, saveStockPrices
-from alphaAdvantage import getLatestDailyPrices, getAllDailyPrices, checkPrices
+from alphaAdvantage import getLatestDailyPrices, getAllDailyPrices
+from trustnet import getFundPrices
 
 def getAndSaveStockPricesSpark(bcConfig, stock):
-    return getAndSaveStockPrices(bcConfig.value, stock)
+    return getAndSaveStockPrices(bcConfig.value, "AlphaAdvantage", stock)
 
-def getAndSaveStockPrices(config, stock, periodBetweenCalls=0, lastTime=0):
+def getAndSaveStockPrices(config, stock, api, periodBetweenCalls=0, lastTime=0):
     maxPriceAgeDays = config['stats'].getint('maxPriceAgeDays')
-    apiKey = config['keys']['alphaAdvantageApiKey']
     storeConfig = config['store']
     localeStr = config['stats']['locale']
 
@@ -36,25 +36,29 @@ def getAndSaveStockPrices(config, stock, periodBetweenCalls=0, lastTime=0):
         refreshPrices = True
     if (refreshPrices):
         # If no latest price data or more than max age, refresh
+        newPrices = None
         if (periodBetweenCalls):
             sleepTime = periodBetweenCalls - (datetime.now() - lastTime).seconds + 1
             if (sleepTime > 0):
                 time.sleep(sleepTime)
-        print(f"{stock}: Refreshing prices")
-        newPrices = getLatestDailyPrices(apiKey, stock, prices)
+        if (api == 'AlphaAdvantage'):
+            print(f"{stock}: Refreshing stock prices from AlphaAdvantage")
+            apiKey = config['keys']['alphaAdvantageApiKey']
+            if (prices and len(prices) > 0):
+                newPrices = getLatestDailyPrices(apiKey, stock, prices)
+            else:
+                # Get all daily prices to save
+                print(f"{stock}: Getting all stock prices")
+                newPrices = getAllDailyPrices(apiKey, stock)
+        elif (api == 'TrustNet'):
+            print(f"{stock}: Refreshing fund prices from TrustNet")
+            newPrices = getFundPrices(stock, prices)
         lastTime = datetime.now()
         if (newPrices and newPrices['dailyPrices']):
             prices = newPrices
             saveStockPrices(storeConfig, stock, prices)
         else:
-            # Get all daily prices to save
-            print(f"{stock}: Getting all stock prices")
-            newPrices = getAllDailyPrices(apiKey, stock)
-            if (newPrices and newPrices['dailyPrices']):
-                prices = newPrices
-                saveStockPrices(storeConfig, stock, prices)
-            else:
-                print(f"{stock}: Failed to get any stock prices")
+            print(f"{stock}: Failed to get any stock prices")
     return (prices, lastTime)
 
 def getLatestPrices(config, rateLimit, stocks):
@@ -62,4 +66,4 @@ def getLatestPrices(config, rateLimit, stocks):
     nowTime = datetime.now()
     lastTime = nowTime - timedelta(seconds = periodBetweenCalls + 1)
     for stock in stocks:
-        (prices, lastTime) = getAndSaveStockPrices(config, stock, periodBetweenCalls, lastTime)
+        (prices, lastTime) = getAndSaveStockPrices(config, stock, "AlphaAdvantage", periodBetweenCalls, lastTime)

@@ -23,7 +23,7 @@ def processStock(config, stock):
     locale.setlocale(locale.LC_ALL, localeStr)
 
     info = retrieveStockInfo(config, stock)
-    (prices, retrieveDate) = getAndSaveStockPrices(config, stock)
+    (prices, retrieveDate) = getAndSaveStockPrices(config, "AlphaAdvantage", stock)
     if (info and prices and prices['dailyPrices']):
         metrics = processStockStats(info, prices['dailyPrices'])
         calcPiotroskiFScore(stock, info, metrics)

@@ -4,9 +4,12 @@ import os
 from dataclasses import dataclass, asdict
 from datetime import datetime
 from statistics import mean
-from saveRetreiveFiles import getStockInfoSaved, getStockTxnSaved, saveStockTransactions, getStockPricesSaved, saveStockLedger
+from saveRetreiveFiles import getStockInfoSaved, getStockTxnSaved, saveStockTransactions, saveStockLedger
+from getLatestPrices import getAndSaveStockPrices
+
 from processStock import calcPriceData
 from getStockLedgerStr import getTaxYear
+from decimal import Decimal
 
 CASH_IN = 'Cash in'
 CASH_OUT = 'Cash out'
@@ -27,26 +30,26 @@ class Transaction:
     isin: str
     desc: str
     qty: int = 0
-    price: float = 0.0
-    debit: float = 0.0
-    credit: float = 0.0
+    price: Decimal = Decimal(0.0)
+    debit: Decimal = Decimal(0.0)
+    credit: Decimal = Decimal(0.0)
 
 @dataclass
 class CapitalGain:
     #Buy and sell history of stock
     date: datetime
     qty: int
-    price: float
+    price: Decimal
     transaction: str = BUY
     def calcGain(self, sellDate, sellPrice, sellQty):
         timeHeld = sellDate - self.date
         gain = (sellPrice - self.price) * sellQty
-        yld = 100*gain/self.price
+        yld = float(100*gain/self.price)
         avgYieldPerYear = yld / (timeHeld.days / 365)
         return (gain, sellQty - self.qty, avgYieldPerYear)
     def calcTotalGain(self, sellDate, sellPrice):
         return self.calcGain(sellDate, sellPrice, self.qty)
-    def calcTotalCurrentGain(self, sellDate, sellPrice):
+    def calcTotalCurrentGain(self, sellPrice):
         return self.calcTotalGain(datetime.now(), sellPrice)
 
 def getExistingTxns(config, stockList, stock):
@@ -70,13 +73,13 @@ def processAccountTxns(summary, txns):
         if (txn.date < dateOpened):
             dateOpened = txn.date
         if type == CASH_IN:
-            cashInPerYear = cashInPerYear.get(taxYear, 0) + txn.credit
+            cashInPerYear[taxYear] = cashInPerYear.get(taxYear, 0) + txn.credit
         elif type == CASH_OUT:
-            cashOutPerYear = cashOutPerYear.get(taxYear, 0) + txn.debit
+            cashOutPerYear[taxYear] = cashOutPerYear.get(taxYear, 0) + txn.debit
         elif type == FEES:
-            feesPerYear = feesPerYear.get(taxYear, 0) + txn.debit
+            feesPerYear[taxYear] = feesPerYear.get(taxYear, 0) + txn.debit
         elif type == REFUND:
-            feesPerYear = feesPerYear.get(taxYear, 0) - txn.credit
+            feesPerYear[taxYear] = feesPerYear.get(taxYear, 0) - txn.credit
     summary['dateOpened'] = dateOpened
     summary['cashInPerYear'] = cashInPerYear
     summary['cashOutPerYear'] = cashOutPerYear
@@ -84,6 +87,7 @@ def processAccountTxns(summary, txns):
     return summary
 
 def processStockTxns(config, stock, txns):
+    configStore = config['store']
     totalCosts = 0
     totalStock = 0
     totalShareInvested = 0 
@@ -93,8 +97,8 @@ def processStockTxns(config, stock, txns):
     invCostsPerYear = dict()  #By tax year
     dividendPerYear = dict() #By tax year
     dividendYieldPerYear = dict() #By tax year
-    adjIinvestmentHistory = list[CapitalGain]
-    fullIinvestmentHistory = list[CapitalGain]
+    adjIinvestmentHistory = list()
+    fullIinvestmentHistory = list()
     stockName = None
     stockSymbol = None
     firstBought = datetime.now()
@@ -104,12 +108,16 @@ def processStockTxns(config, stock, txns):
         if type == BUY:
             if not stockName:
                 stockName = txn.desc
-            if not stockSymbol:
-                stockSymbol = txn.symbol
+            if not stockSymbol and txn.symbol != '':
+                stockSymbol = txn.symbol + '.L'
             if (txn.date < firstBought):
                 firstBought = txn.date
             totalStock += txn.qty
-            shareValue = txn.price * txn.qty
+            if (txn.price == 0):
+                shareValue = txn.debit
+                txn.price = txn.debit / txn.qty
+            else:
+                shareValue = txn.price * txn.qty
             totalShareInvested += shareValue
             avgShareCost = totalShareInvested / totalStock
             invCostsPerYear[taxYear] = invCostsPerYear.get(taxYear, 0) + txn.debit - shareValue #Stamp duty and charges
@@ -117,58 +125,86 @@ def processStockTxns(config, stock, txns):
             fullIinvestmentHistory.append(CapitalGain(date = txn.date, qty = txn.qty, price = txn.price))
         elif type == SELL:
             gain = (txn.price - avgShareCost) * txn.qty #CGT uses average purchase price at time of selling
-            fullIinvestmentHistory.append(CapitalGain(date = txn.date, qty = txn.qty, price = txn.price, transaction = SELL))
             capitalGainPerYear[taxYear] = capitalGainPerYear.get(taxYear, 0) + gain
             totalStock -= txn.qty
+            if (txn.price == 0):
+                shareValue = txn.credit
+                txn.price = txn.credit / txn.qty
+            else:
+                shareValue = txn.price * txn.qty
             shareValue = txn.price * txn.qty
             totalShareInvested -= shareValue
             totalCosts += shareValue - txn.credit #Diff between what should have received vs what was credited
+            fullIinvestmentHistory.append(CapitalGain(date = txn.date, qty = txn.qty, price = txn.price, transaction = SELL))
             #Use last stock buy txn
             stockSold = txn.qty
             while stockSold > 0:
-                buyTxn = adjIinvestmentHistory.pop()
-                (gain, stockSold, avgYield) = buyTxn.calcYield(txn.date, txn.price, stockSold)
-                realGainPerYear[taxYear] = realGainPerYear.get(taxYear, 0) + gain
-                if (stockSold < 0):
-                    #Put any remaining stock back into stock history
-                    adjIinvestmentHistory.append(CapitalGain(date = buyTxn.date, qty = -stockSold, price = buyTxn.price))
+                if len(adjIinvestmentHistory) > 0:
+                    buyTxn = adjIinvestmentHistory.pop()
+                    (gain, stockSold, avgYield) = buyTxn.calcGain(txn.date, txn.price, stockSold)
+                    realGainPerYear[taxYear] = realGainPerYear.get(taxYear, 0) + gain
+                    if (stockSold < 0):
+                        #Put any remaining stock back into stock history
+                        adjIinvestmentHistory.append(CapitalGain(date = buyTxn.date, qty = -stockSold, price = buyTxn.price))
+                else:
+                    print(f"{stock}: Run out of investment history to sell {txn.qty} shares - remaining: {stockSold}\n")
+                    break
         elif type == DIVIDEND:
             divi = txn.credit
             yearYield = dividendYieldPerYear.get(taxYear, 0) + divi/totalShareInvested
-            dividendPerYear[taxYear] = ((dividendPerYear.get(taxYear, 0) + divi), (yearYield))
+            dividendPerYear[taxYear] = dividendPerYear.get(taxYear, 0) + divi
             dividendYieldPerYear[taxYear] = yearYield
     #From remaining stock history workout paper gain
     totalPaperGain = 0
-    info = getStockInfoSaved(config, stock)
-    metrics = dict()
-    prices = getStockPricesSaved(config, stock)
-    calcPriceData(metrics, info, prices['dailyPrices'])
-    latestPriceDate = metrics['currentPriceDate']
-    currentPrice = metrics['currentPrice']
-
-    for hist in adjIinvestmentHistory:
-        (gain, stockSold, avgYield) = hist.calcTotalYield(currentPrice)
-        totalPaperGain += gain
-    remainingCGT = (currentPrice * totalStock) - (avgShareCost * totalStock)
     details = dict()
-    details['stockSymbol'] = stock
+    if (stockSymbol):
+        #Its a share or ETF
+        details['stockSymbol'] = stockSymbol
+        (prices, retrieveDate) = getAndSaveStockPrices(config, stockSymbol, "AlphaAdvantage")
+    else:
+        #Its a fund
+        details['stockSymbol'] = stock
+        (prices, retrieveDate) = getAndSaveStockPrices(config, stock, "TrustNet")
+    if (prices):
+        dailyPrices = prices['dailyPrices']
+        if (len(dailyPrices) > 0):
+            priceDatesSorted = sorted(dailyPrices)
+            latestPriceDateStamp = priceDatesSorted[len(priceDatesSorted)-1]
+            latestPriceDate = datetime.fromtimestamp(latestPriceDateStamp)
+            (low, high) = dailyPrices[latestPriceDateStamp]
+            # Use the average of the last price range we have
+            currentPricePence = Decimal(high + low)/2
+            currentPrice = currentPricePence/100
+
+    if currentPrice:
+        for hist in adjIinvestmentHistory:
+            (gain, stockSold, avgYield) = hist.calcTotalCurrentGain(currentPrice)
+            totalPaperGain += gain
+        remainingCGT = (currentPrice * totalStock) - (avgShareCost * totalStock)
+    else:
+        totalPaperGain = 0
+        
     details['stockName'] = stockName
     details['stockHeld'] = totalStock
     details['heldSince'] = firstBought
     details['totalInvested'] = totalShareInvested
-    details['investmentHistory'] = asdict(fullIinvestmentHistory)
-    details['realisedCapitalGainPerYear'] = realGainPerYear
     details['capitalGainForTaxPerYear'] = capitalGainPerYear
+    details['realisedCapitalGainPerYear'] = realGainPerYear
+    details['investmentHistory'] = fullIinvestmentHistory
+    if currentPrice:
+        details['currentSharePrice'] = currentPrice
+        details['priceDate'] = latestPriceDate
+        details['totalPaperGain'] = totalPaperGain
     details['dealingCostsPerYear'] = invCostsPerYear
     details['avgSharePrice'] = avgShareCost
     details['dealingCosts'] = totalCosts
-    details['totalPaperGain'] = totalPaperGain
-    details['currentSharePrice'] = currentPrice
-    details['priceDate'] = latestPriceDate
     details['dividendsPerYear'] = dividendPerYear
     details['dividendYieldPerYear'] = dividendYieldPerYear
-    details['averageYearlyDiviYield'] = mean(dividendYieldPerYear.values)
-    details['totalGain'] = totalPaperGain + sum(dividendPerYear.values) + sum(realGainPerYear.values) - totalCosts
+    details['averageYearlyDiviYield'] = mean(dividendYieldPerYear.values()) if len(dividendYieldPerYear) > 0 else 0
+    details['totalGain'] = totalPaperGain \
+                + (sum(dividendPerYear.values()) if len(dividendYieldPerYear) > 0 else 0) \
+                + (sum(realGainPerYear.values()) if len(realGainPerYear) > 0 else 0) \
+                - totalCosts
     return details
 
 def summarisePerformance(accountSummary, stockSummary):
@@ -182,7 +218,7 @@ def summarisePerformance(accountSummary, stockSummary):
     totalDivi = dict()
     aggInvestedByYear = dict()
     totalDiviYieldByYear = dict()
-    for details in stockSummary:
+    for details in stockSummary.values():
         totalShareInvested += details['totalInvested']
         totalCosts += details['dealingCosts']
         totalPaperGain += details['totalPaperGain']
@@ -195,16 +231,17 @@ def summarisePerformance(accountSummary, stockSummary):
             totalDealingCosts[year] = totalDealingCosts.get(year, 0) + costs
         for year,divi in details['dividendsPerYear'].items():
             totalDivi[year] = totalDivi.get(year, 0) + divi
-    byYear = accountSummary['cashInPerYear'].keys().sort()
+    years = list(accountSummary['cashInPerYear'].keys())
+    years.sort()
     sumInvested = 0
-    for year in byYear:
+    for year in years:
         sumInvested += accountSummary['cashInPerYear'].get(year, 0)
         aggInvestedByYear[year] = sumInvested
         if sumInvested > 0:
             totalDiviYieldByYear[year] = totalDivi.get(year, 0)
 
-    accountSummary['totalInvested'] = sum(accountSummary['cashInPerYear'].values) - sum(accountSummary['cashOutPerYear'].values)
-    accountSummary['totalFees'] = sum(accountSummary['feesPerYear'].values)
+    accountSummary['totalInvested'] = sum(accountSummary['cashInPerYear'].values()) - sum(accountSummary['cashOutPerYear'].values())
+    accountSummary['totalFees'] = sum(accountSummary['feesPerYear'].values())
     accountSummary['totalInvestedInSecurities'] = totalShareInvested
     accountSummary['totalDealingCosts'] = totalCosts
     accountSummary['totalPaperGain'] = totalPaperGain
@@ -216,7 +253,13 @@ def summarisePerformance(accountSummary, stockSummary):
     accountSummary['dividendsPerYear']  = totalDivi
     accountSummary['dividendYieldPerYear']  = totalDiviYieldByYear
 
+def priceStrToDec(strValue):
+    valStr = strValue.replace('£', '')
+    valStr = valStr.replace(',', '')
+    return Decimal(valStr)
+
 def processTxnFiles(config):
+    configStore = config['store']
     stockListByAcc = dict() #Dict of stocks by accountname, stocks are a dict of stock txns keyed by symbol
     changedStockTxnsByAcc = dict() #Dict keyed by account with Set of stocks whose transactions have been appended to and so need to be saved back to HDFS
     #List transactions directory for account history files
@@ -240,33 +283,33 @@ def processTxnFiles(config):
                     symbol = row['Symbol'],
                     sedol = row['Sedol'],
                     isin = row['ISIN'],
-                    qty = 0 if row['Quantity'] == '' else row['Quantity'],
-                    price = 0 if row['Price'] == '' else row['Price'],
+                    qty = 0 if row['Quantity'] == '' else int(row['Quantity']),
+                    price = 0 if row['Price'] == '' else priceStrToDec(row['Price']),
                     desc = row['Description'],
-                    debit = 0 if row['Debit'] == '' else row['Debit'],
-                    credit = 0 if row['Credit'] == '' else row['Credit']
+                    debit = 0 if row['Debit'] == '' else priceStrToDec(row['Debit']),
+                    credit = 0 if row['Credit'] == '' else priceStrToDec(row['Credit'])
                     )
                 if (txn.desc.startswith('Div') 
                         or txn.desc.lower().startswith('equalisation')
-                        or 'dividend' in txn.desc.lower()):
+                        or 'optional dividend' in txn.desc.lower()):
                     txn.type = DIVIDEND
-                elif (txn.isin == '' and txn.symbol == ''):
+                elif (txn.isin.startswith('No stock') or (txn.isin == '' and txn.symbol == '')):
                     txn.isin = NONE
                     if (txn.desc.startswith("Debit card") 
                             or 'subscription' in txn.desc.lower() 
                             or txn.desc.startswith("Trf")
                             or 'transfer' in txn.desc.lower()):
                         if (txn.credit != 0):
-                            txnType = CASH_IN
+                            txn.type = CASH_IN
                         else:
-                            txnType = CASH_OUT 
+                            txn.type = CASH_OUT 
                     elif (('fee' in txn.desc.lower()
                             or 'payment' in txn.desc.lower())
                                 and txn.debit != 0):
-                        txnType = FEES
+                        txn.type = FEES
                     elif ('refund' in txn.desc.lower()
                             and txn.credit != 0):
-                        txnType = REFUND
+                        txn.type = REFUND
                     else:
                         print(f"Unknown transaction type {txn}")
                 elif (txn.qty != 0):
@@ -277,7 +320,7 @@ def processTxnFiles(config):
                 else:
                     print(f"Unknown transaction type {txn}")
                 # Retrieve transactions by stock symbol
-                existingTxns = getExistingTxns(config, stockList, txn.isin)
+                existingTxns = getExistingTxns(configStore, stockList, txn.isin)
                 txnKey = f"{accountName}-{txn.date}-{txn.ref}" 
                 # check transaction in current list, if not add
                 if (not existingTxns.get(txnKey, None)):
@@ -294,7 +337,7 @@ def processTxnFiles(config):
     for account, stocks in changedStockTxnsByAcc.items():
         for stock in stocks:
             #Sort transactions by date
-            saveStockTransactions(config, accountName, stock, stockListByAcc[account][stock])
+            saveStockTransactions(configStore, accountName, stock, stockListByAcc[account][stock])
     
     #For each account process each stock transactions to work out cash flow and share ledger
     totalCosts = 0
@@ -302,7 +345,7 @@ def processTxnFiles(config):
         stockLedger = dict()
         accountSummary = dict()
         for stock in stocks:
-            txns = list(stocks[stock].values()).sort(key= lambda txn: txn.date)
+            txns = sorted(list(stocks[stock].values()), key= lambda txn: txn.date)
             if (stock != NONE):
                 stockLedger[stock] = processStockTxns(config, stock, txns) 
             else:
@@ -310,4 +353,4 @@ def processTxnFiles(config):
         #Summarise transactions and yields etc
         summarisePerformance(accountSummary, stockLedger)
         #Save to Dropbox file
-        saveStockLedger(config, account, accountSummary, stockLedger)
+        saveStockLedger(configStore, account, accountSummary, stockLedger)

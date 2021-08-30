@@ -13,7 +13,6 @@ config = configparser.ConfigParser()
 config.read('./stockpicker.ini')
 localeStr = config['stats']['locale']
 locale.setlocale( locale.LC_ALL, localeStr) 
-configStore = config['store']
 
 import argparse
 parser = argparse.ArgumentParser(description='Re-calculate and display metrics and scores of given stock symbols')
@@ -21,4 +20,4 @@ parser.add_argument('-d', '--hdfs', action='store_const', const=False, default=T
                    help='Set if using hdfs filesystem rather than local store (True)')
 args = parser.parse_args()
 
-processTxnFiles(configStore)
+processTxnFiles(config)

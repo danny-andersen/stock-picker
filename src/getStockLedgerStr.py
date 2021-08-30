@@ -1,10 +1,10 @@
 
 from tabulate import tabulate
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 
 def getTaxYear(inDate):
-    taxYearStart = datetime.date(year=2021, month=4, day=6)
-    d = datetime.date(year=2021, month=inDate.month, day=inDate.day)
+    taxYearStart = date(year=2021, month=4, day=6)
+    d = date(year=2021, month=inDate.month, day=inDate.day)
     if (d < taxYearStart):
         year = f"{inDate.year - 1}-{inDate.year}"
     else:
@@ -17,8 +17,8 @@ def getAccountSummaryStr(account, accountSummary):
     retStr += f"Total Currently invested: £{accountSummary['totalInvested']:0.2f}\n"
     retStr += f"Total Invested in Securities: £{accountSummary['totalInvestedInSecurities']:0.2f}\n"
     retStr += f"Capital Gain on paper: £{accountSummary['totalPaperGain']:0.2f}\n"
-    retStr += f"Total Realised Capital gain: £{sum(accountSummary['realisedGainPerYear'].values):0.2f}\n"
-    retStr += f"Total Dividends: £{sum(accountSummary['dividendsPerYear'].values):0.2f}\n"
+    retStr += f"Total Realised Capital gain: £{sum(accountSummary['realisedGainPerYear'].values()):0.2f}\n"
+    retStr += f"Total Dividends: £{sum(accountSummary['dividendsPerYear'].values()):0.2f}\n"
     retStr += f"Total Fees paid: £{accountSummary['totalFees']:0.2f}\n"
     retStr += f"Total Dealing costs: £{accountSummary['totalDealingCosts']:0.2f}\n"
     totalReturn = accountSummary['totalGain'] - accountSummary['totalFees'] - accountSummary['totalDealingCosts']
@@ -26,7 +26,7 @@ def getAccountSummaryStr(account, accountSummary):
     procYear = accountSummary['dateOpened']
     endYear = datetime.now()
     timeHeld = endYear - procYear
-    avgReturnPerYear = totalReturn / (timeHeld.days / 365)
+    avgReturnPerYear = float(totalReturn) / (timeHeld.days / 365)
     retStr += f"Average return per year £{avgReturnPerYear:0.2f}\n"
 
     byYear = dict()
@@ -55,10 +55,13 @@ def getStockLedgerStr(details):
     retStr += f"Number of shares: {details['stockHeld']}\n"
     retStr += f"Amount invested {details['totalInvested']:0.2f}\n"
     retStr += f"Average Share Price {details['avgSharePrice']:0.2f}\n"
-    retStr += f"Current Share Price {details['currentSharePrice']:0.2f}"
-    retStr += f"Share price date {details['priceDate']}\n"
-    retStr += f"Total Paper Gain {details['totalPaperGain']:0.2f}\n"
-    retStr += f"Total Dividends {sum(details['devidendsPerYear']):0.2f}\n"
+    if details.get('currentSharePrice', None):
+        retStr += f"Current Share Price {details['currentSharePrice']:0.2f}\n"
+        retStr += f"Share price date {details['priceDate']}\n"
+        retStr += f"Total Paper Gain {details['totalPaperGain']:0.2f}\n"
+    else:
+        retStr += "**** No current price data available, so total gain info doesnt include current value\n"
+    retStr += f"Total Dividends {sum(details['dividendsPerYear'].values()):0.2f}\n"
     retStr += f"Average Yearly Dividend Yield {details['averageYearlyDiviYield']:0.2f}\n"
     retStr += f"Stock Dealing costs {details['dealingCosts']:0.2f}\n"
     retStr += f"\nTotal Gain: {details['totalGain']:0.2f}\n"
