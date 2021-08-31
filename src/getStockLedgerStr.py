@@ -1,6 +1,7 @@
 
 from tabulate import tabulate
 from datetime import datetime, timedelta, date
+from dataclasses import asdict
 
 def getTaxYear(inDate):
     taxYearStart = date(year=2021, month=4, day=6)
@@ -67,18 +68,25 @@ def getStockLedgerStr(details):
     retStr += f"\nTotal Gain: {details['totalGain']:0.2f}\n"
 
     retStr += "Dividends Per Year:"
-    retStr += tabulate(details['dividendsPerYear'], headers='keys')
+    divs = list(details['dividendsPerYear'].items())
+    retStr += tabulate(divs, headers=['Tax Year', 'Dividend Paid'])
 
     retStr += "Investments Made:"
-    retStr += tabulate(details['investmentHistory'], headers='keys')
+    hist = list()
+    for dc in details['investmentHistory']:
+        hist.append(asdict(dc))
+    retStr += tabulate(hist, headers='keys')
 
     retStr += "Realised Capital Gain Per Year:"
-    retStr += tabulate(details['realisedCapitalGainPerYear'], headers='keys')
+    gains = list(details['realisedCapitalGainPerYear'].items())
+    retStr += tabulate(gains, headers=['Tax Year', 'Realised Capital Gain (taxable value)'])
 
     retStr += "Capital Gain For Tax Per Year:"
-    retStr += tabulate(details['capitalGainForTaxPerYear'], headers='keys')
+    gains = list(details['capitalGainForTaxPerYear'].items())
+    retStr += tabulate(gains, headers=['Tax Year', 'Capital Gain (actual)'])
 
     retStr += "Dealing Costs Per Year:"
-    retStr += tabulate(details['dealingCostsPerYear'], headers='keys')
+    costs = list(details['dealingCostsPerYear'].items())
+    retStr += tabulate(costs, headers=['Tax Year', 'Dealing Costs'])
 
     return retStr

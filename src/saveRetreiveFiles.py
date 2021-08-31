@@ -233,7 +233,7 @@ def saveStockLedger(config, account, accountSummary, stockLedger):
     saveStringToDropbox(config, f"/performance/{account}-Summary.txt", accSummary)
     for stock, details in stockLedger.items():
         detailsStr = getStockLedgerStr(details)
-        saveStringToDropbox(config, f"/performance/{account}/{stock}.txt", details)
+        saveStringToDropbox(config, f"/performance/{account}/{stock}.txt", detailsStr)
 
 def saveStringToDropbox(config, path, dataStr):
     dropboxAccessToken = config['dropboxAccessToken']

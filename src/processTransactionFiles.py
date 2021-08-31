@@ -260,6 +260,7 @@ def priceStrToDec(strValue):
 
 def processTxnFiles(config):
     configStore = config['store']
+    isinMapping = config['isinmappings']
     stockListByAcc = dict() #Dict of stocks by accountname, stocks are a dict of stock txns keyed by symbol
     changedStockTxnsByAcc = dict() #Dict keyed by account with Set of stocks whose transactions have been appended to and so need to be saved back to HDFS
     #List transactions directory for account history files
@@ -267,6 +268,9 @@ def processTxnFiles(config):
 
     #For each trading and isa account file, read in transactions into list
     for txnFile in txnFiles:
+        if txnFile.startswith('.~'):
+            # Ignore Lock files
+            break
         # Extract account name
         accountName = txnFile.split('_')[0]
         stockList = stockListByAcc.get(accountName, None)
@@ -289,6 +293,9 @@ def processTxnFiles(config):
                     debit = 0 if row['Debit'] == '' else priceStrToDec(row['Debit']),
                     credit = 0 if row['Credit'] == '' else priceStrToDec(row['Credit'])
                     )
+                if (txn.isin != ''):
+                    #Map any old isin to new isin
+                    txn.isin = isinMapping.get(txn.isin, txn.isin)
                 if (txn.desc.startswith('Div') 
                         or txn.desc.lower().startswith('equalisation')
                         or 'optional dividend' in txn.desc.lower()):
