@@ -258,6 +258,15 @@ def priceStrToDec(strValue):
     valStr = valStr.replace(',', '')
     return Decimal(valStr)
 
+def matchByDesc(txnByDesc, txn):
+    descToMatch = txn.desc
+    for desc in txnByDesc.keys():
+        if (descToMatch.contains(desc)):
+            buyTxn = txnByDesc[desc]
+            txn.isin = buyTxn.isin
+            txn.symbol = buyTxn.symbol
+            txn.sedol = buyTxn.sedol
+
 def processTxnFiles(config):
     configStore = config['store']
     isinMapping = config['isinmappings']
@@ -265,6 +274,7 @@ def processTxnFiles(config):
     changedStockTxnsByAcc = dict() #Dict keyed by account with Set of stocks whose transactions have been appended to and so need to be saved back to HDFS
     #List transactions directory for account history files
     txnFiles = os.listdir('transactions/')
+    txnByDesc = dict() #Dict of buy txns by their description - allows stock details to be found by description
 
     #For each trading and isa account file, read in transactions into list
     for txnFile in txnFiles:
@@ -284,9 +294,9 @@ def processTxnFiles(config):
                 txn = Transaction(
                     date = datetime.strptime(row['Date'], "%d/%m/%Y"),
                     ref = row['Reference'],
-                    symbol = row['Symbol'],
-                    sedol = row['Sedol'],
-                    isin = row['ISIN'],
+                    symbol = row['Symbol'].strip(),
+                    sedol = row['Sedol'].strip(),
+                    isin = row['ISIN'].strip(),
                     qty = 0 if row['Quantity'] == '' else int(row['Quantity']),
                     price = 0 if row['Price'] == '' else priceStrToDec(row['Price']),
                     desc = row['Description'],
@@ -300,6 +310,9 @@ def processTxnFiles(config):
                         or txn.desc.lower().startswith('equalisation')
                         or 'optional dividend' in txn.desc.lower()):
                     txn.type = DIVIDEND
+                    if (txn.isin == ''):
+                        #Some Div payments dont have an isin - match with buy
+                        matchByDesc(txnByDesc, txn)
                 elif (txn.isin.startswith('No stock') or (txn.isin == '' and txn.symbol == '')):
                     txn.isin = NONE
                     if (txn.desc.startswith("Debit card") 
@@ -324,6 +337,7 @@ def processTxnFiles(config):
                         txn.type = SELL
                     else:
                         txn.type = BUY
+                        txnByDesc[txn.desc] = txn
                 else:
                     print(f"Unknown transaction type {txn}")
                 # Retrieve transactions by stock symbol
