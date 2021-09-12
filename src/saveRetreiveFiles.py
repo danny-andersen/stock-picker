@@ -59,7 +59,6 @@ def deleteLocal(fileName):
         ret = os.remove(fileName)
     return ret
 
-
 def retreiveHdfs(client, fileName):
     jsonContent = None
     if (client.status(fileName, strict=False) != None):
@@ -82,7 +81,28 @@ def deleteHdfsFile(client, fileName):
         # File is being replaced - need to delete first
         if (not client.delete(fileName)):
             print (f"Failed to delete file {fileName}")
-    
+
+def listFiles(storeConfig, name):
+    fileList = list()
+    local = storeConfig.getboolean('localStore')
+    if (local):
+        baseDir = storeConfig['baseDir']
+        dirName = baseDir + name
+        dirEntries = os.scandir(dirName)
+        for dirEntry in dirEntries:
+            if (dirEntry.isFile() and not dirEntry.startswith('.')):
+                fileList.append(dirEntry)
+    else: #list files HDFS
+        hdfsBaseDir = storeConfig['hdfsBaseDir']
+        dirName = hdfsBaseDir + name
+        hdfsUrl = storeConfig['hdfsUrl']
+        hdfsClient = InsecureClient(hdfsUrl, user='hdfs')
+        try:
+            fileList = hdfsClient.list(dirName)
+        except:
+            print(f"Got HDFS exception listing directory {dirName}, returning empty list")
+    return fileList
+
 def getStock(storeConfig, stock, name):
     content = None
     local = storeConfig.getboolean('localStore')
@@ -130,6 +150,15 @@ def getStockInfoSaved(config, stock):
 def getStockTxnSaved(config, stock):
     return getStock(config, stock, 'transactions')
 
+def getAllStockTxnSaved(config):
+    accounts = listFiles(config, 'transactions')
+    txnByStockByAcc = dict()
+    for acc in accounts:
+        stockFiles = listFiles(config, f'transactions/{acc}')
+        for stock in stockFiles:
+            txnByStockByAcc[acc][stock] = getStockTxnSaved(config, stock)
+    return txnByStockByAcc
+
 def getStockPricesSaved(storeConfig, stock):
     stockPrices = getStock(storeConfig, stock, 'prices')
     # Convert key from str to int, and value from list to tuple
@@ -148,7 +177,7 @@ def saveStockInfo(config, stock, info):
     saveStock(config, stock, 'info', info)
 
 def saveStockTransactions(config, accountName, stock, txns):
-    saveStock(config, stock, f'{accountName}/transactions/', txns)
+    saveStock(config, stock, f'transactions/{accountName}', txns)
 
 def saveStockMetrics(config, stock, metrics):
     saveStock(config, stock, 'metrics', metrics)

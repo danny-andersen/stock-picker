@@ -33,25 +33,32 @@ def getFundPrices(isin, priceData):
     resp.html.render(timeout=30)
 
     soup = BeautifulSoup(resp.html.html, "lxml")
-    priceStrs = soup.find('td', class_='essential price').stripped_strings
-    retData = priceData
-    for str in priceStrs:
-        if str != '':
-            price = float(str.replace(',',''))
-            newPrice = {int(datetime.now().timestamp()): (price, price)}
-            if (existingPrices):
-                existingPrices.update(newPrice)
-            else:
-                existingPrices = newPrice
-                startDate = datetime.now()
-            endDate = datetime.now()
-            lastAttemptDate = endDate
-            retData = { "stock": isin, 
-                        "startDate" : startDate,
-                        "endDate": endDate,
-                        "lastRetrievalDate" : lastAttemptDate,
-                        "dailyPrices": existingPrices}
-            break
+    retData = None #Only return data if new data added
+    priceStrsTag = soup.find('td', class_='essential price')
+    if priceStrsTag:
+        priceStrs = priceStrsTag.stripped_strings
+        for str in priceStrs:
+            if str and str.strip() != '':
+                str = str.strip()
+                price = float(str.replace(',',''))
+                newPrice = {int(datetime.now().timestamp()): (price, price)}
+                if (existingPrices):
+                    existingPrices.update(newPrice)
+                else:
+                    existingPrices = newPrice
+                    startDate = datetime.now()
+                endDate = datetime.now()
+                lastAttemptDate = endDate
+                retData = { "stock": isin, 
+                            "startDate" : startDate,
+                            "endDate": endDate,
+                            "lastRetrievalDate" : lastAttemptDate,
+                            "dailyPrices": existingPrices}
+                break
+            # else:
+            #     print(f"No price in xml tag {priceStrs}")
+    else:
+        print(f"Could not find price for stock isin: {isin}")
 
     return retData
 

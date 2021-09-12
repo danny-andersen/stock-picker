@@ -1,10 +1,11 @@
 import csv
 from io import StringIO
 import os
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
+from dataclasses_json import dataclass_json
 from datetime import datetime
 from statistics import mean
-from saveRetreiveFiles import getStockInfoSaved, getStockTxnSaved, saveStockTransactions, saveStockLedger
+from saveRetreiveFiles import getStockInfoSaved, getAllStockTxnSaved, getStockTxnSaved, saveStockTransactions, saveStockLedger
 from getLatestPrices import getAndSaveStockPrices
 
 from processStock import calcPriceData
@@ -20,6 +21,7 @@ FEES = 'Fees'
 REFUND ='Refund'
 NONE = 'No stock'
 
+@dataclass_json
 @dataclass
 class Transaction:
     #An investment transaction of some sort
@@ -51,16 +53,6 @@ class CapitalGain:
         return self.calcGain(sellDate, sellPrice, self.qty)
     def calcTotalCurrentGain(self, sellPrice):
         return self.calcTotalGain(datetime.now(), sellPrice)
-
-def getExistingTxns(config, stockList, stock):
-    txns = stockList.get(stock, None)
-    if (not txns):
-        #Get previous ones saved
-        txns = getStockTxnSaved(config, stock)
-        if (not txns or len(txns) == 0):
-            txns = dict()
-        stockList[stock] = txns
-    return txns
 
 def processAccountTxns(summary, txns):
     cashInPerYear = dict()
@@ -165,6 +157,7 @@ def processStockTxns(config, stock, txns):
         #Its a fund
         details['stockSymbol'] = stock
         (prices, retrieveDate) = getAndSaveStockPrices(config, stock, "TrustNet")
+    currentPrice = None
     if (prices):
         dailyPrices = prices['dailyPrices']
         if (len(dailyPrices) > 0):
@@ -258,29 +251,29 @@ def priceStrToDec(strValue):
     valStr = valStr.replace(',', '')
     return Decimal(valStr)
 
-def matchByDesc(txnByDesc, txn):
-    descToMatch = txn.desc
-    for desc in txnByDesc.keys():
-        if (descToMatch.contains(desc)):
-            buyTxn = txnByDesc[desc]
-            txn.isin = buyTxn.isin
-            txn.symbol = buyTxn.symbol
-            txn.sedol = buyTxn.sedol
-
 def processTxnFiles(config):
     configStore = config['store']
     isinMapping = config['isinmappings']
-    stockListByAcc = dict() #Dict of stocks by accountname, stocks are a dict of stock txns keyed by symbol
     changedStockTxnsByAcc = dict() #Dict keyed by account with Set of stocks whose transactions have been appended to and so need to be saved back to HDFS
+
+    #Dict of stocks by accountname, stocks are a dict of stock txns keyed by symbol
+    stockListByAcc = getAllStockTxnSaved(configStore)
+    #Need to convert transactions from json to dataclass 
+    for acc in stockListByAcc.keys():
+        for stock in stockListByAcc[acc].keys():
+            for txKey, txn in stockListByAcc[acc][stock].items():
+                stockListByAcc[acc][stock][txKey] = Transaction.from_json(txn)
+
     #List transactions directory for account history files
-    txnFiles = os.listdir('transactions/')
-    txnByDesc = dict() #Dict of buy txns by their description - allows stock details to be found by description
+    dirEntries = os.scandir('transactions/')
+    txnFiles = list()
+    for dirEntry in dirEntries:
+        if (dirEntry.is_file() and not dirEntry.name.startswith('.') and '.csv' in dirEntry.name):
+            txnFiles.append(dirEntry.name)
 
     #For each trading and isa account file, read in transactions into list
     for txnFile in txnFiles:
-        if txnFile.startswith('.~'):
-            # Ignore Lock files
-            break
+        print(f"Processing file {txnFile}")
         # Extract account name
         accountName = txnFile.split('_')[0]
         stockList = stockListByAcc.get(accountName, None)
@@ -310,9 +303,6 @@ def processTxnFiles(config):
                         or txn.desc.lower().startswith('equalisation')
                         or 'optional dividend' in txn.desc.lower()):
                     txn.type = DIVIDEND
-                    if (txn.isin == ''):
-                        #Some Div payments dont have an isin - match with buy
-                        matchByDesc(txnByDesc, txn)
                 elif (txn.isin.startswith('No stock') or (txn.isin == '' and txn.symbol == '')):
                     txn.isin = NONE
                     if (txn.desc.startswith("Debit card") 
@@ -337,11 +327,13 @@ def processTxnFiles(config):
                         txn.type = SELL
                     else:
                         txn.type = BUY
-                        txnByDesc[txn.desc] = txn
                 else:
                     print(f"Unknown transaction type {txn}")
                 # Retrieve transactions by stock symbol
-                existingTxns = getExistingTxns(configStore, stockList, txn.isin)
+                existingTxns = stockList.get(txn.isin, None)
+                if (not existingTxns):
+                    existingTxns = dict()
+                    stockList[txn.isin] = existingTxns
                 txnKey = f"{accountName}-{txn.date}-{txn.ref}" 
                 # check transaction in current list, if not add
                 if (not existingTxns.get(txnKey, None)):
@@ -354,11 +346,58 @@ def processTxnFiles(config):
                         changedStockTxnsByAcc[accountName] = changed
                     changed.add(txn.isin)
 
+    #Extract all descriptions of BUY transactions
+    #These are used to match Divi payments to stocks that have not ISIN
+    txnByDesc = dict() #Dict of buy txns by their description - allows stock details to be found by description
+    for acc in stockListByAcc.keys():
+        for stock in stockListByAcc[acc].keys():
+            for txKey in stockListByAcc[acc][stock].keys():
+                tx = stockListByAcc[acc][stock][txKey]
+                if (tx.type == BUY or tx.type == SELL) and tx.isin != '':
+                    desc = tx.desc.replace(' ', '') #Strip out whitespace
+                    txnByDesc[desc] = tx
+    for acc in stockListByAcc.keys():
+        for stock in stockListByAcc[acc].keys():
+            stockTxns = stockListByAcc[acc][stock].copy()
+            for txKey in stockTxns.keys():
+                tx = stockListByAcc[acc][stock][txKey]
+                if tx.type == DIVIDEND and tx.isin == '':
+                    #Some Div payments dont have an isin - match with buy
+                    for desc in txnByDesc.keys():
+                        #Strip out whitespace to make comparison better
+                        txdescStrip = tx.desc.replace(' ', '')
+                        if (desc in txdescStrip):
+                            buyTxn = txnByDesc[desc]
+                            tx.isin = buyTxn.isin
+                            tx.symbol = buyTxn.symbol
+                            tx.sedol = buyTxn.sedol
+                            #Need to add to existing stock txns
+                            txns = stockListByAcc[acc][tx.isin]
+                            txns[txKey] = tx
+                            #Remove from current list
+                            stockListByAcc[acc][stock].pop(txKey)
+                            changed = changedStockTxnsByAcc.get(acc, None)
+                            if not changed:
+                                changed = set()
+                                changedStockTxnsByAcc[accountName] = changed
+                            changed.add(tx.isin)
+
     #Save any changed transactions
     for account, stocks in changedStockTxnsByAcc.items():
         for stock in stocks:
-            #Sort transactions by date
-            saveStockTransactions(configStore, accountName, stock, stockListByAcc[account][stock])
+            noTxns = len(stockListByAcc[account][stock])
+            if stock != '':
+                print(f"{account} Updating transactions for {stock} with {noTxns} txns")
+                txns = stockListByAcc[account][stock]
+                jsonTxns = dict()
+                for key, txn in txns.items():
+                    jsonTxns[key] = txn.to_json() 
+                saveStockTransactions(configStore, account, stock, jsonTxns)
+            elif noTxns > 0:
+                print(f"WARNING: {noTxns} Transactions have no stock name set")
+            else:
+                #Remove empty stock
+                stockListByAcc[account].pop('')
     
     #For each account process each stock transactions to work out cash flow and share ledger
     totalCosts = 0
@@ -366,6 +405,7 @@ def processTxnFiles(config):
         stockLedger = dict()
         accountSummary = dict()
         for stock in stocks:
+            #Sort transactions by date
             txns = sorted(list(stocks[stock].values()), key= lambda txn: txn.date)
             if (stock != NONE):
                 stockLedger[stock] = processStockTxns(config, stock, txns) 
