@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 from datetime import datetime
 from statistics import mean
-from saveRetreiveFiles import getStockInfoSaved, getAllStockTxnSaved, getStockTxnSaved, saveStockTransactions, saveStockLedger
+from saveRetreiveFiles import getAllStockTxnSaved, saveStockTransactions, saveStockLedger
 from getLatestPrices import getAndSaveStockPrices
 
 from processStock import calcPriceData
@@ -35,6 +35,7 @@ class Transaction:
     price: Decimal = Decimal(0.0)
     debit: Decimal = Decimal(0.0)
     credit: Decimal = Decimal(0.0)
+    type: str = 'Unknown'
 
 @dataclass
 class CapitalGain:
@@ -101,8 +102,11 @@ def processStockTxns(config, stock, txns):
             if not stockName:
                 stockName = txn.desc
             if not stockSymbol and txn.symbol != '':
-                stockSymbol = txn.symbol + '.L'
-            if (txn.date < firstBought):
+                if txn.symbol.endswith('.'):
+                    stockSymbol = txn.symbol + 'L'
+                else:
+                    stockSymbol = txn.symbol + '.L'
+            if txn.date < firstBought:
                 firstBought = txn.date
             totalStock += txn.qty
             if (txn.price == 0):
@@ -125,7 +129,7 @@ def processStockTxns(config, stock, txns):
             else:
                 shareValue = txn.price * txn.qty
             shareValue = txn.price * txn.qty
-            totalShareInvested -= shareValue
+            totalShareInvested = avgShareCost * totalStock   
             totalCosts += shareValue - txn.credit #Diff between what should have received vs what was credited
             fullIinvestmentHistory.append(CapitalGain(date = txn.date, qty = txn.qty, price = txn.price, transaction = SELL))
             #Use last stock buy txn
@@ -143,8 +147,8 @@ def processStockTxns(config, stock, txns):
                     break
         elif type == DIVIDEND:
             divi = txn.credit
-            yearYield = dividendYieldPerYear.get(taxYear, 0) + divi/totalShareInvested
             dividendPerYear[taxYear] = dividendPerYear.get(taxYear, 0) + divi
+            yearYield = dividendYieldPerYear.get(taxYear, 0) + 100*divi/totalShareInvested
             dividendYieldPerYear[taxYear] = yearYield
     #From remaining stock history workout paper gain
     totalPaperGain = 0
@@ -167,7 +171,11 @@ def processStockTxns(config, stock, txns):
             (low, high) = dailyPrices[latestPriceDateStamp]
             # Use the average of the last price range we have
             currentPricePence = Decimal(high + low)/2
+            #Price usually in pence - calculate in pounds
             currentPrice = currentPricePence/100
+            if (avgShareCost > currentPrice * 8):
+                #Price was already in pounds
+                currentPrice = currentPricePence
 
     if currentPrice:
         for hist in adjIinvestmentHistory:
@@ -214,7 +222,7 @@ def summarisePerformance(accountSummary, stockSummary):
     for details in stockSummary.values():
         totalShareInvested += details['totalInvested']
         totalCosts += details['dealingCosts']
-        totalPaperGain += details['totalPaperGain']
+        totalPaperGain += details.get('totalPaperGain', 0)
         totalGain += details['totalGain']
         for year,gain in details['realisedCapitalGainPerYear'].items():
             totalYearlyGain[year] = totalYearlyGain.get(year, 0) + gain
@@ -335,16 +343,15 @@ def processTxnFiles(config):
                     existingTxns = dict()
                     stockList[txn.isin] = existingTxns
                 txnKey = f"{accountName}-{txn.date}-{txn.ref}" 
-                # check transaction in current list, if not add
-                if (not existingTxns.get(txnKey, None)):
-                    #Add new transaction to existing list
-                    existingTxns[txnKey] = txn
-                    #Set stock to be saved
-                    changed = changedStockTxnsByAcc.get(accountName, None)
-                    if not changed:
-                        changed = set()
-                        changedStockTxnsByAcc[accountName] = changed
-                    changed.add(txn.isin)
+                # Update existing transactions - this will overwrite a transaction if it already exists
+                # And so allows updates to existing transactions to be made
+                existingTxns[txnKey] = txn
+                #Set stock to be saved
+                changed = changedStockTxnsByAcc.get(accountName, None)
+                if not changed:
+                    changed = set()
+                    changedStockTxnsByAcc[accountName] = changed
+                changed.add(txn.isin)
 
     #Extract all descriptions of BUY transactions
     #These are used to match Divi payments to stocks that have not ISIN

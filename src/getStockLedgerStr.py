@@ -13,8 +13,8 @@ def getTaxYear(inDate):
     return year
 
 def getAccountSummaryStr(account, accountSummary):
-    retStr = f"Summary for Account: {account}\n\n"
-    retStr += f"Date account opened: {accountSummary['dateOpened']}"
+    retStr = f"Summary for Account: {account}\n"
+    retStr += f"Date account opened: {accountSummary['dateOpened']}\n"
     retStr += f"Total Currently invested: £{accountSummary['totalInvested']:0.2f}\n"
     retStr += f"Total Invested in Securities: £{accountSummary['totalInvestedInSecurities']:0.2f}\n"
     retStr += f"Capital Gain on paper: £{accountSummary['totalPaperGain']:0.2f}\n"
@@ -52,7 +52,7 @@ def getAccountSummaryStr(account, accountSummary):
 def getStockLedgerStr(details):
     
     retStr = f"Stock: {details['stockSymbol']} Description: {details['stockName']}\n\n"
-    retStr = f"Held since {details['heldSince']}\n"
+    retStr += f"Held since {details['heldSince']}\n"
     retStr += f"Number of shares: {details['stockHeld']}\n"
     retStr += f"Amount invested {details['totalInvested']:0.2f}\n"
     retStr += f"Average Share Price {details['avgSharePrice']:0.2f}\n"
@@ -67,25 +67,25 @@ def getStockLedgerStr(details):
     retStr += f"Stock Dealing costs {details['dealingCosts']:0.2f}\n"
     retStr += f"\nTotal Gain: {details['totalGain']:0.2f}\n"
 
-    retStr += "Dividends Per Year:"
+    retStr += "Dividends Per Year:\n"
     divs = list(details['dividendsPerYear'].items())
     retStr += tabulate(divs, headers=['Tax Year', 'Dividend Paid'])
 
-    retStr += "Investments Made:"
+    retStr += "\nInvestments Made:\n"
     hist = list()
     for dc in details['investmentHistory']:
         hist.append(asdict(dc))
     retStr += tabulate(hist, headers='keys')
 
-    retStr += "Realised Capital Gain Per Year:"
+    retStr += "\nRealised Capital Gain Per Year:\n"
     gains = list(details['realisedCapitalGainPerYear'].items())
     retStr += tabulate(gains, headers=['Tax Year', 'Realised Capital Gain (taxable value)'])
 
-    retStr += "Capital Gain For Tax Per Year:"
+    retStr += "\nCapital Gain For Tax Per Year:\n"
     gains = list(details['capitalGainForTaxPerYear'].items())
     retStr += tabulate(gains, headers=['Tax Year', 'Capital Gain (actual)'])
 
-    retStr += "Dealing Costs Per Year:"
+    retStr += "\nDealing Costs Per Year:\n"
     costs = list(details['dealingCostsPerYear'].items())
     retStr += tabulate(costs, headers=['Tax Year', 'Dealing Costs'])
 

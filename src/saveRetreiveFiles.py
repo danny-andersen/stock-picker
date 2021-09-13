@@ -147,16 +147,18 @@ def deleteStockFile(storeConfig, stock, name):
 def getStockInfoSaved(config, stock):
     return getStock(config, stock, 'info')
 
-def getStockTxnSaved(config, stock):
-    return getStock(config, stock, 'transactions')
+def getStockTxnSaved(config, account, stock):
+    return getStock(config, stock, f'transactions/{account}')
 
 def getAllStockTxnSaved(config):
     accounts = listFiles(config, 'transactions')
     txnByStockByAcc = dict()
     for acc in accounts:
+        txnByStockByAcc[acc] = dict()
         stockFiles = listFiles(config, f'transactions/{acc}')
-        for stock in stockFiles:
-            txnByStockByAcc[acc][stock] = getStockTxnSaved(config, stock)
+        for stockFile in stockFiles:
+            (stock,sep,suffix) = stockFile.partition('.')
+            txnByStockByAcc[acc][stock] = getStockTxnSaved(config, acc, stock)
     return txnByStockByAcc
 
 def getStockPricesSaved(storeConfig, stock):

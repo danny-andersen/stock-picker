@@ -37,24 +37,30 @@ def getFundPrices(isin, priceData):
     priceStrsTag = soup.find('td', class_='essential price')
     if priceStrsTag:
         priceStrs = priceStrsTag.stripped_strings
+        price = None
         for str in priceStrs:
             if str and str.strip() != '':
-                str = str.strip()
-                price = float(str.replace(',',''))
-                newPrice = {int(datetime.now().timestamp()): (price, price)}
-                if (existingPrices):
-                    existingPrices.update(newPrice)
-                else:
-                    existingPrices = newPrice
-                    startDate = datetime.now()
-                endDate = datetime.now()
-                lastAttemptDate = endDate
-                retData = { "stock": isin, 
-                            "startDate" : startDate,
-                            "endDate": endDate,
-                            "lastRetrievalDate" : lastAttemptDate,
-                            "dailyPrices": existingPrices}
-                break
+                if (not price):
+                    str = str.strip()
+                    price = float(str.replace(',',''))
+                elif 'GBP' in str.strip():
+                    #Price is in pounds not pence - multiply by 100
+                    price *= 100
+                    break
+        if (price):
+            newPrice = {int(nowTime.timestamp()): (price, price)}
+            if (existingPrices):
+                existingPrices.update(newPrice)
+            else:
+                existingPrices = newPrice
+                startDate = nowTime
+            endDate = nowTime
+            lastAttemptDate = endDate
+            retData = { "stock": isin, 
+                        "startDate" : startDate,
+                        "endDate": endDate,
+                        "lastRetrievalDate" : lastAttemptDate,
+                        "dailyPrices": existingPrices}
             # else:
             #     print(f"No price in xml tag {priceStrs}")
     else:
