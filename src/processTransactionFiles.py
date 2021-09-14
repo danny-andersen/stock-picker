@@ -62,6 +62,7 @@ def processAccountTxns(summary, txns):
     dateOpened = datetime.now()
     for txn in txns:
         type = txn.type
+        txn.date = txn.date.replace(tzinfo=None) #Make the date naive if not already
         taxYear = getTaxYear(txn.date)
         if (txn.date < dateOpened):
             dateOpened = txn.date
@@ -97,6 +98,7 @@ def processStockTxns(config, stock, txns):
     firstBought = datetime.now()
     for txn in txns:
         type = txn.type
+        txn.date = txn.date.replace(tzinfo=None) #Make the date naive if not already
         taxYear = getTaxYear(txn.date)
         if type == BUY:
             if not stockName:
