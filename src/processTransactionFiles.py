@@ -3,7 +3,7 @@ from io import StringIO
 import os
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
-from datetime import datetime
+from datetime import datetime, timedelta, date, timezone
 from statistics import mean
 from saveRetreiveFiles import getAllStockTxnSaved, saveStockTransactions, saveStockLedger
 from getLatestPrices import getAndSaveStockPrices
@@ -53,17 +53,18 @@ class CapitalGain:
     def calcTotalGain(self, sellDate, sellPrice):
         return self.calcGain(sellDate, sellPrice, self.qty)
     def calcTotalCurrentGain(self, sellPrice):
-        return self.calcTotalGain(datetime.now(), sellPrice)
+        return self.calcTotalGain(datetime.now(timezone.utc), sellPrice)
 
 def processAccountTxns(summary, txns):
     cashInPerYear = dict()
     cashOutPerYear = dict()
     feesPerYear = dict()
-    dateOpened = datetime.now()
+    # dateOpened = datetime.now().replace(tzinfo=None)
+    dateOpened = datetime.now(timezone.utc)
     for txn in txns:
         type = txn.type
-        txn.date = txn.date.replace(tzinfo=None) #Make the date naive if not already
         taxYear = getTaxYear(txn.date)
+        # txn.date = txn.date.replace(tzinfo=None) #Make the date naive if not already
         if (txn.date < dateOpened):
             dateOpened = txn.date
         if type == CASH_IN:
@@ -95,10 +96,11 @@ def processStockTxns(config, stock, txns):
     fullIinvestmentHistory = list()
     stockName = None
     stockSymbol = None
-    firstBought = datetime.now()
+    # firstBought = datetime.now().replace(tzinfo=None)
+    firstBought = datetime.now(timezone.utc)
     for txn in txns:
         type = txn.type
-        txn.date = txn.date.replace(tzinfo=None) #Make the date naive if not already
+        # txn.date = txn.date.replace(tzinfo=None) #Make the date naive if not already
         taxYear = getTaxYear(txn.date)
         if type == BUY:
             if not stockName:
@@ -169,7 +171,7 @@ def processStockTxns(config, stock, txns):
         if (len(dailyPrices) > 0):
             priceDatesSorted = sorted(dailyPrices)
             latestPriceDateStamp = priceDatesSorted[len(priceDatesSorted)-1]
-            latestPriceDate = datetime.fromtimestamp(latestPriceDateStamp)
+            latestPriceDate = date.fromtimestamp(latestPriceDateStamp)
             (low, high) = dailyPrices[latestPriceDateStamp]
             # Use the average of the last price range we have
             currentPricePence = Decimal(high + low)/2
@@ -191,32 +193,35 @@ def processStockTxns(config, stock, txns):
     details['stockHeld'] = totalStock
     details['heldSince'] = firstBought
     details['totalInvested'] = totalShareInvested
-    details['capitalGainForTaxPerYear'] = capitalGainPerYear
+    details['realisedCapitalGainForTaxPerYear'] = capitalGainPerYear
     details['realisedCapitalGainPerYear'] = realGainPerYear
     details['investmentHistory'] = fullIinvestmentHistory
     if currentPrice:
         details['currentSharePrice'] = currentPrice
         details['priceDate'] = latestPriceDate
         details['totalPaperGain'] = totalPaperGain
+        details['capitalGainForTax'] = remainingCGT
     details['dealingCostsPerYear'] = invCostsPerYear
     details['avgSharePrice'] = avgShareCost
     details['dealingCosts'] = totalCosts
     details['dividendsPerYear'] = dividendPerYear
+    details['averageYearlyDivi'] = mean(dividendPerYear.values()) if len(dividendPerYear) > 0 else 0
     details['dividendYieldPerYear'] = dividendYieldPerYear
     details['averageYearlyDiviYield'] = mean(dividendYieldPerYear.values()) if len(dividendYieldPerYear) > 0 else 0
     details['totalGain'] = totalPaperGain \
-                + (sum(dividendPerYear.values()) if len(dividendYieldPerYear) > 0 else 0) \
-                + (sum(realGainPerYear.values()) if len(realGainPerYear) > 0 else 0) \
-                - totalCosts
+            + (sum(dividendPerYear.values()) if len(dividendYieldPerYear) > 0 else 0) \
+            + (sum(realGainPerYear.values()) if len(realGainPerYear) > 0 else 0) \
+            - totalCosts
     return details
 
 def summarisePerformance(accountSummary, stockSummary):
     totalShareInvested = 0
     totalCosts = 0
     totalPaperGain = 0
+    totalPaperGainForTax = 0
     totalGain = 0
-    totalYearlyGain = dict()
-    totalCapitalGain = dict()
+    totalRealisedGain = dict()
+    totalRealisedForTaxGain = dict()
     totalDealingCosts = dict()
     totalDivi = dict()
     aggInvestedByYear = dict()
@@ -224,34 +229,40 @@ def summarisePerformance(accountSummary, stockSummary):
     for details in stockSummary.values():
         totalShareInvested += details['totalInvested']
         totalCosts += details['dealingCosts']
+        totalPaperGainForTax += details.get('capitalGainForTax', 0)
         totalPaperGain += details.get('totalPaperGain', 0)
-        totalGain += details['totalGain']
+        totalGain += details.get('totalGain', 0)
         for year,gain in details['realisedCapitalGainPerYear'].items():
-            totalYearlyGain[year] = totalYearlyGain.get(year, 0) + gain
-        for year,gain in details['capitalGainForTaxPerYear'].items():
-            totalCapitalGain[year] = totalCapitalGain.get(year, 0) + gain
+            totalRealisedGain[year] = totalRealisedGain.get(year, 0) + gain
+        for year,gain in details['realisedCapitalGainForTaxPerYear'].items():
+            totalRealisedForTaxGain[year] = totalRealisedForTaxGain.get(year, 0) + gain
         for year,costs in details['dealingCostsPerYear'].items():
             totalDealingCosts[year] = totalDealingCosts.get(year, 0) + costs
         for year,divi in details['dividendsPerYear'].items():
             totalDivi[year] = totalDivi.get(year, 0) + divi
-    years = list(accountSummary['cashInPerYear'].keys())
-    years.sort()
+
+    startYear = accountSummary['dateOpened']
+    endYear = datetime.now(timezone.utc) + timedelta(days=365) # Make sure we have this tax year
+    procYear = startYear
     sumInvested = 0
-    for year in years:
-        sumInvested += accountSummary['cashInPerYear'].get(year, 0)
+    while procYear < endYear:
+        year = getTaxYear(procYear)
+        sumInvested += accountSummary['cashInPerYear'].get(year, 0) - accountSummary['cashOutPerYear'].get(year,0)
         aggInvestedByYear[year] = sumInvested
         if sumInvested > 0:
-            totalDiviYieldByYear[year] = totalDivi.get(year, 0)
+            totalDiviYieldByYear[year] = 100*totalDivi.get(year, 0) / sumInvested
+        procYear += timedelta(days=365)
 
     accountSummary['totalInvested'] = sum(accountSummary['cashInPerYear'].values()) - sum(accountSummary['cashOutPerYear'].values())
     accountSummary['totalFees'] = sum(accountSummary['feesPerYear'].values())
     accountSummary['totalInvestedInSecurities'] = totalShareInvested
     accountSummary['totalDealingCosts'] = totalCosts
     accountSummary['totalPaperGain'] = totalPaperGain
+    accountSummary['totalPaperGainForTax'] = totalPaperGainForTax
     accountSummary['totalGain'] = totalGain
     accountSummary['aggInvestedByYear'] = aggInvestedByYear
-    accountSummary['realisedGainPerYear']  = totalYearlyGain
-    accountSummary['realisedCapitalTaxGainPerYear']  = totalCapitalGain
+    accountSummary['realisedGainPerYear']  = totalRealisedGain
+    accountSummary['realisedGainForTaxPerYear']  = totalRealisedForTaxGain
     accountSummary['dealingCostsPerYear']  = totalDealingCosts
     accountSummary['dividendsPerYear']  = totalDivi
     accountSummary['dividendYieldPerYear']  = totalDiviYieldByYear
@@ -294,8 +305,12 @@ def processTxnFiles(config):
         with open('transactions/' + txnFile) as csvFile:
             csv_reader = csv.DictReader(csvFile)
             for row in csv_reader:
+                if (len(row['Date'])) == 8: 
+                    fmt = "%d/%m/%y"
+                else:
+                    fmt = "%d/%m/%Y"
                 txn = Transaction(
-                    date = datetime.strptime(row['Date'], "%d/%m/%Y"),
+                    date = datetime.strptime(row['Date'], fmt).replace(tzinfo=timezone.utc),
                     ref = row['Reference'],
                     symbol = row['Symbol'].strip(),
                     sedol = row['Sedol'].strip(),

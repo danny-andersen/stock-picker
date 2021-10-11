@@ -1,6 +1,6 @@
 
 from tabulate import tabulate
-from datetime import datetime, timedelta, date
+from datetime import timedelta, datetime, date, timezone
 from dataclasses import asdict
 
 def getTaxYear(inDate):
@@ -14,18 +14,20 @@ def getTaxYear(inDate):
 
 def getAccountSummaryStr(account, accountSummary):
     retStr = f"Summary for Account: {account}\n"
-    retStr += f"Date account opened: {accountSummary['dateOpened']}\n"
+    retStr += f"Date account opened: {accountSummary['dateOpened'].date()}\n"
     retStr += f"Total Currently invested: £{accountSummary['totalInvested']:0.2f}\n"
     retStr += f"Total Invested in Securities: £{accountSummary['totalInvestedInSecurities']:0.2f}\n"
     retStr += f"Capital Gain on paper: £{accountSummary['totalPaperGain']:0.2f}\n"
+    retStr += f"Capital Gain on paper (for Tax): £{accountSummary['totalPaperGainForTax']:0.2f}\n"
     retStr += f"Total Realised Capital gain: £{sum(accountSummary['realisedGainPerYear'].values()):0.2f}\n"
     retStr += f"Total Dividends: £{sum(accountSummary['dividendsPerYear'].values()):0.2f}\n"
+    retStr += f"Avg Dividend Yield: {sum(accountSummary['dividendsPerYear'].values())/accountSummary['totalInvestedInSecurities']:0.2f}%\n"
     retStr += f"Total Fees paid: £{accountSummary['totalFees']:0.2f}\n"
     retStr += f"Total Dealing costs: £{accountSummary['totalDealingCosts']:0.2f}\n"
     totalReturn = accountSummary['totalGain'] - accountSummary['totalFees'] - accountSummary['totalDealingCosts']
     retStr += f"Total Return on paper (Paper gain, dividends paid, less fees and costs): £{totalReturn:0.2f}\n"
     startYear = accountSummary['dateOpened']
-    endYear = datetime.now()
+    endYear = datetime.now(timezone.utc) + timedelta(days=365) # Make sure we have this tax year
     timeHeld = endYear - startYear
     avgReturnPerYear = float(totalReturn) / (timeHeld.days / 365)
     retStr += f"Average return per year £{avgReturnPerYear:0.2f}\n"
@@ -43,9 +45,10 @@ def getAccountSummaryStr(account, accountSummary):
             labels.append('Cash In')
             labels.append('Cash Out')
             labels.append('Agg Invested')
-            labels.append('Gain Realised')
+            labels.append('Gain Realised (Real)')
+            labels.append('Gain Realised (Tax)')
             labels.append('Dividends')
-            labels.append('Yield')
+            labels.append('Yield %')
             labels.append('Dealing Costs')
             labels.append('Fees')
             byYear['0'] = labels
@@ -54,20 +57,12 @@ def getAccountSummaryStr(account, accountSummary):
         values.append(accountSummary['cashInPerYear'].get(taxYear, 0))
         values.append(accountSummary['cashOutPerYear'].get(taxYear, 0))
         values.append(accountSummary['aggInvestedByYear'].get(taxYear, 0))
-        values.append(accountSummary['realisedCapitalTaxGainPerYear'].get(taxYear, 0))
+        values.append(accountSummary['realisedGainPerYear'].get(taxYear, 0))
+        values.append(accountSummary['realisedGainForTaxPerYear'].get(taxYear, 0))
         values.append(accountSummary['dividendsPerYear'].get(taxYear, 0))
         values.append(accountSummary['dividendYieldPerYear'].get(taxYear, 0))
         values.append(accountSummary['dealingCostsPerYear'].get(taxYear, 0))
         values.append(accountSummary['feesPerYear'].get(taxYear, 0))
-        # values = dict()
-        # values['Cash In'] = accountSummary['cashInPerYear'].get(taxYear, 0)
-        # values['Cash Out'] = accountSummary['cashOutPerYear'].get(taxYear, 0)
-        # values['Agg Invested'] = accountSummary['aggInvestedByYear'].get(taxYear, 0)
-        # values['Gain Realised'] = accountSummary['realisedCapitalTaxGainPerYear'].get(taxYear, 0)
-        # values['Dividends'] = accountSummary['dividendsPerYear'].get(taxYear, 0)
-        # values['Yield'] = accountSummary['dividendYieldPerYear'].get(taxYear, 0)
-        # values['Dealing Costs'] = accountSummary['dealingCostsPerYear'].get(taxYear, 0)
-        # values['Fees'] = accountSummary['feesPerYear'].get(taxYear, 0)
         procYear += timedelta(days=365)
         byYear[taxYear] = values
 
@@ -79,24 +74,32 @@ def getAccountSummaryStr(account, accountSummary):
 def getStockLedgerStr(details):
     
     retStr = f"Stock: {details['stockSymbol']}\nDescription: {details['stockName']}\n\n"
-    retStr += f"Held since {details['heldSince']}\n"
+    retStr += f"Held since {details['heldSince'].date()}\n"
     retStr += f"Number of shares: {details['stockHeld']}\n"
     retStr += f"Amount invested £{details['totalInvested']:0.2f}\n"
     retStr += f"Average Share Price {details['avgSharePrice']:0.2f}\n"
     if details.get('currentSharePrice', None):
         retStr += f"Current Share Price {details['currentSharePrice']:0.2f}\n"
         retStr += f"Share price date {details['priceDate']}\n"
+        retStr += f"Total paper gain (real): £{details['totalPaperGain']:0.2f}\n"
+        retStr += f"Total paper gain (tax): £{details['capitalGainForTax']:0.2f}\n"
         retStr += f"Total Paper Gain £{details['totalPaperGain']:0.2f}\n"
     else:
         retStr += "**** No current price data available, so total gain info doesnt include current value\n"
     retStr += f"Total Dividends £{sum(details['dividendsPerYear'].values()):0.2f}\n"
-    retStr += f"Average Yearly Dividend Yield £{details['averageYearlyDiviYield']:0.2f}\n"
+    retStr += f"Average Yearly Dividend £{details['averageYearlyDivi']:0.2f}\n"
+    retStr += f"Average Yearly Dividend Yield {details['averageYearlyDiviYield']:0.2f}%\n"
+    # if (details['totalInvested'] > 0):
+    #     retStr += f"Average Yearly Dividend Yield {100*details['averageYearlyDiviYield']/details['totalInvested']:0.2f}%\n"
     retStr += f"Stock Dealing costs £{details['dealingCosts']:0.2f}\n"
     retStr += f"Total Gain: £{details['totalGain']:0.2f}\n"
 
+    divs = list()
     retStr += "\nDividends Per Year:\n"
-    divs = list(details['dividendsPerYear'].items())
-    retStr += tabulate(divs, headers=['Tax Year', 'Dividend Paid'])
+    for year in details['dividendsPerYear'].keys():
+        divs.append([year, details['dividendsPerYear'][year], details['dividendYieldPerYear'][year]])
+    # divs = list(details['dividendsPerYear'].items())
+    retStr += tabulate(divs, headers=['Tax Year', 'Dividend Paid', 'Yield'])
 
     retStr += "\n\nInvestments Made:\n"
     hist = list()
@@ -104,13 +107,9 @@ def getStockLedgerStr(details):
         hist.append(asdict(dc))
     retStr += tabulate(hist, headers='keys')
 
-    retStr += "\n\nRealised Capital Gain Per Year:\n"
-    gains = list(details['realisedCapitalGainPerYear'].items())
+    retStr += "\n\nRealised Capital Gain (taxable) Per Year:\n"
+    gains = list(details['realisedCapitalGainForTaxPerYear'].items())
     retStr += tabulate(gains, headers=['Tax Year', 'Realised Capital Gain (taxable value)'])
-
-    retStr += "\n\nCapital Gain For Tax Per Year:\n"
-    gains = list(details['capitalGainForTaxPerYear'].items())
-    retStr += tabulate(gains, headers=['Tax Year', 'Capital Gain (actual)'])
 
     retStr += "\n\nDealing Costs Per Year:\n"
     costs = list(details['dealingCostsPerYear'].items())
