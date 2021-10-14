@@ -1,4 +1,5 @@
 import sys
+import os
 if (os.path.exists('processStock.zip')):
     sys.path.insert(0, 'processStock.zip')
 else:

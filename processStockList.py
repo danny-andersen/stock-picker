@@ -6,9 +6,9 @@ else:
     sys.path.insert(0, './src')
 
 from processStock import processStock
-from showScores import scoresOnTheDoors
+# from showScores import scoresOnTheDoors
 from saveRetreiveFiles import mergeAndSaveScores
-from processTransactionFiles import processTxnFiles
+# from processTransactionFiles import processTxnFiles
 import configparser
 import locale
 
@@ -26,12 +26,19 @@ parser.add_argument('-d', '--hdfs', action='store_const', const=False, default=T
                    help='Set if using hdfs filesystem rather than local store (True)')
 args = parser.parse_args()
 
+heldStocks = []
+with open('heldstocklist.txt', 'r') as heldFile:
+    for stock in heldFile:
+        stock = stock.strip(' \n\r')
+        if (stock != ''):
+            heldStocks.append(stock)
+    
 scores = []
 with open(stockFileName, 'r') as stockFile:
     for stock in stockFile:
         stock = stock.strip(' \n\r')
-        scores.append(processStock(config, stock, args.hdfs))
+        scores.append(processStock(config, stock))
         
-mergeAndSaveScores(configStore, scores, args.hdfs)
-scoresOnTheDoors(configStore, scores, 10, args.hdfs)
-processTxnFiles(configStore)
+mergeAndSaveScores(configStore, scores, heldStocks)
+#scoresOnTheDoors(configStore, scores, 10, args.hdfs)
+#processTxnFiles(configStore)

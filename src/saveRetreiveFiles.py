@@ -258,6 +258,8 @@ def mergeAndSaveScores(storeConfig, scores, heldStocks):
         summary = tabulate(heldDict, headers='keys', showindex="always")
         path="/held-scores-summary.txt"
         saveStringToDropbox(storeConfig, path, summary)
+    else:
+        print("*****WARNING - No scores received to merge!")
 
 def saveStockLedger(config, account, accountSummary, stockLedger):
     accSummary = getAccountSummaryStr(account, accountSummary)

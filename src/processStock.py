@@ -4,9 +4,9 @@ from statistics import mean, median, pstdev
 import math
 import locale
 
-from retrieveStockInfo import retrieveStockInfo
 from scoreStock import determineOverallScore
 from saveRetreiveFiles import saveStockMetrics, saveStringToDropbox
+from retrieveStockInfo import retrieveStockInfo
 from getLatestPrices import getAndSaveStockPrices
 from printResults import getResultsStr
 from pricePeriod import getWeightedSlope, calcPriceStatisticsForPeriod
@@ -23,7 +23,7 @@ def processStock(config, stock):
     locale.setlocale(locale.LC_ALL, localeStr)
 
     info = retrieveStockInfo(config, stock)
-    (prices, retrieveDate) = getAndSaveStockPrices(config, "AlphaAdvantage", stock)
+    (prices, retrieveDate) = getAndSaveStockPrices(config, stock, "AlphaAdvantage")
     if (info and prices and prices['dailyPrices']):
         metrics = processStockStats(info, prices['dailyPrices'])
         calcPiotroskiFScore(stock, info, metrics)
@@ -33,6 +33,7 @@ def processStock(config, stock):
         saveStringToDropbox(
             storeConfig, "/details/{0}-results.txt".format(stock), resultStr)
     else:
+        print(f"****WARN Not processed stock {stock} as missing info {(info == None)} or prices {(prices == None)}")
         scores = None
 
     return scores

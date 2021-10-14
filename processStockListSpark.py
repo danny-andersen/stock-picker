@@ -70,7 +70,6 @@ def processStocks(stockFile, iniFile):
         scores = mrdd.collect()
         scores = [s for s in scores if s] 
         print (f"*************Attempt {attempts}: Collected {len(scores)} scores out of {len(stocks)} stocks")
-        mergeAndSaveScores(configStore, scores, heldStocks)
         #Check that we have all the info 
         print (f"***************Attempt {attempts}: Checking all info retreived")
         mrdd = rdd.map(lambda stock: checkStockSpark(broadCastConfig, stock))
@@ -92,6 +91,7 @@ def processStocks(stockFile, iniFile):
         print (f"***************Attempt {attempts}: Retrying for stocks: {stocks}")
     print (f"***************Job complete: Processed {startStocksNum - len(stocks)} out of {startStocksNum} stocks")
 
+    mergeAndSaveScores(configStore, scores, heldStocks)
 
 if __name__ == "__main__":
     stockFileName = 'stocklist.txt'

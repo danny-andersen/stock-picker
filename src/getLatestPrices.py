@@ -58,7 +58,7 @@ def getAndSaveStockPrices(config, stock, api, periodBetweenCalls=0, lastTime=0):
             prices = newPrices
             saveStockPrices(storeConfig, stock, prices)
         else:
-            print(f"{stock}: Failed to get any stock prices")
+            print(f"{stock}: Failed to get any stock prices from API {api}")
     return (prices, lastTime)
 
 def getLatestPrices(config, rateLimit, stocks):
