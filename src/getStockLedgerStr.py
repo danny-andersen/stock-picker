@@ -17,19 +17,18 @@ def getAccountSummaryStr(account, accountSummary):
     retStr += f"Date account opened: {accountSummary['dateOpened'].date()}\n"
     retStr += f"Total Currently invested: £{accountSummary['totalInvested']:0.2f}\n"
     retStr += f"Total Invested in Securities: £{accountSummary['totalInvestedInSecurities']:0.2f}\n"
-    retStr += f"Capital Gain on paper: £{accountSummary['totalPaperGain']:0.2f}\n"
+    retStr += f"Capital Gain on paper: £{accountSummary['totalPaperGain']:0.2f} {accountSummary['totalPaperGainPerc']:0.2f}%\n"
     retStr += f"Capital Gain on paper (for Tax): £{accountSummary['totalPaperGainForTax']:0.2f}\n"
     retStr += f"Total Realised Capital gain: £{sum(accountSummary['realisedGainPerYear'].values()):0.2f}\n"
     retStr += f"Total Dividends: £{sum(accountSummary['dividendsPerYear'].values()):0.2f}\n"
     retStr += f"Avg Dividend Yield: {sum(accountSummary['dividendsPerYear'].values())/accountSummary['totalInvestedInSecurities']:0.2f}%\n"
     retStr += f"Total Fees paid: £{accountSummary['totalFees']:0.2f}\n"
     retStr += f"Total Dealing costs: £{accountSummary['totalDealingCosts']:0.2f}\n"
-    totalReturn = accountSummary['totalGain'] - accountSummary['totalFees'] - accountSummary['totalDealingCosts']
-    retStr += f"Total Return on paper (Paper gain, dividends paid, less fees and costs): £{totalReturn:0.2f}\n"
+    retStr += f"Total Return on paper (Paper gain, dividends paid, less fees and costs): £{accountSummary['totalGain']:0.2f} {accountSummary['totalGainPerc']:0.2f}% \n"
     startYear = accountSummary['dateOpened']
     endYear = datetime.now(timezone.utc) + timedelta(days=365) # Make sure we have this tax year
     timeHeld = endYear - startYear
-    avgReturnPerYear = float(totalReturn) / (timeHeld.days / 365)
+    avgReturnPerYear = float(accountSummary['totalGain']) / (timeHeld.days / 365)
     retStr += f"Average return per year £{avgReturnPerYear:0.2f}\n"
 
     procYear = startYear
@@ -76,23 +75,22 @@ def getStockLedgerStr(details):
     retStr = f"Stock: {details['stockSymbol']}\nDescription: {details['stockName']}\n\n"
     retStr += f"Held since {details['heldSince'].date()}\n"
     retStr += f"Number of shares: {details['stockHeld']}\n"
-    retStr += f"Amount invested £{details['totalInvested']:0.2f}\n"
     retStr += f"Average Share Price {details['avgSharePrice']:0.2f}\n"
+    retStr += f"Amount invested £{details['totalInvested']:0.2f}\n"
     if details.get('currentSharePrice', None):
+        retStr += f"Current Market Value £{details['marketValue']:0.2f}\n"
         retStr += f"Current Share Price {details['currentSharePrice']:0.2f}\n"
-        retStr += f"Share price date {details['priceDate']}\n"
-        retStr += f"Total paper gain (real): £{details['totalPaperGain']:0.2f}\n"
-        retStr += f"Total paper gain (tax): £{details['capitalGainForTax']:0.2f}\n"
-        retStr += f"Total Paper Gain £{details['totalPaperGain']:0.2f}\n"
+        retStr += f"Share price date {details['priceDate'].date()}\n"
+        # retStr += f"Total paper gain (real): £{details['totalPaperGain']:0.2f}\n"
+        retStr += f"Total Paper Gain £{details['totalPaperGain']:0.2f} {details['totalPaperGainPerc']:0.2f}%\n"
+        retStr += f"Total Taxable Gain if sold £{details['totalPaperCGT']:0.2f} {details['totalPaperCGTPerc']:0.2f}%\n"
     else:
         retStr += "**** No current price data available, so total gain info doesnt include current value\n"
-    retStr += f"Total Dividends £{sum(details['dividendsPerYear'].values()):0.2f}\n"
-    retStr += f"Average Yearly Dividend £{details['averageYearlyDivi']:0.2f}\n"
-    retStr += f"Average Yearly Dividend Yield {details['averageYearlyDiviYield']:0.2f}%\n"
-    # if (details['totalInvested'] > 0):
-    #     retStr += f"Average Yearly Dividend Yield {100*details['averageYearlyDiviYield']/details['totalInvested']:0.2f}%\n"
+    retStr += f"Total Dividends £{details['totalDividends']:0.2f}\n"
+    retStr += f"Average Yearly Dividend £{details['averageYearlyDivi']:0.2f}, Yield: {details['averageYearlyDiviYield']:0.2f}%\n"
     retStr += f"Stock Dealing costs £{details['dealingCosts']:0.2f}\n"
-    retStr += f"Total Gain: £{details['totalGain']:0.2f}\n"
+    retStr += f"Total Gain: £{details['totalGain']:0.2f}, ({details['totalGainPerc']:0.2f}%) \n"
+    retStr += f"Average Gain per year: £{details['avgGainPerYear']:0.2f}, ({details['avgGainPerYearPerc']:0.2f}%) \n"
 
     divs = list()
     retStr += "\nDividends Per Year:\n"
