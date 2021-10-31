@@ -90,7 +90,7 @@ def processStocks(stockFile, iniFile):
         attempts += 1
         print (f"***************Attempt {attempts}: Retrying for stocks: {stocks}")
     print (f"***************Job complete: Processed {startStocksNum - len(stocks)} out of {startStocksNum} stocks")
-
+    print ("**************** Merging and saving stock scores to Dropbox")
     mergeAndSaveScores(configStore, scores, heldStocks)
 
 if __name__ == "__main__":

@@ -1,3 +1,3 @@
 ./checkAndStartHDFS.sh
-cp stocklist-full.txt stocklist.sh
+cp heldstocklist.txt stocklist.txt
 ./sparkSubmit.sh processStockListSpark.py
