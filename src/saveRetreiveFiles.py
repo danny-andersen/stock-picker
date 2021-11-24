@@ -6,7 +6,7 @@ from dateutil.parser import parse
 import re
 from tabulate import tabulate
 import dropbox
-from getStockLedgerStr import getStockLedgerStr, getAccountSummaryStr
+from getStockLedgerStr import getStockLedgerStr, getAccountSummaryStr, getStockSummaryStr, getAccountSummaryHtml
 
 def myconverter(o):
     if isinstance(o, datetime):
@@ -262,11 +262,16 @@ def mergeAndSaveScores(storeConfig, scores, heldStocks):
         print("*****WARNING - No scores received to merge!")
 
 def saveStockLedger(config, account, accountSummary, stockLedger):
-    accSummary = getAccountSummaryStr(account, accountSummary)
-    saveStringToDropbox(config, f"/performance/{account}-Summary.txt", accSummary)
+    summaryStr = "\nStock Summary:\n"
     for stock, details in stockLedger.items():
         detailsStr = getStockLedgerStr(details)
+        summaryStr += getStockSummaryStr(details)
         saveStringToDropbox(config, f"/performance/{account}/{details['stockSymbol']}.txt", detailsStr)
+    accSummaryTxt = getAccountSummaryStr(account, accountSummary)
+    accSummaryTxt += summaryStr
+    saveStringToDropbox(config, f"/performance/{account}-Summary.txt", accSummaryTxt)
+    accSummaryHtml = getAccountSummaryHtml(account, accountSummary, stockLedger)
+    saveStringToDropbox(config, f"/performance/{account}-Summary.html", accSummaryHtml)
 
 def saveStringToDropbox(config, path, dataStr):
     dropboxAccessToken = config['dropboxAccessToken']
