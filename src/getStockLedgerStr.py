@@ -105,12 +105,13 @@ def getAccountSummaryHtml(account, accountSummary, stockLedger):
     procYear = startYear
     dom.appendChild(h2("\nYearly breakdown\n"))
     byYear = table()
-    byYear.appendChild(tr(th('Cash In'),th('Cash Out'),th('Agg Invested'),th('Gain Realised (Tax)'),th('Dividends'),th('Yield%'),th('Dealing Costs'),th('Fees')))
+    byYear.appendChild(tr(th('Year'),th('Cash In'),th('Cash Out'),th('Agg Invested'),th('Gain Realised'),th('Dividends'),th('Yield%'),th('Dealing Costs'),th('Fees')))
     while procYear < endYear:
         years = (procYear-startYear).days/365
         taxYear = getTaxYear(procYear)
         values = list()
         yearRow = tr()
+        yearRow.appendChild(td(f"{taxYear}"))
         yearRow.appendChild(td(f"£{accountSummary['cashInPerYear'].get(taxYear, 0):0.0f}"))
         yearRow.appendChild(td(f"£{accountSummary['cashOutPerYear'].get(taxYear, 0):0.0f}"))
         yearRow.appendChild(td(f"£{accountSummary['aggInvestedByYear'].get(taxYear, 0):0.0f}"))
@@ -128,7 +129,8 @@ def getAccountSummaryHtml(account, accountSummary, stockLedger):
     stockTable.appendChild(tr(th('Stock'),th('Name'),th('Cash in'), th('Invested'), th('Divis'), th('Yield'),th('Gain')))
     for stock, details in stockLedger.items():
         stockRow = tr()
-        stockRow.appendChild(td(f"{details['stockSymbol']}"))
+        detailLocation = f"./{account}/{details['stockSymbol']}.txt"
+        stockRow.appendChild(td(a(f"{details['stockSymbol']}", _href=detailLocation)))
         stockRow.appendChild(td(f"{details['stockName']}"))
         stockRow.appendChild(td(f"£{details['totalCashInvested']:0.0f}"))
         stockRow.appendChild(td(f"£{details['totalInvested']:0.0f}"))
@@ -137,8 +139,9 @@ def getAccountSummaryHtml(account, accountSummary, stockLedger):
         stockRow.appendChild(td(f"£{details['totalGain']:0.0f} ({details['totalGainPerc']:0.2f}%)"))
         stockTable.appendChild(stockRow)
     dom.append(stockTable)
-    dom = html(dom)
-    return f"{dom}"
+    ht = html(meta(_charset='UTF-8'))
+    ht.append(dom)
+    return f"{ht}"
 
 def getStockSummaryStr(details):
     retStr = f"{details['stockSymbol']} {details['stockName']} "
