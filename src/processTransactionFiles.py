@@ -266,8 +266,8 @@ def processStockTxns(config, securities, stock, txns):
                 + realisedCapitalGain
                 # - totalCosts
                 # + (sum(dividendPerYear.values()) if len(dividendYieldPerYear) > 0 else 0) \
-    if details['totalGain'] and totalShareInvested:
-        details['totalGainPerc'] = 100.0 * float(details['totalGain']/totalShareInvested)
+    if details['totalGain'] and totalCashInvested:
+        details['totalGainPerc'] = 100.0 * float(details['totalGain']/totalCashInvested)
         details['avgGainPerYear'] = float(details['totalGain'])/yearsHeld
         details['avgGainPerYearPerc'] = details['totalGainPerc']/yearsHeld
     else:
