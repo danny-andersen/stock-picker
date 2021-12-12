@@ -76,7 +76,7 @@ def getAccountSummaryStr(account, accountSummary):
 
     return retStr
 
-def getAccountSummaryHtml(account, accountSummary, stockLedger):
+def getAccountSummaryHtml(account, accountSummary, stockLedgerList):
     dom =  body()
     dom.appendChild(h1(f"Summary for Account: {account}\n"))
     summary = table()
@@ -126,8 +126,8 @@ def getAccountSummaryHtml(account, accountSummary, stockLedger):
 
     dom.append(h2('Stock Summary'))
     stockTable = table()
-    stockTable.appendChild(tr(th('Stock'),th('Name'),th('Cash in'), th('Invested'), th('Divis'), th('Yield'),th('Gain')))
-    for stock, details in stockLedger.items():
+    stockTable.appendChild(tr(th('Stock'),th('Name'),th('Cash in'), th('Invested'), th('Divis'), th('Yield'),th('Gain'),th('Avg Gain/Yr')))
+    for details in stockLedgerList:
         stockRow = tr()
         detailLocation = f"./{account}/{details['stockSymbol']}.txt"
         stockRow.appendChild(td(a(f"{details['stockSymbol']}", _href=detailLocation)))
@@ -137,6 +137,7 @@ def getAccountSummaryHtml(account, accountSummary, stockLedger):
         stockRow.appendChild(td(f"£{details['totalDividends']:0.0f}"))
         stockRow.appendChild(td(f"{details['averageYearlyDiviYield']:0.0f}%"))
         stockRow.appendChild(td(f"£{details['totalGain']:0.0f} ({details['totalGainPerc']:0.2f}%)"))
+        stockRow.appendChild(td(f"{details['avgGainPerYearPerc']:0.2f}%"))
         stockTable.appendChild(stockRow)
     dom.append(stockTable)
     ht = html(meta(_charset='UTF-8'))
@@ -154,6 +155,7 @@ def getStockSummaryStr(details):
 def getStockLedgerStr(details):
     
     retStr = f"Stock: {details['stockSymbol']}\nDescription: {details['stockName']}\n\n"
+    retStr += f"Sedol {details['sedol']} ISIN: {details['isin']}\n"
     retStr += f"Held since {details['heldSince'].date()}\n"
     retStr += f"Cash invested £{details['totalCashInvested']:0.2f}\n"
     retStr += f"Number of shares: {details['stockHeld']}\n"

@@ -1,5 +1,6 @@
 import csv
 from io import StringIO
+from logging import currentframe
 import os
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
@@ -20,6 +21,9 @@ DIVIDEND = 'Dividend'
 FEES = 'Fees'
 REFUND ='Refund'
 NONE = 'No stock'
+STERLING = 'STERLING'
+USD = 'USDUSDUSDUS1'
+EUR = 'EUREUREUREU1'
 
 SECONDS_IN_YEAR = 365.25*24*3600
 
@@ -35,8 +39,11 @@ class Transaction:
     desc: str
     qty: float = 0.0
     price: Decimal = Decimal(0.0)
+    priceCurrency: str = '£'
     debit: Decimal = Decimal(0.0)
+    debitCurrency: str = '£'
     credit: Decimal = Decimal(0.0)
+    creditCurrency: str = '£'
     type: str = 'Unknown'
 
 @dataclass_json
@@ -48,6 +55,7 @@ class Security:
     desc: str
     qty: int = 0
     currentPrice: Decimal = Decimal(0.0)
+    currency: str = '£'
     avgBuyPrice: Decimal = Decimal(0.0)
     bookCost: Decimal = Decimal(0.0)
     gain: Decimal = Decimal(0.0)
@@ -69,6 +77,37 @@ class CapitalGain:
         return self.calcGain(sellDate, sellPrice, self.qty)
     def calcTotalCurrentGain(self, sellPrice):
         return self.calcTotalGain(datetime.now(timezone.utc), sellPrice)
+
+def convertToSterling(currencyTxns, txn, amount):
+    if (currencyTxns):
+        #Find the currency conversion transaction reference
+        #Go forward in time to the next currency conversion event
+        timeDiff = timedelta(weeks=1000)
+        zeroDelta = timedelta(seconds = 0)
+        for ctxn in currencyTxns:
+            if ctxn.credit != 0:
+                txnDelta = ctxn.date - txn.date    
+                if (txnDelta > zeroDelta and txnDelta < timeDiff):
+                    convTxn = ctxn
+        if not ctxn:
+            #didnt fine one later - choose the nearest one 
+            for ctxn in currencyTxns:
+                if ctxn.credit != 0:
+                    txnDelta = abs(ctxn.date - txn.date)    
+                    if (txnDelta < timeDiff):
+                        convTxn = ctxn
+        #Find the associated currency to sterling conversion rate
+        if ctxn:
+            convRate = ctxn.credit / ctxn.qty
+            #Multiply amount by conversion rate
+            ret = amount * convRate
+        else:
+            print(f"Failed to find a conversion transaction for currency for txn {txn}")
+            ret = amount
+    else:
+        ret = amount
+
+    return ret
 
 def processAccountTxns(summary, txns):
     cashInPerYear = dict()
@@ -96,7 +135,8 @@ def processAccountTxns(summary, txns):
     summary['feesPerYear'] = feesPerYear
     return summary
 
-def processStockTxns(config, securities, stock, txns):
+def processStockTxns(config, securities, stocks, stock):
+    txns = stocks[stock]
     totalCosts = 0
     totalStock = 0
     totalShareInvested = 0 
@@ -113,6 +153,7 @@ def processStockTxns(config, securities, stock, txns):
     stockName = None
     stockSymbol = None
     stockSedol = None
+    stockisin = None
     lastDiviDate = None
     lastDivi = 0
     totalDivi = 0
@@ -132,34 +173,42 @@ def processStockTxns(config, securities, stock, txns):
                     stockSymbol = txn.symbol + '.L'
             if not stockSedol and txn.sedol != '':
                 stockSedol = txn.sedol
+            if not stockisin == None and txn.isin != '':
+                stockisin = txn.isin
             if txn.date < firstBought:
                 firstBought = txn.date
             totalStock += txn.qty
-            priceIncCosts = txn.debit / txn.qty
+            debit = convertToSterling(stocks.get(txn.debitCurrency, None), txn, txn.debit)
+            priceIncCosts =  debit / txn.qty
             if (txn.price != 0):
-                costs = txn.debit - (txn.qty * txn.price)
+                costs = debit - (txn.qty * txn.price)
             else:
                 costs = 0
-            totalShareInvested += txn.debit
+            totalShareInvested += debit
             #If its a reinvested dividend, need to take this off total gain
             if (lastDiviDate 
                     and (txn.date - lastDiviDate < timedelta(days=7))
-                    and (lastDivi >= txn.debit)):
-                reinvestDiviTotal += txn.debit
+                    and (lastDivi >= debit)):
+                reinvestDiviTotal += debit
             else:
-                totalCashInvested += txn.debit
+                totalCashInvested += debit
             avgShareCost = totalShareInvested / totalStock
             invCostsPerYear[taxYear] = invCostsPerYear.get(taxYear, 0) + costs #Stamp duty and charges
             totalCosts += costs
             # adjIinvestmentHistory.append(CapitalGain(date = txn.date, qty = txn.qty, price = txn.price))
             fullIinvestmentHistory.append(CapitalGain(date = txn.date, qty = txn.qty, price = priceIncCosts))
         elif type == SELL:
-            priceIncCosts = txn.credit / txn.qty
+            if not stockName:
+                if (stock.isin == USD or stock.isin == EUR):
+                    stockName = stock.isin
+                    stockSymbol = stock.isin
+            credit = convertToSterling(stocks.get(txn.creditCurrency, None), txn, txn.credit)
+            priceIncCosts = credit / txn.qty
             gain = (priceIncCosts - avgShareCost) * txn.qty #CGT uses average purchase price at time of selling
             capitalGainPerYear[taxYear] = capitalGainPerYear.get(taxYear, 0) + gain
             totalStock -= txn.qty
             if (txn.price != 0):
-                totalCosts += (txn.price * txn.qty) - txn.credit #Diff between what should have received vs what was credited
+                totalCosts += (txn.price * txn.qty) - credit #Diff between what should have received vs what was credited
             totalShareInvested = avgShareCost * totalStock  
             fullIinvestmentHistory.append(CapitalGain(date = txn.date, qty = txn.qty, price = priceIncCosts, transaction = SELL))
             #Use last stock buy txn
@@ -176,12 +225,15 @@ def processStockTxns(config, securities, stock, txns):
             #         print(f"{stock}: Run out of investment history to sell {txn.qty} shares - remaining: {stockSold}\n")
             #         break
         elif type == DIVIDEND:
-            divi = txn.credit
+            divi = convertToSterling(stocks.get(txn.creditCurrency, None), txn, txn.credit)
             lastDivi = divi
             lastDiviDate = txn.date
             totalDivi += divi
             dividendPerYear[taxYear] = dividendPerYear.get(taxYear, 0) + divi
-            yearYield = dividendYieldPerYear.get(taxYear, 0) + 100*float(divi/totalShareInvested)
+            if totalShareInvested > 0.01:
+                yearYield = dividendYieldPerYear.get(taxYear, 0) + 100*float(divi/totalShareInvested)
+            else:
+                yearYield = 0
             dividendYieldPerYear[taxYear] = yearYield
     #From remaining stock history workout paper gain
     # totalPaperGain = 0
@@ -228,6 +280,8 @@ def processStockTxns(config, securities, stock, txns):
         remainingCGT = 0
 
     yearsHeld = float((datetime.now(timezone.utc) - firstBought).total_seconds())/SECONDS_IN_YEAR
+    details['sedol'] = stockSedol
+    details['isin'] = stockisin
     details['stockName'] = stockName
     details['stockHeld'] = totalStock
     details['heldSince'] = firstBought
@@ -291,7 +345,7 @@ def summarisePerformance(account, accountSummary, stockSummary):
     aggInvestedByYear = dict()
     totalDiviYieldByYear = dict()
     totalMarketValue = 0
-    for details in stockSummary.values():
+    for details in stockSummary:
         totalMarketValue += details.get('marketValue', 0)
         totalCashInvested += details['totalCashInvested']
         totalDiviReInvested += details['totalDiviReinvested']
@@ -353,14 +407,34 @@ def summarisePerformance(account, accountSummary, stockSummary):
     accountSummary['dividendYieldPerYear']  = totalDiviYieldByYear
 
 def priceStrToDec(strValue):
-    valStr = strValue.replace('£', '')
-    valStr = valStr.replace(',', '')
-    if ('p' in valStr):
-        valStr = valStr.replace('p', '')
-        val = Decimal(valStr) / 100
+    if (not strValue or strValue.strip == ''):
+        val = Decimal(0.0)
+        currency = STERLING
     else:
-        val = Decimal(valStr)
-    return val
+        if strValue.startswith ('£'):
+            valStr = strValue.replace('£', '')
+            currency = STERLING
+        elif strValue.endswith('p'):
+            currency = STERLING
+            valStr = strValue
+        elif strValue.startswith ('$'):
+            valStr = strValue.replace('$', '')
+            currency = USD
+        elif strValue.startswith ('€'):
+            valStr = strValue.replace('€', '')
+            currency = EUR
+        else:
+            valStr = strValue
+            currency = STERLING
+            print(f"Warning: Unrecognised currency, assuming sterling {strValue}")
+
+        valStr = valStr.replace(',', '')
+        if (currency == STERLING and 'p' in valStr):
+            valStr = valStr.replace('p', '')
+            val = Decimal(valStr) / 100
+        else:
+            val = Decimal(valStr)
+    return (currency, val)
 
 def processTxnFiles(config):
     configStore = config['store']
@@ -398,12 +472,12 @@ def processTxnFiles(config):
                         date = mtime,
                         symbol = row['\ufeff"Symbol"'].strip().replace('..','.'),
                         qty = 0 if row['Qty'] == '' else float(row['Qty']),
-                        currentPrice = 0 if row['Price'] == '' else priceStrToDec(row['Price']),
                         desc = row['Description'],
                         avgBuyPrice = row['Average Price'],
                         bookCost = row['Book Cost'],
                         gain = row['Gain']
                     )
+                    (security.currency, security.currentPrice) = priceStrToDec(row['Price'])
                     securitiesBySymbol[security.symbol] = security
 
     #List transactions directory for account history files
@@ -437,26 +511,29 @@ def processTxnFiles(config):
                     sedol = row['Sedol'].strip(),
                     isin = row['ISIN'].strip(),
                     qty = 0 if row['Quantity'] == '' else int(row['Quantity']),
-                    price = 0 if row['Price'] == '' else priceStrToDec(row['Price']),
                     desc = row['Description'],
-                    debit = 0 if row['Debit'] == '' else priceStrToDec(row['Debit']),
-                    credit = 0 if row['Credit'] == '' else priceStrToDec(row['Credit'])
                     )
+                (txn.priceCurrency, txn.price) = priceStrToDec(row['Price'])
+                (txn.debitCurrency, txn.debit) = priceStrToDec(row['Debit'])
+                (txn.creditCurrency, txn.credit) = priceStrToDec(row['Credit'])
                 desc = txn.desc.lower() 
                 if (txn.isin != ''):
                     #Map any old isin to new isin
                     txn.isin = isinMapping.get(txn.isin, txn.isin)
                 if (desc.startswith('div') 
                         or desc.startswith('equalisation')
+                        or desc.endswith('distribution')
+                        or desc.endswith('rights')
                         or 'optional dividend' in desc):
                     txn.type = DIVIDEND
-                elif (txn.isin.startswith('No stock') or (txn.isin == '' and txn.symbol == '')):
+                elif (txn.isin.startswith(NONE) or (txn.isin == '' and txn.symbol == '')):
                     txn.isin = NONE
                     if (desc.startswith("debit card") 
                             or 'subscription' in desc 
                             or desc.startswith("trf")
                             or 'transfer' in desc
                             or 'cashback' in desc
+                            or '(di)' in desc
                             or 'lump sum' in desc):
                         if (txn.credit != 0):
                             txn.type = CASH_IN
@@ -478,6 +555,10 @@ def processTxnFiles(config):
                         txn.type = BUY
                 else:
                     print(f"Unknown transaction type {txn}")
+    
+                if (txn.type == BUY and (txn.isin == USD or txn.isin == EUR)):
+                    #Ignore currency conversion BUY transactions 
+                    continue
                 # Retrieve transactions by stock symbol
                 existingTxns = stockList.get(txn.isin, None)
                 if (not existingTxns):
@@ -552,14 +633,20 @@ def processTxnFiles(config):
     for account, stocks in stockListByAcc.items():
         stockLedger = dict()
         accountSummary = dict()
+        sortedStocks = dict()
         for stock in stocks:
-            #Sort transactions by date
-            txns = sorted(list(stocks[stock].values()), key= lambda txn: txn.date)
+            #Sort all transactions by date first
+            sortedStocks[stock] = sorted(list(stocks[stock].values()), key= lambda txn: txn.date)
+        for stock in stocks:
+            if (stock == USD or stock == EUR):
+                #Dont process currency conversion txns
+                continue
             if (stock != NONE):
-                stockLedger[stock] = processStockTxns(config, securitiesByAccount[account], stock, txns) 
+                stockLedger[stock] = processStockTxns(config, securitiesByAccount[account], sortedStocks, stock) 
             else:
-                processAccountTxns(accountSummary, txns)
+                processAccountTxns(accountSummary, sortedStocks[stock])
         #Summarise transactions and yields etc
-        summarisePerformance(account, accountSummary, stockLedger)
+        stockLedgerList = sorted(list(stockLedger.values()), key = lambda stock: stock['avgGainPerYearPerc'], reverse = True)
+        summarisePerformance(account, accountSummary, stockLedgerList)
         #Save to Dropbox file
-        saveStockLedger(configStore, account, accountSummary, stockLedger)
+        saveStockLedger(configStore, account, accountSummary, stockLedgerList)
