@@ -5,6 +5,8 @@ from statistics import mean
 from dataclasses import asdict
 from domonic.html import *
 
+from transactionDefs import *
+
 def getTaxYear(inDate):
     taxYearStart = date(year=2021, month=4, day=6)
     d = date(year=2021, month=inDate.month, day=inDate.day)
@@ -76,7 +78,7 @@ def getAccountSummaryStr(account, accountSummary):
 
     return retStr
 
-def getAccountSummaryHtml(account, accountSummary, stockLedgerList):
+def getAccountSummaryHtml(account, accountSummary, stockLedgerList: list[SecurityDetails]):
     dom =  body()
     dom.appendChild(h1(f"Summary for Account: {account}\n"))
     summary = table()
@@ -124,77 +126,122 @@ def getAccountSummaryHtml(account, accountSummary, stockLedgerList):
         procYear += timedelta(days=365)
     dom.append(byYear)
 
+    historicStocks: list[SecurityDetails] = list()
     dom.append(h2('Stock Summary'))
     stockTable = table()
-    stockTable.appendChild(tr(th('Stock'),th('Name'),th('Cash in'), th('Invested'), th('Divis'), th('Yield'),th('Gain'),th('Avg Gain/Yr')))
+    stockTable.appendChild(tr(th('Stock'),th('Name'),th('Cash inv'), th(' Total Invested'), th('Dividends'), th('Yield'),th('Gain'),th('Years Held'),th('Avg Gain/Yr')))
     for details in stockLedgerList:
+        historicStocks.extend(details.historicHoldings)
+        if (details.totalInvested != 0):
+            stockRow = tr()
+            detailLocation = f"./{account}/{details.symbol}.txt"
+            stockRow.appendChild(td(a(f"{details.symbol}", _href=detailLocation)))
+            stockRow.appendChild(td(f"{details.name}"))
+            stockRow.appendChild(td(f"£{details.cashInvested:0.0f}"))
+            stockRow.appendChild(td(f"£{details.totalInvested:0.0f}"))
+            stockRow.appendChild(td(f"£{details.totalDividends():0.0f}"))
+            stockRow.appendChild(td(f"{details.averageYearlyDiviYield():0.0f}%"))
+            stockRow.appendChild(td(f"£{details.totalGain():0.0f} ({details.totalGainPerc():0.2f}%)"))
+            stockRow.appendChild(td(f"{details.yearsHeld():0.2f}"))
+            stockRow.appendChild(td(f"{details.avgGainPerYearPerc():0.2f}%"))
+            stockTable.appendChild(stockRow)
+    dom.append(stockTable)
+
+    dom.append(h2('Previous Stock Holdings'))
+    stockTable = table()
+    stockTable.appendChild(tr(th('Stock'),th('Name'),th('Cash inv'), th('Capital Gain'), th('Dividends'), th('Yield'),th('Total Gain'),th('Years Held'),th('Avg Gain/Yr'),th('From'),th('To')))
+    for details in historicStocks:
         stockRow = tr()
-        detailLocation = f"./{account}/{details['stockSymbol']}.txt"
-        stockRow.appendChild(td(a(f"{details['stockSymbol']}", _href=detailLocation)))
-        stockRow.appendChild(td(f"{details['stockName']}"))
-        stockRow.appendChild(td(f"£{details['totalCashInvested']:0.0f}"))
-        stockRow.appendChild(td(f"£{details['totalInvested']:0.0f}"))
-        stockRow.appendChild(td(f"£{details['totalDividends']:0.0f}"))
-        stockRow.appendChild(td(f"{details['averageYearlyDiviYield']:0.0f}%"))
-        stockRow.appendChild(td(f"£{details['totalGain']:0.0f} ({details['totalGainPerc']:0.2f}%)"))
-        stockRow.appendChild(td(f"{details['avgGainPerYearPerc']:0.2f}%"))
+        detailLocation = f"./{account}/{details.symbol}.txt"
+        stockRow.appendChild(td(a(f"{details.symbol}", _href=detailLocation)))
+        stockRow.appendChild(td(f"{details.name}"))
+        stockRow.appendChild(td(f"£{details.cashInvested:0.0f}"))
+        stockRow.appendChild(td(f"£{details.realisedCapitalGain():0.0f}"))
+        stockRow.appendChild(td(f"£{details.totalDividends():0.0f}"))
+        stockRow.appendChild(td(f"{details.averageYearlyDiviYield():0.0f}%"))
+        stockRow.appendChild(td(f"£{details.totalGain():0.0f} ({details.totalGainPerc():0.2f}%)"))
+        stockRow.appendChild(td(f"{details.yearsHeld():0.2f}"))
+        stockRow.appendChild(td(f"{details.avgGainPerYearPerc():0.2f}%"))
+        stockRow.appendChild(td(f"{details.startDate.date()}"))
+        stockRow.appendChild(td(f"{details.endDate.date()}"))
         stockTable.appendChild(stockRow)
     dom.append(stockTable)
+
     ht = html(meta(_charset='UTF-8'))
     ht.append(dom)
     return f"{ht}"
 
-def getStockSummaryStr(details):
-    retStr = f"{details['stockSymbol']} {details['stockName']} "
-    retStr += f"Cash in £{details['totalCashInvested']:0.2f} "
-    retStr += f"Invested £{details['totalInvested']:0.2f} "
-    retStr += f"Divis £{details['totalDividends']:0.2f}, Avg Yield: {details['averageYearlyDiviYield']:0.2f}% "
-    retStr += f"Gain: £{details['totalGain']:0.2f}, ({details['totalGainPerc']:0.2f}%)\n"
+def getStockSummaryStr(details: SecurityDetails):
+    retStr = f"{details.symbol} {details.name} "
+    retStr += f"Cash in £{details.cashInvested:0.2f} "
+    retStr += f"Invested £{details.totalInvested:0.2f} "
+    retStr += f"Capital Gain £{details.realisedCapitalGain():0.2f} "
+    retStr += f"Divis £{details.totalDividends():0.2f}, Avg Yield: {details.averageYearlyDiviYield():0.2f}% "
+    retStr += f"Gain: £{details.totalGain():0.2f}, ({details.totalGainPerc():0.2f}%)\n"
+    if (details.historicHoldings):
+        for det in details.historicHoldings:
+            retStr += "    Historic: " + getStockSummaryStr(det)
     return retStr
 
-def getStockLedgerStr(details):
-    
-    retStr = f"Stock: {details['stockSymbol']}\nDescription: {details['stockName']}\n\n"
-    retStr += f"Sedol {details['sedol']} ISIN: {details['isin']}\n"
-    retStr += f"Held since {details['heldSince'].date()}\n"
-    retStr += f"Cash invested £{details['totalCashInvested']:0.2f}\n"
-    retStr += f"Number of shares: {details['stockHeld']}\n"
-    retStr += f"Amount invested £{details['totalInvested']:0.2f}\n"
-    retStr += f"Amount dividends re-invested £{details['totalDiviReinvested']:0.2f}\n"
-    retStr += f"Average Share Price {details['avgSharePrice']:0.2f}\n"
-    if details.get('currentSharePrice', None):
-        retStr += f"Current Share Price {details['currentSharePrice']:0.2f}\n"
-        retStr += f"Share price date {details['priceDate'].date()}\n"
-        retStr += f"Current Market Value £{details['marketValue']:0.2f}\n"
-        # retStr += f"Total Paper Gain £{details['totalPaperGain']:0.2f} {details['totalPaperGainPerc']:0.2f}%\n"
-        retStr += f"Total Taxable Gain if sold £{details['totalPaperCGT']:0.2f} {details['totalPaperCGTPerc']:0.2f}%\n"
+def getStockLedgerStr(securityDetails: SecurityDetails):
+    retStr = f"Stock: {securityDetails.symbol}\nDescription: {securityDetails.name}\n"
+    retStr += f"Sedol: {securityDetails.sedol} ISIN: {securityDetails.isin}\n\n"
+    retStr += f"Current Holding:\n"
+    retStr += getDetailsStr(securityDetails)
+    if securityDetails.historicHoldings:
+        for prev in securityDetails.historicHoldings:
+            retStr += "\n\nPrevious holding:\n"
+            retStr += getDetailsStr(prev)
+
+    return retStr
+
+def getDetailsStr(details):
+    retStr = ""
+    if details.endDate:
+        #Historic stock 
+        retStr += f"Bought {details.startDate.date() if details.startDate else ''}\n"
+        retStr += f"Sold remaining stock {details.endDate.date()}\n"
+        retStr += f"Held for {details.yearsHeld():0.2f} years\n"
     else:
-        retStr += "**** No current price data available, so total gain info doesnt include current value\n"
-    retStr += f"Total Dividends £{details['totalDividends']:0.2f}\n"
-    retStr += f"Average Yearly Dividend £{details['averageYearlyDivi']:0.2f}, Yield: {details['averageYearlyDiviYield']:0.2f}%\n"
-    retStr += f"Stock Dealing costs £{details['dealingCosts']:0.2f}\n"
-    retStr += f"Total Gain: £{details['totalGain']:0.2f}, ({details['totalGainPerc']:0.2f}%) \n"
-    retStr += f"Average Gain per year: £{details['avgGainPerYear']:0.2f}, ({details['avgGainPerYearPerc']:0.2f}%) \n"
+        retStr += f"Held since {details.startDate.date() if details.startDate else ''}\n"
+        retStr += f"Number of shares: {details.qtyHeld}\n"
+        if details.currentSharePrice:
+            retStr += f"Current Share Price {details.currentSharePrice:0.2f}\n"
+            retStr += f"Share price date {details.currentSharePriceDate.date()}\n"
+            retStr += f"Current Market Value £{details.marketValue():0.2f}\n"
+            # retStr += f"Total Paper Gain £{details['totalPaperGain']:0.2f} {details['totalPaperGainPerc']:0.2f}%\n"
+            retStr += f"Total Taxable Gain if sold £{details.paperCGT():0.2f} {details.paperCGTPerc():0.2f}%\n"
+        else:
+            retStr += "**** No current price data available, so total gain info doesnt include current value\n"
+
+    retStr += f"Cash invested £{details.cashInvested:0.2f}\n"
+    retStr += f"Amount invested £{details.totalInvested:0.2f}\n"
+    retStr += f"Amount dividends re-invested £{details.diviInvested:0.2f}\n"
+    retStr += f"Average Share Price {details.avgSharePrice:0.2f}\n"
+    retStr += f"Total Dividends £{details.totalDividends():0.2f}\n"
+    retStr += f"Average Yearly Dividend £{details.averageYearlyDivi():0.2f}, Yield: {details.averageYearlyDiviYield():0.2f}%\n"
+    retStr += f"Stock Dealing costs £{details.totalCosts:0.2f}\n"
+    retStr += f"Total Gain: £{details.totalGain():0.2f}, ({details.totalGainPerc():0.2f}%) \n"
+    retStr += f"Average Gain per year: £{details.avgGainPerYear():0.2f}, ({details.avgGainPerYearPerc():0.2f}%) \n"
 
     divs = list()
     retStr += "\nDividends Per Year:\n"
-    for year in details['dividendsPerYear'].keys():
-        divs.append([year, details['dividendsPerYear'][year], details['dividendYieldPerYear'][year]])
-    # divs = list(details['dividendsPerYear'].items())
+    for year in details.dividendsByYear.keys():
+        divs.append([year, details.dividendsByYear[year], details.dividendYieldByYear[year]])
     retStr += tabulate(divs, headers=['Tax Year', 'Dividend Paid', 'Yield'])
 
     retStr += "\n\nInvestments Made:\n"
     hist = list()
-    for dc in details['investmentHistory']:
+    for dc in details.investmentHistory:
         hist.append(asdict(dc))
     retStr += tabulate(hist, headers='keys')
 
     retStr += "\n\nRealised Capital Gain (taxable) Per Year:\n"
-    gains = list(details['realisedCapitalGainForTaxPerYear'].items())
+    gains = list(details.realisedCapitalGainByYear.items())
     retStr += tabulate(gains, headers=['Tax Year', 'Realised Capital Gain (taxable value)'])
 
     retStr += "\n\nDealing Costs Per Year:\n"
-    costs = list(details['dealingCostsPerYear'].items())
+    costs = list(details.costsByYear.items())
     retStr += tabulate(costs, headers=['Tax Year', 'Dealing Costs'])
 
     return retStr

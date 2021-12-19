@@ -266,7 +266,7 @@ def saveStockLedger(config, account, accountSummary, stockLedgerList):
     for details in stockLedgerList:
         detailsStr = getStockLedgerStr(details)
         summaryStr += getStockSummaryStr(details)
-        saveStringToDropbox(config, f"/performance/{account}/{details['stockSymbol']}.txt", detailsStr)
+        saveStringToDropbox(config, f"/performance/{account}/{details.symbol}.txt", detailsStr)
     accSummaryTxt = getAccountSummaryStr(account, accountSummary)
     accSummaryTxt += summaryStr
     saveStringToDropbox(config, f"/performance/{account}-Summary.txt", accSummaryTxt)

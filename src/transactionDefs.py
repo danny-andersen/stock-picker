@@ -1,6 +1,7 @@
-from dataclasses import dataclass
+from statistics import mean
+from dataclasses import dataclass, field
 from dataclasses_json import dataclass_json
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 
 CASH_IN = 'Cash in'
@@ -67,6 +68,84 @@ class CapitalGain:
         return self.calcGain(sellDate, sellPrice, self.qty)
     def calcTotalCurrentGain(self, sellPrice):
         return self.calcTotalGain(datetime.now(timezone.utc), sellPrice)
+
+@dataclass
+class SecurityDetails:
+    sedol: str = None
+    symbol: str = None
+    isin: str = None
+    name: str = None
+    qtyHeld: int = 0
+    startDate: datetime = None
+    endDate: datetime = None
+    cashInvested: Decimal = Decimal(0.0)
+    diviInvested: Decimal = Decimal(0.0)
+    totalInvested: Decimal = Decimal(0.0)
+    avgSharePrice: Decimal = Decimal(0.0)
+    realisedCapitalGainByYear: dict[str, Decimal(0.0)] = field(default_factory=dict)
+    currentSharePrice: Decimal = Decimal(0.0)
+    currentSharePriceDate: datetime = None
+    costsByYear: dict[str, Decimal(0.0)] = field(default_factory=dict)
+    totalCosts: Decimal = Decimal(0.0)
+    dividendsByYear: dict[str, Decimal(0.0)] = field(default_factory=dict)
+    dividendYieldByYear: dict[str, Decimal(0.0)] = field(default_factory=dict)
+    investmentHistory: list[CapitalGain] = field(default_factory=list)
+    historicHoldings: list = field(default_factory=list)
+    def yearsHeld(self):
+        if (self.startDate):
+            if (self.endDate):
+                return float((self.endDate.timestamp() - self.startDate.timestamp())/SECONDS_IN_YEAR)
+            else:
+                return float((datetime.now(timezone.utc) - self.startDate).total_seconds())/SECONDS_IN_YEAR
+        else:
+            return 0
+    def totalGain(self):
+        val = self.marketValue()
+        if (val != 0):
+            return val - self.cashInvested + self.realisedCapitalGain() + self.totalDividends()
+        else:
+            return self.paperCGT() \
+                + self.totalDividends() \
+                + self.realisedCapitalGain()
+    def avgGainPerYear(self):
+        if self.yearsHeld() > 0:
+            return float(self.totalGain())/self.yearsHeld()
+        else:
+            return 0
+    def totalGainPerc(self):
+        if self.cashInvested > 0:
+            return 100.0 * float(self.totalGain()/self.cashInvested)
+        else:
+            return 0
+    def avgGainPerYearPerc(self):
+        if self.yearsHeld() > 0:
+            return float(self.totalGainPerc())/self.yearsHeld()
+        else:
+            return 0
+    def totalDividends(self):
+        return sum(self.dividendsByYear.values()) if len(self.dividendsByYear) > 0 else 0
+    def averageYearlyDivi(self):
+        return mean(self.dividendsByYear.values()) if len(self.dividendsByYear) > 0 else 0
+    def averageYearlyDiviYield(self):
+        return mean(self.dividendYieldByYear.values()) if len(self.dividendYieldByYear) > 0 else 0
+    def realisedCapitalGain(self):
+        return (sum(self.realisedCapitalGainByYear.values()) if len(self.realisedCapitalGainByYear) > 0 else 0)
+    def marketValue(self):
+        return self.currentSharePrice * self.qtyHeld
+    def paperCGT(self):
+        if (self.currentSharePrice):
+            return self.marketValue() - (self.avgSharePrice * self.qtyHeld)
+        else:
+            return Decimal(0.0)
+    def paperCGTPerc(self):
+        if self.totalInvested:
+            return 100.0 * float(self.paperCGT() / self.totalInvested)
+        else:
+            return Decimal(0.0)
+
+
+
+
 
 def convertToSterling(currencyTxns, txn, amount):
     if (currencyTxns):

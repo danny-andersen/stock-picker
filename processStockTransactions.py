@@ -9,7 +9,7 @@ from processTransactionFiles import processTxnFiles
 import configparser
 import locale
 
-config = configparser.ConfigParser()
+config = configparser.ConfigParser() 
 config.read('./stockpicker.ini')
 localeStr = config['stats']['locale']
 locale.setlocale( locale.LC_ALL, localeStr) 

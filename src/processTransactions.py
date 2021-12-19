@@ -34,94 +34,90 @@ def processAccountTxns(summary, txns):
     summary['feesPerYear'] = feesPerYear
     return summary
 
-def processStockTxns(config, securities, stocks, stock):
+def processStockTxns(securities, stocks, stock):
     txns = stocks[stock]
-    totalCosts = 0
-    totalStock = 0
-    totalShareInvested = 0 
-    capitalGainPerYear = dict() #total capital gain realised by tax year
-    avgShareCost = 0
-    invCostsPerYear = dict()  #By tax year
-    dividendPerYear = dict() #By tax year
-    dividendYieldPerYear = dict() #By tax year
-    fullIinvestmentHistory = list()
-    reinvestDiviTotal = 0
-    totalCashInvested = 0
-    stockName = None
-    stockSymbol = None
-    stockSedol = None
-    stockisin = None
     lastDiviDate = None
     lastDivi = 0
     totalDivi = 0
-    # firstBought = datetime.now().replace(tzinfo=None)
-    firstBought = datetime.now(timezone.utc)
+    firstBought = None
+    details = SecurityDetails()
     for txn in txns:
         type = txn.type
-        # txn.date = txn.date.replace(tzinfo=None) #Make the date naive if not already
         taxYear = getTaxYear(txn.date)
         if type == BUY:
-            if not stockName:
-                stockName = txn.desc
-            if not stockSymbol and txn.symbol != '':
+            if not details.symbol and txn.symbol != '':
                 if txn.symbol.endswith('.'):
-                    stockSymbol = txn.symbol + 'L'
+                    details.symbol = txn.symbol + 'L'
                 else:
-                    stockSymbol = txn.symbol + '.L'
-            if not stockSedol and txn.sedol != '':
-                stockSedol = txn.sedol
-            if not stockisin == None and txn.isin != '':
-                stockisin = txn.isin
-            if txn.date < firstBought:
-                firstBought = txn.date
-            totalStock += txn.qty
+                    details.symbol = txn.symbol + '.L'
+            if not details.name:
+                details.name = txn.desc
+            if not details.sedol:
+                details.sedol = txn.sedol
+            if not details.isin:
+                details.isin = txn.isin
+            if not details.startDate:
+                details.startDate = txn.date
+            details.qtyHeld += txn.qty
             debit = convertToSterling(stocks.get(txn.debitCurrency, None), txn, txn.debit)
             priceIncCosts =  debit / txn.qty
             if (txn.price != 0):
                 costs = debit - (txn.qty * txn.price)
             else:
                 costs = 0
-            totalShareInvested += debit
-            #If its a reinvested dividend, need to take this off total gain
+            details.totalInvested += debit
+            #If its a reinvested dividend, need to take this off total cash
             if (lastDiviDate 
                     and (txn.date - lastDiviDate < timedelta(days=7))
                     and (lastDivi >= debit)):
-                reinvestDiviTotal += debit
+                details.diviInvested += debit
             else:
-                totalCashInvested += debit
-            avgShareCost = totalShareInvested / totalStock
-            invCostsPerYear[taxYear] = invCostsPerYear.get(taxYear, 0) + costs #Stamp duty and charges
-            totalCosts += costs
-            # adjIinvestmentHistory.append(CapitalGain(date = txn.date, qty = txn.qty, price = txn.price))
-            fullIinvestmentHistory.append(CapitalGain(date = txn.date, qty = txn.qty, price = priceIncCosts))
+                details.cashInvested += debit
+            details.avgSharePrice = details.totalInvested / details.qtyHeld
+            details.costsByYear[taxYear] = details.costsByYear.get(taxYear, 0) + costs #Stamp duty and charges
+            details.totalCosts += costs
+            details.investmentHistory.append(CapitalGain(date = txn.date, qty = txn.qty, price = priceIncCosts))
         elif type == SELL:
-            if not stockName:
-                if (stock.isin == USD or stock.isin == EUR):
-                    stockName = stock.isin
-                    stockSymbol = stock.isin
+            if not details.name:
+                if (details.isin == USD or details.isin == EUR):
+                    details.name = details.isin
+                    details.symbol = details.isin
             credit = convertToSterling(stocks.get(txn.creditCurrency, None), txn, txn.credit)
             priceIncCosts = credit / txn.qty
-            gain = (priceIncCosts - avgShareCost) * txn.qty #CGT uses average purchase price at time of selling
-            capitalGainPerYear[taxYear] = capitalGainPerYear.get(taxYear, 0) + gain
-            totalStock -= txn.qty
+            gain = (priceIncCosts - details.avgSharePrice) * txn.qty #CGT uses average purchase price at time of selling
+            details.realisedCapitalGainByYear[taxYear] = details.realisedCapitalGainByYear.get(taxYear, 0) + gain
+            details.qtyHeld -= txn.qty
             if (txn.price != 0):
-                totalCosts += (txn.price * txn.qty) - credit #Diff between what should have received vs what was credited
-            totalShareInvested = avgShareCost * totalStock  
-            fullIinvestmentHistory.append(CapitalGain(date = txn.date, qty = txn.qty, price = priceIncCosts, transaction = SELL))
+                details.totalCosts += (txn.price * txn.qty) - credit #Diff between what should have received vs what was credited
+            details.totalInvested = details.avgSharePrice * details.qtyHeld
+            details.investmentHistory.append(CapitalGain(date = txn.date, qty = txn.qty, price = priceIncCosts, transaction = SELL))
+            if (details.qtyHeld <= 0):
+                #This is a stock close out txn
+                #Start a new set of security details, with the old one stored in history
+                details.endDate = txn.date
+                newDetails = SecurityDetails()
+                if len(details.historicHoldings) > 0:
+                    #Promote previous holdings to the new parent
+                    newDetails.historicHoldings.extend(details.historicHoldings)
+                    details.historicHoldings = None
+                newDetails.sedol = details.sedol
+                newDetails.isin = details.isin
+                newDetails.symbol = details.symbol
+                newDetails.name = details.name
+                newDetails.historicHoldings.append(details)
+                details = newDetails
         elif type == DIVIDEND:
             divi = convertToSterling(stocks.get(txn.creditCurrency, None), txn, txn.credit)
             lastDivi = divi
             lastDiviDate = txn.date
-            totalDivi += divi
-            dividendPerYear[taxYear] = dividendPerYear.get(taxYear, 0) + divi
-            if totalShareInvested > 0.01:
-                yearYield = dividendYieldPerYear.get(taxYear, 0) + 100*float(divi/totalShareInvested)
+            details.dividendsByYear[taxYear] = details.dividendsByYear.get(taxYear, 0) + divi
+            if details.totalInvested > 0.01:
+                yearYield = details.dividendYieldByYear.get(taxYear, 0) + 100*float(divi/details.totalInvested)
             else:
                 yearYield = 0
-            dividendYieldPerYear[taxYear] = yearYield
+            details.dividendYieldByYear[taxYear] = yearYield
     #From remaining stock history workout paper gain
     # totalPaperGain = 0
-    details = dict()
     # if (stockSymbol):
     #     #Its a share or ETF
     #     details['stockSymbol'] = stockSymbol
@@ -145,70 +141,11 @@ def processStockTxns(config, securities, stocks, stock):
     #         if (avgShareCost > currentPrice * 8):
     #             #Price was already in pounds
     #             currentPrice = currentPricePence
-    if (stockSymbol):
-        #Its a share or ETF
-        details['stockSymbol'] = stockSymbol
-        security = securities.get(stockSymbol, None)
-    else:
+    if not details.symbol:
         #Its a fund
-        details['stockSymbol'] = stockSedol
-        security = securities.get(stockSedol, None)
+        details.symbol = details.sedol
+    security = securities.get(details.symbol, None)
     if security:
-        currentPrice = security.currentPrice
-        # for hist in adjIinvestmentHistory:
-        #     (gain, stockSold, avgYield) = hist.calcTotalCurrentGain(currentPrice)
-        #     totalPaperGain += gain
-        remainingCGT = (currentPrice * totalStock) - (avgShareCost * totalStock)
-    else:
-        # totalPaperGain = 0
-        remainingCGT = 0
-
-    yearsHeld = float((datetime.now(timezone.utc) - firstBought).total_seconds())/SECONDS_IN_YEAR
-    details['sedol'] = stockSedol
-    details['isin'] = stockisin
-    details['stockName'] = stockName
-    details['stockHeld'] = totalStock
-    details['heldSince'] = firstBought
-    details['totalCashInvested'] = totalCashInvested
-    details['totalDiviReinvested'] = reinvestDiviTotal
-    details['totalInvested'] = totalShareInvested
-    details['realisedCapitalGainForTaxPerYear'] = capitalGainPerYear
-    # details['realisedCapitalGainPerYear'] = realGainPerYear
-    details['investmentHistory'] = fullIinvestmentHistory
-    if security:
-        details['marketValue'] = currentPrice * totalStock
-        details['currentSharePrice'] = currentPrice
-        details['priceDate'] = security.date
-        # details['totalPaperGain'] = totalPaperGain
-        details['totalPaperCGT'] = remainingCGT
-        if (remainingCGT):
-            # details['totalPaperGainPerc'] = 100.0 * float(totalPaperGain / totalShareInvested)
-            details['totalPaperCGTPerc'] = 100.0 * float(remainingCGT / totalShareInvested)
-        else:
-            # details['totalPaperGainPerc'] = 0
-            details['totalPaperCGTPerc'] = 0
-    details['dealingCostsPerYear'] = invCostsPerYear
-    details['avgSharePrice'] = avgShareCost
-    details['dealingCosts'] = totalCosts
-    details['dividendsPerYear'] = dividendPerYear
-    details['averageYearlyDivi'] = mean(dividendPerYear.values()) if len(dividendPerYear) > 0 else 0
-    details['dividendYieldPerYear'] = dividendYieldPerYear
-    details['averageYearlyDiviYield'] = mean(dividendYieldPerYear.values()) if len(dividendYieldPerYear) > 0 else 0
-    details['totalDividends'] = totalDivi
-    realisedCapitalGain = (sum(capitalGainPerYear.values()) if len(capitalGainPerYear) > 0 else 0)
-    if security:
-        details['totalGain'] = details['marketValue'] - totalCashInvested + realisedCapitalGain + totalDivi
-    else:
-        details['totalGain'] = remainingCGT \
-                + totalDivi \
-                + realisedCapitalGain
-    if details['totalGain'] and totalCashInvested:
-        details['totalGainPerc'] = 100.0 * float(details['totalGain']/totalCashInvested)
-        details['avgGainPerYear'] = float(details['totalGain'])/yearsHeld
-        details['avgGainPerYearPerc'] = details['totalGainPerc']/yearsHeld
-    else:
-        details['totalGainPerc'] = 0
-        details['avgGainPerYear'] = 0
-        details['avgGainPerYearPerc'] = 0
-    
+        details.currentSharePrice = security.currentPrice
+        details.currentSharePriceDate = security.date
     return details

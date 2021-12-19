@@ -5,7 +5,7 @@ from getStockLedgerStr import getTaxYear
 from transactionDefs import *
 from processTransactions import processAccountTxns, processStockTxns
 
-def summarisePerformance(account, accountSummary, stockSummary):
+def summarisePerformance(account, accountSummary, stockSummary: list[SecurityDetails]):
     totalShareInvested = 0
     totalCashInvested = 0
     totalDiviReInvested = 0
@@ -18,19 +18,24 @@ def summarisePerformance(account, accountSummary, stockSummary):
     aggInvestedByYear = dict()
     totalDiviYieldByYear = dict()
     totalMarketValue = 0
+    detailsToProcess: SecurityDetails = list()
+    detailsToProcess.extend(stockSummary)
     for details in stockSummary:
-        totalMarketValue += details.get('marketValue', 0)
-        totalCashInvested += details['totalCashInvested']
-        totalDiviReInvested += details['totalDiviReinvested']
-        totalShareInvested += details['totalInvested']
-        totalCosts += details['dealingCosts']
-        totalPaperGainForTax += details.get('totalPaperCGT', 0)
-        totalGain += details.get('totalGain', 0)
-        for year,gain in details['realisedCapitalGainForTaxPerYear'].items():
+        detailsToProcess.extend(details.historicHoldings)
+    
+    for details in detailsToProcess:
+        totalMarketValue += details.marketValue()
+        totalCashInvested += details.cashInvested
+        totalDiviReInvested += details.diviInvested
+        totalShareInvested += details.totalInvested
+        totalCosts += details.totalCosts
+        totalPaperGainForTax += details.paperCGT()
+        totalGain += details.totalGain()
+        for year,gain in details.realisedCapitalGainByYear.items():
             totalRealisedForTaxGain[year] = totalRealisedForTaxGain.get(year, 0) + gain
-        for year,costs in details['dealingCostsPerYear'].items():
+        for year,costs in details.costsByYear.items():
             totalDealingCosts[year] = totalDealingCosts.get(year, 0) + costs
-        for year,divi in details['dividendsPerYear'].items():
+        for year,divi in details.dividendsByYear.items():
             totalDivi[year] = totalDivi.get(year, 0) + divi
 
     startYear = accountSummary['dateOpened']
@@ -284,11 +289,11 @@ def processTxnFiles(config):
                 #Dont process currency conversion txns
                 continue
             if (stock != NONE):
-                stockLedger[stock] = processStockTxns(config, securitiesByAccount[account], sortedStocks, stock) 
+                stockLedger[stock] = processStockTxns(securitiesByAccount[account], sortedStocks, stock) 
             else:
                 processAccountTxns(accountSummary, sortedStocks[stock])
         #Summarise transactions and yields etc
-        stockLedgerList = sorted(list(stockLedger.values()), key = lambda stock: stock['avgGainPerYearPerc'], reverse = True)
+        stockLedgerList = sorted(list(stockLedger.values()), key = lambda stock: stock.avgGainPerYearPerc(), reverse = True)
         summarisePerformance(account, accountSummary, stockLedgerList)
         #Save to Dropbox file
         saveStockLedger(configStore, account, accountSummary, stockLedgerList)
