@@ -147,6 +147,7 @@ def getAccountSummaryHtml(account, accountSummary, stockLedgerList: list[Securit
             stockTable.appendChild(stockRow)
     dom.append(stockTable)
 
+    historicStocks = sorted(historicStocks, key = lambda stock: stock.avgGainPerYearPerc(), reverse = True)
     dom.append(h2('Previous Stock Holdings'))
     stockTable = table()
     stockTable.appendChild(tr(th('Stock'),th('Name'),th('Cash inv'), th('Capital Gain'), th('Dividends'), th('Yield'),th('Total Gain'),th('Years Held'),th('Avg Gain/Yr'),th('From'),th('To')))
@@ -204,6 +205,7 @@ def getDetailsStr(details):
         retStr += f"Held for {details.yearsHeld():0.2f} years\n"
     else:
         retStr += f"Held since {details.startDate.date() if details.startDate else ''}\n"
+        retStr += f"Held for {details.yearsHeld():0.2f} years\n"
         retStr += f"Number of shares: {details.qtyHeld}\n"
         if details.currentSharePrice:
             retStr += f"Current Share Price {details.currentSharePrice:0.2f}\n"

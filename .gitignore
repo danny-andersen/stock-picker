@@ -129,6 +129,8 @@ dmypy.json
 #Any local config
 *.ini
 heldstocklist.txt
+stocklist.txt
+stocklist-full.txt
 
 #Private transaction files
 transactions/
