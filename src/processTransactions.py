@@ -8,10 +8,10 @@ from processStock import calcPriceData
 from getStockLedgerStr import getTaxYear
 from transactionDefs import *
 
-def processAccountTxns(summary, txns):
-    cashInPerYear = dict()
-    cashOutPerYear = dict()
-    feesPerYear = dict()
+def processAccountTxns(summary: AccountSummary, txns: list[Transaction]):
+    cashInByYear = dict()
+    cashOutByYear = dict()
+    feesByYear = dict()
     # dateOpened = datetime.now().replace(tzinfo=None)
     dateOpened = datetime.now(timezone.utc)
     for txn in txns:
@@ -21,26 +21,27 @@ def processAccountTxns(summary, txns):
         if (txn.date < dateOpened):
             dateOpened = txn.date
         if type == CASH_IN:
-            cashInPerYear[taxYear] = cashInPerYear.get(taxYear, 0) + txn.credit
+            cashInByYear[taxYear] = cashInByYear.get(taxYear, Decimal(0.0)) + txn.credit
         elif type == CASH_OUT:
-            cashOutPerYear[taxYear] = cashOutPerYear.get(taxYear, 0) + txn.debit
+            cashOutByYear[taxYear] = cashOutByYear.get(taxYear, Decimal(0.0)) + txn.debit
         elif type == FEES:
-            feesPerYear[taxYear] = feesPerYear.get(taxYear, 0) + txn.debit
+            feesByYear[taxYear] = feesByYear.get(taxYear, Decimal(0.0)) + txn.debit
         elif type == REFUND:
-            feesPerYear[taxYear] = feesPerYear.get(taxYear, 0) - txn.credit
-    summary['dateOpened'] = dateOpened
-    summary['cashInPerYear'] = cashInPerYear
-    summary['cashOutPerYear'] = cashOutPerYear
-    summary['feesPerYear'] = feesPerYear
+            feesByYear[taxYear] = feesByYear.get(taxYear, Decimal(0.0)) - txn.credit
+    summary.dateOpened = dateOpened
+    summary.cashInByYear = cashInByYear
+    summary.cashOutByYear = cashOutByYear
+    summary.feesByYear = feesByYear
     return summary
 
 def processStockTxns(securities, stocks, stock):
     txns = stocks[stock]
     lastDiviDate = None
-    lastDivi = 0
-    totalDivi = 0
+    lastDivi = Decimal(0.0)
+    totalDivi = Decimal(0.0)
     firstBought = None
     details = SecurityDetails()
+    details.transactions = txns
     for txn in txns:
         type = txn.type
         taxYear = getTaxYear(txn.date)
@@ -74,7 +75,7 @@ def processStockTxns(securities, stocks, stock):
             else:
                 details.cashInvested += debit
             details.avgSharePrice = details.totalInvested / details.qtyHeld
-            details.costsByYear[taxYear] = details.costsByYear.get(taxYear, 0) + costs #Stamp duty and charges
+            details.costsByYear[taxYear] = details.costsByYear.get(taxYear, Decimal(0.0)) + costs #Stamp duty and charges
             details.totalCosts += costs
             details.investmentHistory.append(CapitalGain(date = txn.date, qty = txn.qty, price = priceIncCosts))
         elif type == SELL:
@@ -85,7 +86,7 @@ def processStockTxns(securities, stocks, stock):
             credit = convertToSterling(stocks.get(txn.creditCurrency, None), txn, txn.credit)
             priceIncCosts = credit / txn.qty
             gain = (priceIncCosts - details.avgSharePrice) * txn.qty #CGT uses average purchase price at time of selling
-            details.realisedCapitalGainByYear[taxYear] = details.realisedCapitalGainByYear.get(taxYear, 0) + gain
+            details.realisedCapitalGainByYear[taxYear] = details.realisedCapitalGainByYear.get(taxYear, Decimal(0.0)) + gain
             details.qtyHeld -= txn.qty
             if (txn.price != 0):
                 details.totalCosts += (txn.price * txn.qty) - credit #Diff between what should have received vs what was credited
@@ -110,11 +111,11 @@ def processStockTxns(securities, stocks, stock):
             divi = convertToSterling(stocks.get(txn.creditCurrency, None), txn, txn.credit)
             lastDivi = divi
             lastDiviDate = txn.date
-            details.dividendsByYear[taxYear] = details.dividendsByYear.get(taxYear, 0) + divi
+            details.dividendsByYear[taxYear] = details.dividendsByYear.get(taxYear, Decimal(0.0)) + divi
             if details.totalInvested > 0.01:
-                yearYield = details.dividendYieldByYear.get(taxYear, 0) + 100*float(divi/details.totalInvested)
+                yearYield = float(details.dividendYieldByYear.get(taxYear, Decimal(0.0))) + 100*float(divi/details.totalInvested)
             else:
-                yearYield = 0
+                yearYield = 0.0
             details.dividendYieldByYear[taxYear] = yearYield
     #From remaining stock history workout paper gain
     # totalPaperGain = 0

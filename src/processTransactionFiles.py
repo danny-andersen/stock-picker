@@ -1,23 +1,35 @@
 import csv
 import os
-from saveRetreiveFiles import getAllStockTxnSaved, saveStockTransactions, saveStockLedger
+from saveRetreiveFiles import getAllStockTxnSaved, saveStringToDropbox, saveStockTransactions
 from getStockLedgerStr import getTaxYear
 from transactionDefs import *
 from processTransactions import processAccountTxns, processStockTxns
+from getStockLedgerStr import getStockLedgerStr, getAccountSummaryStr, getAccountSummaryHtml
 
-def summarisePerformance(account, accountSummary, stockSummary: list[SecurityDetails]):
-    totalShareInvested = 0
-    totalCashInvested = 0
-    totalDiviReInvested = 0
-    totalCosts = 0
-    totalPaperGainForTax = 0
-    totalGain = 0
+def saveStockLedger(config, accountSummary: AccountSummary, stockLedgerList: list[SecurityDetails]):
+    for details in stockLedgerList:
+        detailsStr = getStockLedgerStr(details)
+        saveStringToDropbox(config, f"/performance/{accountSummary.name}/{details.symbol}.txt", detailsStr)
+
+def saveAccountSummary(config, accountSummary: AccountSummary, stockLedgerList: list[SecurityDetails]):
+    accSummaryTxt = getAccountSummaryStr(accountSummary, stockLedgerList)
+    saveStringToDropbox(config, f"/performance/{accountSummary.name}-Summary.txt", accSummaryTxt)
+    accSummaryHtml = getAccountSummaryHtml(accountSummary, stockLedgerList)
+    saveStringToDropbox(config, f"/performance/{accountSummary.name}-Summary.html", accSummaryHtml)
+
+def summarisePerformance(accountSummary: AccountSummary, stockSummary: list[SecurityDetails]):
+    totalShareInvested = Decimal(0.0)
+    totalCashInvested = Decimal(0.0)
+    totalDiviReInvested = Decimal(0.0)
+    totalCosts = Decimal(0.0)
+    totalPaperGainForTax = Decimal(0.0)
+    totalGain = Decimal(0.0)
     totalRealisedForTaxGain = dict()
     totalDealingCosts = dict()
     totalDivi = dict()
     aggInvestedByYear = dict()
     totalDiviYieldByYear = dict()
-    totalMarketValue = 0
+    totalMarketValue = Decimal(0.0)
     detailsToProcess: SecurityDetails = list()
     detailsToProcess.extend(stockSummary)
     for details in stockSummary:
@@ -32,56 +44,48 @@ def summarisePerformance(account, accountSummary, stockSummary: list[SecurityDet
         totalPaperGainForTax += details.paperCGT()
         totalGain += details.totalGain()
         for year,gain in details.realisedCapitalGainByYear.items():
-            totalRealisedForTaxGain[year] = totalRealisedForTaxGain.get(year, 0) + gain
+            totalRealisedForTaxGain[year] = totalRealisedForTaxGain.get(year, Decimal(0.0)) + gain
         for year,costs in details.costsByYear.items():
-            totalDealingCosts[year] = totalDealingCosts.get(year, 0) + costs
+            totalDealingCosts[year] = totalDealingCosts.get(year, Decimal(0.0)) + costs
         for year,divi in details.dividendsByYear.items():
-            totalDivi[year] = totalDivi.get(year, 0) + divi
+            totalDivi[year] = totalDivi.get(year, Decimal(0.0)) + divi
 
-    startYear = accountSummary['dateOpened']
+    startYear = accountSummary.dateOpened
     endYear = datetime.now(timezone.utc) + timedelta(days=365) # Make sure we have this tax year
     procYear = startYear
     sumInvested = 0
     while procYear < endYear:
         year = getTaxYear(procYear)
-        sumInvested += accountSummary['cashInPerYear'].get(year, 0) - accountSummary['cashOutPerYear'].get(year,0)
+        sumInvested += accountSummary.cashInByYear.get(year, Decimal(0.0)) - accountSummary.cashOutByYear.get(year,Decimal(0.0))
         aggInvestedByYear[year] = sumInvested
         if sumInvested > 0:
-            if totalDivi.get(year, 0) != 0:
-                totalDiviYieldByYear[year] = 100*totalDivi.get(year, 0) / sumInvested
+            if totalDivi.get(year, Decimal(0.0)) != 0:
+                totalDiviYieldByYear[year] = 100*totalDivi.get(year, Decimal(0.0)) / sumInvested
         procYear += timedelta(days=365)
 
     #Add in monthly fees trading account that is taken by DD since Jan 2020
-    if (account.lower() == 'trading'):
+    if (accountSummary.name.lower() == 'trading'):
         feesDirectDebitDate = datetime(year=2020, month=1, day=14)
         endTime = datetime.now()
         increment = timedelta(days=30)
-        feesPerYear = accountSummary['feesPerYear']
+        feesPerYear = accountSummary.feesByYear
         while (feesDirectDebitDate < endTime):
             taxYear = getTaxYear(feesDirectDebitDate)
-            feesPerYear[taxYear] = feesPerYear.get(taxYear, 0) + Decimal(9.99)
+            feesPerYear[taxYear] = feesPerYear.get(taxYear, Decimal(0.0)) + Decimal(9.99)
             feesDirectDebitDate += increment 
 
-    accountSummary['totalInvested'] = sum(accountSummary['cashInPerYear'].values()) - sum(accountSummary['cashOutPerYear'].values())
-    accountSummary['totalCashInvested'] = totalCashInvested
-    accountSummary['totalFees'] = sum(accountSummary['feesPerYear'].values())
-    accountSummary['totalDiviReInvested'] = totalDiviReInvested
-    accountSummary['totalMarketValue'] = totalMarketValue
-    accountSummary['totalInvestedInSecurities'] = totalShareInvested
-    accountSummary['totalDealingCosts'] = totalCosts
-    accountSummary['totalPaperGainForTax'] = totalPaperGainForTax
-    accountSummary['totalPaperGainForTaxPerc'] = 100.0 * float(totalPaperGainForTax / totalShareInvested)
-    accountSummary['totalRealisedGain'] = sum(totalRealisedForTaxGain.values())
-    accountSummary['totalGainFromInvestments'] = totalMarketValue - accountSummary['totalInvested']
-    accountSummary['totalGainFromInvPerc'] = 100 * float(accountSummary['totalGainFromInvestments'] / totalShareInvested)
-    accountSummary['totalGain'] = totalGain - accountSummary['totalFees']  #Dealing costs are wrapped up in stock price received
-    accountSummary['totalGainPerc'] = 100 * float(accountSummary['totalGain'] / totalShareInvested)
-    accountSummary['aggInvestedByYear'] = aggInvestedByYear
-    accountSummary['realisedGainForTaxPerYear']  = totalRealisedForTaxGain
-    accountSummary['dealingCostsPerYear']  = totalDealingCosts
-    accountSummary['dividendsPerYear']  = totalDivi
-    accountSummary['dividendYieldPerYear']  = totalDiviYieldByYear
-
+    accountSummary.totalCashInvested = totalCashInvested
+    accountSummary.totalDiviReInvested = totalDiviReInvested
+    accountSummary.totalMarketValue = totalMarketValue
+    accountSummary.totalInvestedInSecurities = totalShareInvested
+    accountSummary.totalDealingCosts = totalCosts
+    accountSummary.totalPaperGainForTax = totalPaperGainForTax
+    accountSummary.totalGain = totalGain
+    accountSummary.aggInvestedByYear = aggInvestedByYear
+    accountSummary.realisedGainForTaxByYear = totalRealisedForTaxGain
+    accountSummary.dealingCostsByYear  = totalDealingCosts
+    accountSummary.dividendsByYear = totalDivi
+    accountSummary.dividendYieldByYear = totalDiviYieldByYear
 
 def processTxnFiles(config):
     configStore = config['store']
@@ -277,9 +281,11 @@ def processTxnFiles(config):
     
     #For each account process each stock transactions to work out cash flow and share ledger
     totalCosts = 0
+    allStocks = list()
+    allAccounts = list()
     for account, stocks in stockListByAcc.items():
         stockLedger = dict()
-        accountSummary = dict()
+        accountSummary = AccountSummary(name = account)
         sortedStocks = dict()
         for stock in stocks:
             #Sort all transactions by date first
@@ -294,6 +300,16 @@ def processTxnFiles(config):
                 processAccountTxns(accountSummary, sortedStocks[stock])
         #Summarise transactions and yields etc
         stockLedgerList = sorted(list(stockLedger.values()), key = lambda stock: stock.avgGainPerYearPerc(), reverse = True)
-        summarisePerformance(account, accountSummary, stockLedgerList)
+        allStocks.extend(stockLedgerList)
         #Save to Dropbox file
-        saveStockLedger(configStore, account, accountSummary, stockLedgerList)
+        saveStockLedger(configStore, accountSummary, stockLedgerList)
+        summarisePerformance(accountSummary, stockLedgerList)
+        allAccounts.append(accountSummary)
+        saveAccountSummary(configStore, accountSummary, stockLedgerList)    #Create overall summary
+    totalStockList = sorted(allStocks, key = lambda stock: stock.avgGainPerYearPerc(), reverse = True)
+    totalSummary = AccountSummary(name = 'Total')
+    for summary in allAccounts:
+        totalSummary.mergeInAccountSummary(summary)
+    saveAccountSummary(configStore, totalSummary, totalStockList)    #Create overall summary
+    
+    
