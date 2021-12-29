@@ -22,26 +22,31 @@ def processAccountTxns(summary: AccountSummary, txns: list[Transaction]):
             dateOpened = txn.date
         if type == CASH_IN:
             cashInByYear[taxYear] = cashInByYear.get(taxYear, Decimal(0.0)) + txn.credit
+            summary.cashBalance += txn.credit
         elif type == CASH_OUT:
             cashOutByYear[taxYear] = cashOutByYear.get(taxYear, Decimal(0.0)) + txn.debit
+            summary.cashBalance -= txn.debit
         elif type == FEES:
             feesByYear[taxYear] = feesByYear.get(taxYear, Decimal(0.0)) + txn.debit
+            summary.cashBalance -= txn.debit
         elif type == REFUND:
             feesByYear[taxYear] = feesByYear.get(taxYear, Decimal(0.0)) - txn.credit
+            summary.cashBalance += txn.credit
     summary.dateOpened = dateOpened
     summary.cashInByYear = cashInByYear
     summary.cashOutByYear = cashOutByYear
     summary.feesByYear = feesByYear
     return summary
 
-def processStockTxns(securities, stocks, stock):
+def processStockTxns(account: AccountSummary, securities, stocks: dict[str, list[Transaction]], stock):
     txns = stocks[stock]
     lastDiviDate = None
     lastDivi = Decimal(0.0)
-    totalDivi = Decimal(0.0)
-    firstBought = None
     details = SecurityDetails()
     details.transactions = txns
+    if (not account.name or account.name == "None"):
+        print(f"No account name {account} for stock {stock} ")
+    details.account = account.name
     for txn in txns:
         type = txn.type
         taxYear = getTaxYear(txn.date)
@@ -61,13 +66,14 @@ def processStockTxns(securities, stocks, stock):
                 details.startDate = txn.date
             details.qtyHeld += txn.qty
             debit = convertToSterling(stocks.get(txn.debitCurrency, None), txn, txn.debit)
+            account.cashBalance -= debit
             priceIncCosts =  debit / txn.qty
             if (txn.price != 0):
                 costs = debit - (txn.qty * txn.price)
             else:
                 costs = 0
             details.totalInvested += debit
-            #If its a reinvested dividend, need to take this off total cash
+            #If its a reinvested dividend, need to not include this in total cash invested
             if (lastDiviDate 
                     and (txn.date - lastDiviDate < timedelta(days=7))
                     and (lastDivi >= debit)):
@@ -84,6 +90,7 @@ def processStockTxns(securities, stocks, stock):
                     details.name = details.isin
                     details.symbol = details.isin
             credit = convertToSterling(stocks.get(txn.creditCurrency, None), txn, txn.credit)
+            account.cashBalance += credit
             priceIncCosts = credit / txn.qty
             gain = (priceIncCosts - details.avgSharePrice) * txn.qty #CGT uses average purchase price at time of selling
             details.realisedCapitalGainByYear[taxYear] = details.realisedCapitalGainByYear.get(taxYear, Decimal(0.0)) + gain
@@ -105,10 +112,12 @@ def processStockTxns(securities, stocks, stock):
                 newDetails.isin = details.isin
                 newDetails.symbol = details.symbol
                 newDetails.name = details.name
+                newDetails.account = details.account
                 newDetails.historicHoldings.append(details)
                 details = newDetails
         elif type == DIVIDEND:
             divi = convertToSterling(stocks.get(txn.creditCurrency, None), txn, txn.credit)
+            account.cashBalance += divi
             lastDivi = divi
             lastDiviDate = txn.date
             details.dividendsByYear[taxYear] = details.dividendsByYear.get(taxYear, Decimal(0.0)) + divi
@@ -117,6 +126,9 @@ def processStockTxns(securities, stocks, stock):
             else:
                 yearYield = 0.0
             details.dividendYieldByYear[taxYear] = yearYield
+        # if (account.cashBalance != txn.runningBalance):
+        #     print(f"Running balance for account {account.name} wrong {account.cashBalance} != {txn.runningBalance}")
+
     #From remaining stock history workout paper gain
     # totalPaperGain = 0
     # if (stockSymbol):

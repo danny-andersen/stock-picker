@@ -163,6 +163,7 @@ def processTxnFiles(config):
                     isin = row['ISIN'].strip(),
                     qty = 0 if row['Quantity'] == '' else int(row['Quantity']),
                     desc = row['Description'],
+                    runningBalance=row['Running Balance']
                     )
                 (txn.priceCurrency, txn.price) = priceStrToDec(row['Price'])
                 (txn.debitCurrency, txn.debit) = priceStrToDec(row['Debit'])
@@ -177,8 +178,8 @@ def processTxnFiles(config):
                         or desc.endswith('rights')
                         or 'optional dividend' in desc):
                     txn.type = DIVIDEND
-                elif (txn.isin.startswith(NONE) or (txn.isin == '' and txn.symbol == '')):
-                    txn.isin = NONE
+                elif (txn.isin.startswith(NO_STOCK) or (txn.isin == '' and txn.symbol == '')):
+                    txn.isin = NO_STOCK
                     if (desc.startswith("debit card") 
                             or 'subscription' in desc 
                             or desc.startswith("trf")
@@ -294,8 +295,8 @@ def processTxnFiles(config):
             if (stock == USD or stock == EUR):
                 #Dont process currency conversion txns
                 continue
-            if (stock != NONE):
-                stockLedger[stock] = processStockTxns(securitiesByAccount[account], sortedStocks, stock) 
+            if (stock != NO_STOCK):
+                stockLedger[stock] = processStockTxns(accountSummary, securitiesByAccount[account], sortedStocks, stock) 
             else:
                 processAccountTxns(accountSummary, sortedStocks[stock])
         #Summarise transactions and yields etc

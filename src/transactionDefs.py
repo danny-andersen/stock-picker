@@ -11,7 +11,7 @@ BUY = 'Buy'
 DIVIDEND = 'Dividend'
 FEES = 'Fees'
 REFUND ='Refund'
-NONE = 'No stock'
+NO_STOCK = 'No stock'
 STERLING = 'STERLING'
 USD = 'USDUSDUSDUS1'
 EUR = 'EUREUREUREU1'
@@ -36,6 +36,7 @@ class Transaction:
     credit: Decimal = Decimal(0.0)
     creditCurrency: str = '£'
     type: str = 'Unknown'
+    runningBalance: Decimal = Decimal(0.0)
 
 @dataclass_json
 @dataclass
@@ -75,6 +76,7 @@ class SecurityDetails:
     symbol: str = None
     isin: str = None
     name: str = None
+    account: str = None
     qtyHeld: int = 0
     startDate: datetime = None
     endDate: datetime = None
@@ -151,6 +153,7 @@ class AccountSummary:
     totalCashInvested: Decimal = Decimal(0.0)
     totalDiviReInvested: Decimal = Decimal(0.0)
     totalDealingCosts: Decimal = Decimal(0.0)
+    cashBalance: Decimal = Decimal(0.0)
     totalMarketValue: Decimal = Decimal(0.0)
     totalInvestedInSecurities: Decimal = Decimal(0.0)
     totalPaperGainForTax: Decimal = Decimal(0.0)
@@ -172,6 +175,7 @@ class AccountSummary:
         self.totalDiviReInvested += summary.totalDiviReInvested
         self.totalDealingCosts += summary.totalDealingCosts
         self.totalMarketValue += summary.totalMarketValue
+        self.cashBalance += summary.cashBalance
         self.totalInvestedInSecurities += summary.totalInvestedInSecurities
         self.totalPaperGainForTax += summary.totalPaperGainForTax
         self.totalGain += summary.totalGain
@@ -228,6 +232,8 @@ class AccountSummary:
         return sum(self.cashInByYear.values()) - sum(self.cashOutByYear.values())
     def totalFees(self):
         return sum(self.feesByYear.values()) if len(self.feesByYear) > 0 else Decimal(0.0)
+    def totalValue(self):
+        return self.totalMarketValue + self.cashBalance
     def totalPaperGainForTaxPerc(self):
         return 100.0 * float(self.totalPaperGainForTax / self.totalInvestedInSecurities)
     def totalRealisedGain(self):
