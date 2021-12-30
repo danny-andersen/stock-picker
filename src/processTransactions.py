@@ -126,8 +126,6 @@ def processStockTxns(account: AccountSummary, securities, stocks: dict[str, list
             else:
                 yearYield = 0.0
             details.dividendYieldByYear[taxYear] = yearYield
-        # if (account.cashBalance != txn.runningBalance):
-        #     print(f"Running balance for account {account.name} wrong {account.cashBalance} != {txn.runningBalance}")
 
     #From remaining stock history workout paper gain
     # totalPaperGain = 0

@@ -162,8 +162,7 @@ def processTxnFiles(config):
                     sedol = row['Sedol'].strip(),
                     isin = row['ISIN'].strip(),
                     qty = 0 if row['Quantity'] == '' else int(row['Quantity']),
-                    desc = row['Description'],
-                    runningBalance=row['Running Balance']
+                    desc = row['Description']
                     )
                 (txn.priceCurrency, txn.price) = priceStrToDec(row['Price'])
                 (txn.debitCurrency, txn.debit) = priceStrToDec(row['Debit'])
@@ -176,6 +175,7 @@ def processTxnFiles(config):
                         or desc.startswith('equalisation')
                         or desc.endswith('distribution')
                         or desc.endswith('rights')
+                        or '(di)' in desc
                         or 'optional dividend' in desc):
                     txn.type = DIVIDEND
                 elif (txn.isin.startswith(NO_STOCK) or (txn.isin == '' and txn.symbol == '')):

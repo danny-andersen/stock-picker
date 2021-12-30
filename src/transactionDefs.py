@@ -36,7 +36,6 @@ class Transaction:
     credit: Decimal = Decimal(0.0)
     creditCurrency: str = '£'
     type: str = 'Unknown'
-    runningBalance: Decimal = Decimal(0.0)
 
 @dataclass_json
 @dataclass
@@ -103,11 +102,7 @@ class SecurityDetails:
         else:
             return 0.0
     def totalGain(self):
-        val = self.marketValue()
-        if (val != 0):
-            return val - self.cashInvested + self.realisedCapitalGain() + self.totalDividends()
-        else:
-            return self.paperCGT() \
+        return self.paperCGT() \
                 + self.totalDividends() \
                 + self.realisedCapitalGain()
     def avgGainPerYear(self):
@@ -135,6 +130,8 @@ class SecurityDetails:
         return (sum(self.realisedCapitalGainByYear.values()) if len(self.realisedCapitalGainByYear) > 0 else Decimal(0.0))
     def marketValue(self):
         return self.currentSharePrice * self.qtyHeld
+    def capitalGain(self):
+        return self.realisedCapitalGain() + self.paperCGT()
     def paperCGT(self):
         if (self.currentSharePrice):
             return self.marketValue() - (self.avgSharePrice * self.qtyHeld)

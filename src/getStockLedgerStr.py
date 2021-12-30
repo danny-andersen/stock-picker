@@ -135,9 +135,9 @@ def getAccountSummaryHtml(accountSummary: AccountSummary, stockLedgerList: list[
     dom.append(h2('Stock Summary'))
     stockTable = table()
     if (allAccounts):
-        stockTable.appendChild(tr(th('Stock'),th('Account'),th('Name'),th('Cash inv'), th(' Total Invested'), th('Market Value'), th('Dividends'), th('Yield'),th('Gain'),th('Years Held'),th('Avg Gain/Yr')))
+        stockTable.appendChild(tr(th('Stock'),th('Account'),th('Name'),th('Cash inv'), th(' Total Invested'), th('Market Value'), th('Capital Gain'), th('Dividends'), th('Yield'),th('Gain'),th('Years Held'),th('Avg Gain/Yr')))
     else:
-        stockTable.appendChild(tr(th('Stock'),th('Name'),th('Cash inv'), th(' Total Invested'), th('Market Value'), th('Dividends'), th('Yield'),th('Gain'),th('Years Held'),th('Avg Gain/Yr')))
+        stockTable.appendChild(tr(th('Stock'),th('Name'),th('Cash inv'), th(' Total Invested'), th('Market Value'), th('Capital Gain'), th('Dividends'), th('Yield'),th('Gain'),th('Years Held'),th('Avg Gain/Yr')))
     for details in stockLedgerList:
         historicStocks.extend(details.historicHoldings)
         if (details.totalInvested != 0):
@@ -150,6 +150,7 @@ def getAccountSummaryHtml(accountSummary: AccountSummary, stockLedgerList: list[
             stockRow.appendChild(td(f"£{details.cashInvested:,.0f}"))
             stockRow.appendChild(td(f"£{details.totalInvested:,.0f}"))
             stockRow.appendChild(td(f"£{details.marketValue():,.0f}"))
+            stockRow.appendChild(td(f"£{details.capitalGain():,.0f}"))
             stockRow.appendChild(td(f"£{details.totalDividends():,.0f}"))
             stockRow.appendChild(td(f"{details.averageYearlyDiviYield():,.0f}%"))
             stockRow.appendChild(td(f"£{details.totalGain():,.0f} ({details.totalGainPerc():0.2f}%)"))
@@ -240,6 +241,7 @@ def getDetailsStr(details: SecurityDetails):
     retStr += f"Total Dividends £{details.totalDividends():0.0f}\n"
     retStr += f"Average Yearly Dividend £{details.averageYearlyDivi():,.0f}, Yield: {details.averageYearlyDiviYield():0.2f}%\n"
     retStr += f"Realised Capital gain £{details.realisedCapitalGain():,.0f}\n"
+    retStr += f"Total Capital gain £{details.capitalGain():,.0f}\n"
     retStr += f"Stock Dealing costs £{details.totalCosts:,.0f}\n"
     retStr += f"Total Gain: £{details.totalGain():,.0f}, ({details.totalGainPerc():0.2f}%) \n"
     retStr += f"Average Gain per year: £{details.avgGainPerYear():,.0f}, ({details.avgGainPerYearPerc():0.2f}%) \n"
