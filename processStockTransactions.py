@@ -5,7 +5,7 @@ if (os.path.exists('processStock.zip')):
 else:
     sys.path.insert(0, './src')
 
-from processTransactionFiles import processTxnFiles
+from processTransactionFiles import processTransactions
 import configparser
 import locale
 
@@ -20,4 +20,4 @@ parser.add_argument('-d', '--hdfs', action='store_const', const=False, default=T
                    help='Set if using hdfs filesystem rather than local store (True)')
 args = parser.parse_args()
 
-processTxnFiles(config)
+processTransactions(config)

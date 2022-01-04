@@ -100,6 +100,7 @@ def listFiles(storeConfig, name):
             fileList = hdfsClient.list(dirName)
         except:
             print(f"Got HDFS exception listing directory {dirName}, returning empty list")
+            exit()
     return fileList
 
 def getStock(storeConfig, stock, name):

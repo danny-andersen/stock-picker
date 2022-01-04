@@ -87,21 +87,10 @@ def summarisePerformance(accountSummary: AccountSummary, stockSummary: list[Secu
     accountSummary.dividendsByYear = totalDivi
     accountSummary.dividendYieldByYear = totalDiviYieldByYear
 
-def processTxnFiles(config):
-    configStore = config['store']
-    isinMapping = config['isinmappings']
-    changedStockTxnsByAcc = dict() #Dict keyed by account with Set of stocks whose transactions have been appended to and so need to be saved back to HDFS
-
-    #Dict of stocks by accountname, stocks are a dict of stock txns keyed by symbol
-    stockListByAcc = getAllStockTxnSaved(configStore)
-    #Need to convert transactions from json to dataclass 
-    for acc in stockListByAcc.keys():
-        for stock in stockListByAcc[acc].keys():
-            for txKey, txn in stockListByAcc[acc][stock].items():
-                stockListByAcc[acc][stock][txKey] = Transaction.from_json(txn)
-
+def getPortfolioOverviews(config):
     #List portfolio directory for account portfolio files
-    dirEntries = os.scandir('portfolio/')
+    overviewDir = config['files']['portfoliosLocation']
+    dirEntries = os.scandir(overviewDir)
     portfolioFiles = list()
     for dirEntry in dirEntries:
         if (dirEntry.is_file() and not dirEntry.name.startswith('.') and '.csv' in dirEntry.name):
@@ -130,9 +119,27 @@ def processTxnFiles(config):
                     )
                     (security.currency, security.currentPrice) = priceStrToDec(row['Price'])
                     securitiesBySymbol[security.symbol] = security
+    return securitiesByAccount
 
+def getStoredTransactions(configStore):
+
+    #Dict of stocks by accountname, stocks are a dict of stock txns keyed by symbol
+    stockListByAcc = getAllStockTxnSaved(configStore)
+    #Need to convert transactions from json to dataclass 
+    for acc in stockListByAcc.keys():
+        for stock in stockListByAcc[acc].keys():
+            for txKey, txn in stockListByAcc[acc][stock].items():
+                stockListByAcc[acc][stock][txKey] = Transaction.from_json(txn)
+    return stockListByAcc
+
+def processLatestTxnFiles(config, stockListByAcc):
+
+    isinMapping = config['isinmappings']
+    configStore = config['store']
+    transDir = config['files']['transactionsLocation']
+    changedStockTxnsByAcc = dict() #Dict keyed by account with Set of stocks whose transactions have been appended to and so need to be saved back to HDFS
     #List transactions directory for account history files
-    dirEntries = os.scandir('transactions/')
+    dirEntries = os.scandir(transDir)
     txnFiles = list()
     for dirEntry in dirEntries:
         if (dirEntry.is_file() and not dirEntry.name.startswith('.') and '.csv' in dirEntry.name):
@@ -273,13 +280,69 @@ def processTxnFiles(config):
                 jsonTxns = dict()
                 for key, txn in txns.items():
                     jsonTxns[key] = txn.to_json() 
-                saveStockTransactions(configStore, account, stock, jsonTxns)
+                saveStockTransactions(config, account, stock, jsonTxns)
             elif noTxns > 0:
                 print(f"WARNING: {noTxns} Transactions have no stock name set")
             else:
                 #Remove empty stock
                 stockListByAcc[account].pop('')
-    
+
+def getFundOverviews(config):
+    fundsFile = config['files']['fundsOverview']
+
+    fundOverviews: dict[str, FundOverview] = dict()
+    #List portfolio directory for account portfolio files
+    with open(fundsFile) as csvFile:
+        csv_reader = csv.DictReader(csvFile)
+        for row in csv_reader:
+            isin = row['ISIN'].strip()
+            if (isin != ''):
+                fund = FundOverview (
+                    isin = isin,
+                    name = row['Name'],
+                    fundType = FundType[row['Type'].strip().upper()]
+                )
+                fundOverviews[isin] = fund
+                if (row['Income'].strip().lower() == 'inc'):
+                    fund.income = True
+                else:
+                    fund.income = False
+                fund.fees = float(row['Fees'])
+                fund.maturity = float(row['Maturity']) if row['Maturity'].strip() != '' else float(0.0)
+                fund.risk = Risk[row['Risk'].strip().upper()]
+                grade = row['Bond-Grade'].strip()
+                if (grade != ''):
+                    fund.bondGrade = BondGrade[grade]
+                fund.americas = float(row['Americas']) if row['Americas'].strip() != '' else float(0.0)
+                fund.americasEmerging = float(row['Americas-Emerging']) if row['Americas-Emerging'].strip() != '' else float(0.0)
+                fund.europe = float(row['Europe']) if row['Europe'].strip() != '' else float(0.0)
+                fund.europeEmerging = float(row['Euro-Emerging']) if row['Euro-Emerging'].strip() != '' else float(0.0)
+                fund.asia = float(row['Asia']) if row['Asia'].strip() != '' else float(0.0)
+                fund.asiaEmerging = float(row['Asia-Emerging']) if row['Asia-Emerging'].strip() != '' else float(0.0)
+                fund.cyclical = float(row['Cyclical']) if row['Cyclical'].strip() != '' else float(0.0)
+                fund.sensitive = float(row['Sensitive']) if row['Sensitive'].strip() != '' else float(0.0)
+                fund.defensive = float(row['Defensive']) if row['Defensive'].strip() != '' else float(0.0)
+                fund.alpha3Yr = float(row['3yr-Alpha']) if row['3yr-Alpha'].strip() != '' else float(0.0)
+                fund.beta3Yr = float(row['3yr-Beta']) if row['3yr-Beta'].strip() != '' else float(0.0)
+                fund.sharpe3Yr = float(row['3yr-Sharpe']) if row['3yr-Sharpe'].strip() != '' else float(0.0)
+                fund.stdDev3Yr = float(row['3yr-SD']) if row['3yr-SD'].strip() != '' else float(0.0)
+                fund.return3Yr = float(row['3yr-Ret']) if row['3yr-Ret'].strip() != '' else float(0.0)
+                fund.return5Yr = float(row['5yr-Ret']) if row['3yr-Ret'].strip() != '' else float(0.0)
+
+    return fundOverviews
+
+def processTransactions(config):
+    configStore = config['store']
+
+    #Get previously stored transactions
+    stockListByAcc = getStoredTransactions(configStore)
+    #Process any new transactions
+    processLatestTxnFiles(config, stockListByAcc)
+    #Get Latest Account Portfolio positions
+    securitiesByAccount = getPortfolioOverviews(config)
+    #Get Fund overview stats
+    fundOverviews: dict[FundOverview] = getFundOverviews(config) 
+
     #For each account process each stock transactions to work out cash flow and share ledger
     totalCosts = 0
     allStocks = list()
@@ -296,7 +359,7 @@ def processTxnFiles(config):
                 #Dont process currency conversion txns
                 continue
             if (stock != NO_STOCK):
-                stockLedger[stock] = processStockTxns(accountSummary, securitiesByAccount[account], sortedStocks, stock) 
+                stockLedger[stock] = processStockTxns(accountSummary, securitiesByAccount[account], fundOverviews, sortedStocks, stock) 
             else:
                 processAccountTxns(accountSummary, sortedStocks[stock])
         #Summarise transactions and yields etc
@@ -304,6 +367,7 @@ def processTxnFiles(config):
         allStocks.extend(stockLedgerList)
         #Save to Dropbox file
         saveStockLedger(configStore, accountSummary, stockLedgerList)
+        #Summarise account performance
         summarisePerformance(accountSummary, stockLedgerList)
         allAccounts.append(accountSummary)
         saveAccountSummary(configStore, accountSummary, stockLedgerList)    #Create overall summary

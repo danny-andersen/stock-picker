@@ -246,6 +246,10 @@ def getDetailsStr(details: SecurityDetails):
     retStr += f"Total Gain: £{details.totalGain():,.0f}, ({details.totalGainPerc():0.2f}%) \n"
     retStr += f"Average Gain per year: £{details.avgGainPerYear():,.0f}, ({details.avgGainPerYearPerc():0.2f}%) \n"
 
+    if details.fundOverview:
+        retStr += "\n"
+        retStr += details.fundOverview.getStr()
+
     divs = list()
     retStr += "\nDividends Per Year:\n"
     for year in details.dividendsByYear.keys():

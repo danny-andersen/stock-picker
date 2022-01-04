@@ -38,7 +38,7 @@ def processAccountTxns(summary: AccountSummary, txns: list[Transaction]):
     summary.feesByYear = feesByYear
     return summary
 
-def processStockTxns(account: AccountSummary, securities, stocks: dict[str, list[Transaction]], stock):
+def processStockTxns(account: AccountSummary, securities, funds, stocks: dict[str, list[Transaction]], stock):
     txns = stocks[stock]
     lastDiviDate = None
     lastDivi = Decimal(0.0)
@@ -159,4 +159,5 @@ def processStockTxns(account: AccountSummary, securities, stocks: dict[str, list
     if security:
         details.currentSharePrice = security.currentPrice
         details.currentSharePriceDate = security.date
+    details.fundOverview = funds.get(details.isin, None)
     return details

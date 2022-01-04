@@ -135,4 +135,6 @@ stocklist-full.txt
 #Private transaction files
 transactions/
 portfolio/
+fundsOverview/
+
 

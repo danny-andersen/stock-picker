@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 from dataclasses_json import dataclass_json
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
+from enum import Enum, IntEnum
 
 CASH_IN = 'Cash in'
 CASH_OUT = 'Cash out'
@@ -17,6 +18,79 @@ USD = 'USDUSDUSDUS1'
 EUR = 'EUREUREUREU1'
 
 SECONDS_IN_YEAR = 365.25*24*3600
+
+class BondGrade(IntEnum):
+    AAA = 1
+    AA = 2
+    A = 3
+    BBB = 4
+    BB = 5
+    B = 6
+    CCC = 7
+    CC = 8
+    C = 9
+    D = 10
+    NONE = 11
+
+    def isInvestmentGrade(self):
+        return (self <= 4)
+    def isJunkGrade(self):
+        return not self.isInvestmentGrade()
+
+class Risk(IntEnum):
+    LOW = 1
+    MED = 2
+    HIGH = 3
+
+class FundType(Enum):
+    FUND = 1
+    GILT = 2
+    CORP_BOND = 3
+    ETF = 4
+
+@dataclass
+class FundOverview:
+    isin: str
+    name: str
+    fundType: FundType
+    income: bool = False
+    fees: float = 0.0
+    risk: Risk = Risk.MED
+    maturity: float = 0.0
+    bondGrade: BondGrade = BondGrade.NONE
+    americas: float = 0.0
+    americasEmerging: float = 0.0
+    europe: float = 0.0
+    europeEmerging: float = 0.0
+    asia: float = 0.0
+    asiaEmerging: float = 0.0
+    cyclical: float = 0.0
+    sensitive: float = 0.0
+    defensive: float = 0.0
+    alpha3Yr: float = 0.0
+    beta3Yr: float = 0.0
+    sharpe3Yr: float = 0.0
+    stdDev3Yr: float = 0.0
+    return3Yr: float = 0.0
+    return5Yr: float = 0.0
+
+    def getStr(self):
+        retStr = "Fund overview:\n"
+        retStr += f"Type: {self.fundType}\n"
+        retStr += f"Income fund? {'Yes' if self.income else 'No'}\n" 
+        retStr += f"Annual fees: {self.fees}%\n"
+        retStr += f"Risk: {self.risk}\n"
+        if (self.fundType == FundType.GILT or self.fundType == FundType.CORP_BOND):
+            retStr += f"Bond Maturity Average: {self.maturity} years\n"
+            retStr += f"Bond Grade: {self.bondGrade}\n"
+        else:
+            retStr += f"Stock spread: Cyclical {self.cyclical}%, Sensitive {self.sensitive}%, Defensive {self.defensive}%\n"
+        retStr += f"Geographical Spread: Americas {self.americas}%, Americas Emerging {self.americasEmerging}%,"
+        retStr += f"Europe {self.europe}%, Europe Emerging {self.europeEmerging}%,"
+        retStr += f"Asia {self.asia}%, Asia Emerging {self.asiaEmerging}%\n"
+        retStr += f"3 year Stats: Alpha {self.alpha3Yr} Beta {self.beta3Yr} Sharpe {self.sharpe3Yr} Return {self.return5Yr}% 5yr Return {self.return5Yr}\n"
+        return retStr
+
 
 @dataclass_json
 @dataclass
@@ -93,6 +167,8 @@ class SecurityDetails:
     investmentHistory: list[CapitalGain] = field(default_factory=list)
     transactions: list[Transaction] = field(default_factory=list)
     historicHoldings: list = field(default_factory=list)
+    fundOverview: FundOverview = None
+
     def yearsHeld(self):
         if (self.startDate):
             if (self.endDate):
@@ -232,17 +308,17 @@ class AccountSummary:
     def totalValue(self):
         return self.totalMarketValue + self.cashBalance
     def totalPaperGainForTaxPerc(self):
-        return 100.0 * float(self.totalPaperGainForTax / self.totalInvestedInSecurities)
+        return 100.0 * float(self.totalPaperGainForTax) / float(self.totalInvestedInSecurities)
     def totalRealisedGain(self):
         return sum(self.realisedGainForTaxByYear.values()) if len(self.realisedGainForTaxByYear) > 0 else Decimal(0.0)
     def totalGainFromInvestments(self):
         return self.totalMarketValue - self.totalInvested()
     def totalGainFromInvPerc(self):
-        return 100 * float(self.totalGainFromInvestments() / self.totalInvestedInSecurities)
+        return 100 * float(self.totalGainFromInvestments()) / float(self.totalInvestedInSecurities)
     def totalGainLessFees(self):
         return self.totalGain - self.totalFees()  #Dealing costs are wrapped up in stock price received
     def totalGainPerc(self):
-        return 100 * float(self.totalGainLessFees() / self.totalInvestedInSecurities)
+        return 100 * float(self.totalGainLessFees()) / float(self.totalInvestedInSecurities)
     def totalDividends(self):
         return sum(self.dividendsByYear.values()) if len(self.dividendsByYear) > 0 else Decimal(0.0)
     def avgDividends(self):
@@ -253,7 +329,6 @@ class AccountSummary:
         endYear = datetime.now(timezone.utc)
         timeHeld = endYear - startYear
         return float(self.totalGain) / (timeHeld.days / 365)
-
 
 def convertToSterling(currencyTxns, txn, amount):
     if (currencyTxns):
