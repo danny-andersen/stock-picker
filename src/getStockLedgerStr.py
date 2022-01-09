@@ -106,6 +106,144 @@ def getAccountSummaryHtml(accountSummary: AccountSummary, stockLedgerList: list[
     summary.appendChild(tr(td("Average return per year"),td(f"£{accountSummary.avgReturnPerYear():,.0f}")))
     dom.appendChild(summary)
 
+    dom.appendChild(h2("\nStatistics By Investment Type\n"))
+    dom.appendChild(h3("\nFund values and returns\n"))
+    fs = table()
+    funds = accountSummary.fundTotals
+    totalAccountValue = accountSummary.totalValue()
+    if (totalAccountValue == 0): totalAccountValue = Decimal(1.0)
+    fs.appendChild(tr(th('Type'),th('Total Invested'),th('Total Market Value'),th('%Account'),th('Avg Fees'),th('Avg Ret'),th('3yr Ret'),th('5yr Ret')))
+    totInvested = Decimal(0.0)
+    totValue = Decimal(0.0)
+    totfees = 0.0
+    totRet = 0.0
+    tot3yrRet = 0.0
+    tot5yrRet = 0.0
+    totStocks = Decimal(0.0)
+    totBonds = Decimal(0.0)
+    totCash = Decimal(0.0)
+    totGold = Decimal(0.0)
+    for typ, fund in funds.items():
+        fs.appendChild(tr(td(typ.name),td(f"£{fund.totalInvested:,.0f}"), td(f"£{fund.totalValue:,.0f}"),td(f"{100*fund.totalValue/totalAccountValue:0.2f}%"),
+                td(f"{fund.fees:0.2f}%"), td(f"{fund.actualReturn:0.2f}%"), td(f"{fund.return3Yr:0.2f}%"), td(f"{fund.return5Yr:0.2f}%") ))
+        totInvested += fund.totalInvested
+        totValue += fund.totalValue
+        val = float(fund.totalValue)
+        totfees += fund.fees * val
+        totRet += fund.actualReturn * val
+        tot3yrRet += fund.return3Yr * val
+        tot5yrRet += fund.return5Yr * val
+        if (fund.isStockType()):
+            totStocks += fund.totalValue
+        elif (fund.isBondType()):
+            totBonds += fund.totalValue
+        elif (fund.isCashType()):
+            totCash += fund.totalValue
+        elif (fund.isGoldType()):
+            totGold += fund.totalValue
+    totValue = totValue if totValue else Decimal(1.0)
+    tot = float(totValue)
+    fs.appendChild(tr(td("Overall"),td(f"£{totInvested:,.0f}"), td(f"£{totValue:,.0f}"),td(f"{100*totValue/totalAccountValue:0.2f}%"),
+                td(f"{totfees/tot:0.2f}%"), td(f"{totRet/tot:0.2f}%"), td(f"{tot3yrRet/tot:0.2f}%"), td(f"{tot5yrRet/tot:0.2f}%") ))
+    fs.appendChild(tr(td("Stocks"),td("-"), td(f"£{totStocks:,.0f}"),td(f"{100*totStocks/totalAccountValue:0.2f}%") ))
+    fs.appendChild(tr(td("Bonds"),td("-"), td(f"£{totBonds:,.0f}"),td(f"{100*totBonds/totalAccountValue:0.2f}%") ))
+    fs.appendChild(tr(td("Cash"),td("-"), td(f"£{totCash:,.0f}"),td(f"{100*totCash/totalAccountValue:0.2f}%") ))
+    fs.appendChild(tr(td("Gold"),td("-"), td(f"£{totGold:,.0f}"),td(f"{100*totGold/totalAccountValue:0.2f}%") ))
+    dom.appendChild(fs)
+    if (len(accountSummary.totalByInstitution) > 0):
+        dom.appendChild(h3("\nValue by Institution\n"))
+        fi = table()
+        totVal = Decimal(0.0)
+        val = Decimal(0.0)
+        fi.appendChild(tr(th('Institution'),th('Value'),th('Total Account %') ))
+        for inst, val in accountSummary.totalByInstitution.items():
+            fi.appendChild(tr(td(inst),td(f"£{val:,.0f}"), td(f"{100.0*float(val/totalAccountValue):0.2f}%") ))
+            totVal += val
+        fi.appendChild(tr(td("Total"),td(f"£{totVal:,.0f}"), td(f"{100.0*float(totVal/totalAccountValue):0.2f}%") ))
+        dom.appendChild(fi)
+
+    dom.appendChild(h3("\nFund Risks\n"))
+    fr = table()
+    fr.appendChild(tr(th('Type'),th('Alpha'),th('Beta'),th('Sharpe'),th('Std Dev'),th('Maturity yrs') ))
+    totAlpha = 0.0
+    totBeta = 0.0
+    totSharpe = 0.0
+    totSD = 0.0
+    totalNonShareVal = 0.0
+    totMat = 0.0
+    totMatVal = 0.0
+    for typ, fund in funds.items():
+        if (typ != FundType.SHARE):
+            totPerc = fund.alpha3Yr+fund.beta3Yr+fund.sharpe3Yr+fund.stdDev3Yr
+            fr.appendChild(tr(td(typ.name),td(f"{fund.alpha3Yr:0.2f}"), td(f"{fund.beta3Yr:0.2f}"),td(f"{fund.sharpe3Yr:0.2f}"),td(f"{fund.stdDev3Yr:0.2f}", td(f"{fund.maturity:0.2f}")) ))
+            val = float(fund.totalValue)
+            if (totPerc > 0):
+                totalNonShareVal += val
+                totAlpha += fund.alpha3Yr * val
+                totBeta += fund.beta3Yr * val
+                totSharpe += fund.sharpe3Yr * val
+                totSD += fund.stdDev3Yr * val
+            if (fund.maturity > 0): 
+                totMat += fund.maturity * val
+                totMatVal += val
+    if totalNonShareVal == 0: totalNonShareVal = 1.0
+    if totMatVal == 0: totMatVal = 1.0
+    fr.appendChild(tr(td("Overall"),td(f"{totAlpha/totalNonShareVal:0.2f}"), td(f"{totBeta/totalNonShareVal:0.2f}"),td(f"{totSharpe/totalNonShareVal:0.2f}"),td(f"{totSD/totalNonShareVal:0.2f}"),td(f"{totMat/totMatVal:0.2f}") ))
+    dom.appendChild(fr)
+    dom.appendChild(h3("\nGeographical Spread\n"))
+    fr = table()
+    fr.appendChild(tr(th('Type'),th('Americas'),th('Americas-Emerging'),th('Asia'),th('Asia-Emerging'),th('Europe'),th('Europe-Emerging'),th('Total') ))
+    totamer = 0.0
+    totamerem = 0.0
+    totasia = 0.0
+    totasiaem = 0.0
+    toteuro = 0.0
+    toteuroem = 0.0
+    totVal = 0.0
+    for typ, fund in funds.items():
+            totPerc = fund.americas + fund.americasEmerging + fund.asia + fund.asiaEmerging + fund.europe + fund.europeEmerging
+            fr.appendChild(tr(td(typ.name),td(f"{fund.americas:0.2f}"), td(f"{fund.americasEmerging:0.2f}"),
+                        td(f"{fund.asia:0.2f}"),td(f"{fund.asiaEmerging:0.2f}"),
+                        td(f"{fund.europe:0.2f}"),td(f"{fund.europeEmerging:0.2f}"),
+                        td(f"{totPerc:0.2f}") ))
+            if (totPerc != 0):
+                val = float(fund.totalValue)
+                totamer += fund.americas * val
+                totamerem += fund.americasEmerging * val
+                totasia += fund.asia * val
+                totasiaem += fund.asiaEmerging * val
+                toteuro += fund.europe * val
+                toteuroem += fund.europeEmerging * val
+                totVal += val
+    totVal = totVal if totVal else 1.0
+    totPerc = (totamer + totamerem + totasia + totasiaem + toteuro + toteuroem)/totVal
+    fr.appendChild(tr(td("Overall"),td(f"{totamer/totVal:0.2f}"), td(f"{totamerem/totVal:0.2f}"),
+                        td(f"{totasia/totVal:0.2f}"),td(f"{totasiaem/totVal:0.2f}"),
+                        td(f"{toteuro/totVal:0.2f}"),td(f"{toteuroem/totVal:0.2f}"),
+                        td(f"{totPerc:0.2f}") ))
+    dom.appendChild(fr)
+    dom.appendChild(h3("\nFund Diversity\n"))
+    fr = table()
+    fr.appendChild(tr(th('Type'),th('Cyclical'),th('Sensitive'),th('Defensive'),th('Total') ))
+    totCyc = 0.0
+    totSens = 0.0
+    totDef = 0.0
+    totVal = 0.0
+    for typ, fund in funds.items():
+        if (typ != FundType.SHARE):
+            totPerc = fund.cyclical+fund.sensitive+fund.defensive
+            fr.appendChild(tr(td(typ.name),td(f"{fund.cyclical:0.2f}"), td(f"{fund.sensitive:0.2f}"),td(f"{fund.defensive:0.2f}"),td(f"{totPerc:0.2f}")))
+            if (totPerc != 0):
+                val = float(fund.totalValue)
+                totCyc += fund.cyclical * val
+                totSens += fund.sensitive * val
+                totDef += fund.defensive * val
+                totVal += val
+    totVal = totVal if totVal else 1.0
+    totPerc = (totCyc + totSens + totDef)/totVal
+    fr.appendChild(tr(td("Overall"),td(f"{totCyc/totVal:0.2f}"), td(f"{totSens/totVal:0.2f}"),td(f"{totDef/totVal:0.2f}"),td(f"{totPerc:0.2f}")))
+    dom.appendChild(fr)
+
     startYear = accountSummary.dateOpened
     endYear = datetime.now(timezone.utc) + timedelta(days=365) # Make sure we have this tax year
     # endYear = datetime.now(timezone.utc)
@@ -114,9 +252,7 @@ def getAccountSummaryHtml(accountSummary: AccountSummary, stockLedgerList: list[
     byYear = table()
     byYear.appendChild(tr(th('Year'),th('Cash In'),th('Cash Out'),th('Agg Invested'),th('Gain Realised'),th('Dividends'),th('Yield%'),th('Dealing Costs'),th('Fees')))
     while procYear < endYear:
-        years = (procYear-startYear).days/365
         taxYear = getTaxYear(procYear)
-        values = list()
         yearRow = tr()
         yearRow.appendChild(td(f"{taxYear}"))
         yearRow.appendChild(td(f"£{accountSummary.cashInByYear.get(taxYear, Decimal(0.0)):,.0f}"))
@@ -135,9 +271,9 @@ def getAccountSummaryHtml(accountSummary: AccountSummary, stockLedgerList: list[
     dom.append(h2('Stock Summary'))
     stockTable = table()
     if (allAccounts):
-        stockTable.appendChild(tr(th('Stock'),th('Account'),th('Name'),th('Cash inv'), th(' Total Invested'), th('Market Value'), th('Capital Gain'), th('Dividends'), th('Yield'),th('Gain'),th('Years Held'),th('Avg Gain/Yr')))
+        stockTable.appendChild(tr(th('Stock'),th('Account'),th('Type'),th('Name'),th('Cash inv'), th('Market Value'), th('Yield'),th('Return'),th('Years Held'),th('Annualised Ret'), th('3yr-Ret'), th('5yr-Ret'),th('Alpha'), th('Beta'), th('Sharpe')))
     else:
-        stockTable.appendChild(tr(th('Stock'),th('Name'),th('Cash inv'), th(' Total Invested'), th('Market Value'), th('Capital Gain'), th('Dividends'), th('Yield'),th('Gain'),th('Years Held'),th('Avg Gain/Yr')))
+        stockTable.appendChild(tr(th('Stock'),th('Type'),th('Name'),th('Cash inv'), th('Market Value'), th('Yield'),th('Return'),th('Years Held'),th('Annualised Ret'), th('3yr-Ret'), th('5yr-Ret'),th('Alpha'), th('Beta'), th('Sharpe')))
     for details in stockLedgerList:
         historicStocks.extend(details.historicHoldings)
         if (details.totalInvested != 0):
@@ -146,16 +282,25 @@ def getAccountSummaryHtml(accountSummary: AccountSummary, stockLedgerList: list[
             stockRow.appendChild(td(a(f"{details.symbol}", _href=detailLocation)))
             if (allAccounts):
                 stockRow.appendChild(td(f"{details.account}"))
+            stockRow.appendChild(td(f"{details.fundOverview.fundType.name if details.fundOverview else 'None'}"))
             stockRow.appendChild(td(f"{details.name}"))
             stockRow.appendChild(td(f"£{details.cashInvested:,.0f}"))
-            stockRow.appendChild(td(f"£{details.totalInvested:,.0f}"))
+            # stockRow.appendChild(td(f"£{details.totalInvested:,.0f}"))
             stockRow.appendChild(td(f"£{details.marketValue():,.0f}"))
-            stockRow.appendChild(td(f"£{details.capitalGain():,.0f}"))
-            stockRow.appendChild(td(f"£{details.totalDividends():,.0f}"))
+            # stockRow.appendChild(td(f"£{details.capitalGain():,.0f}"))
+            # stockRow.appendChild(td(f"£{details.totalDividends():,.0f}"))
             stockRow.appendChild(td(f"{details.averageYearlyDiviYield():,.0f}%"))
             stockRow.appendChild(td(f"£{details.totalGain():,.0f} ({details.totalGainPerc():0.2f}%)"))
             stockRow.appendChild(td(f"{details.yearsHeld():0.1f}"))
             stockRow.appendChild(td(f"{details.avgGainPerYearPerc():0.2f}%"))
+            fund = details.fundOverview
+            if (fund):
+                stockRow.appendChild(td(f"{fund.return3Yr:0.2f}%"))
+                stockRow.appendChild(td(f"{fund.return5Yr:0.2f}%"))
+                stockRow.appendChild(td(f"{fund.alpha3Yr:0.2f}"))
+                stockRow.appendChild(td(f"{fund.beta3Yr:0.2f}"))
+                stockRow.appendChild(td(f"{fund.sharpe3Yr:0.2f}"))
+
             stockTable.appendChild(stockRow)
     dom.append(stockTable)
 
@@ -163,15 +308,16 @@ def getAccountSummaryHtml(accountSummary: AccountSummary, stockLedgerList: list[
     dom.append(h2('Previous Stock Holdings'))
     stockTable = table()
     if (allAccounts):
-        stockTable.appendChild(tr(th('Stock'),th('Account'),th('Name'),th('Cash inv'), th('Capital Gain'), th('Dividends'), th('Yield'),th('Total Gain'),th('Years Held'),th('Avg Gain/Yr'),th('From'),th('To')))
+        stockTable.appendChild(tr(th('Stock'),th('Account'),th('Type'),th('Name'),th('Cash inv'), th('Capital Gain'), th('Dividends'), th('Yield'),th('Total Gain'),th('Years Held'),th('Avg Gain/Yr'),th('From'),th('To')))
     else:
-        stockTable.appendChild(tr(th('Stock'),th('Name'),th('Cash inv'), th('Capital Gain'), th('Dividends'), th('Yield'),th('Total Gain'),th('Years Held'),th('Avg Gain/Yr'),th('From'),th('To')))
+        stockTable.appendChild(tr(th('Stock'),th('Type'),th('Name'),th('Cash inv'), th('Capital Gain'), th('Dividends'), th('Yield'),th('Total Gain'),th('Years Held'),th('Avg Gain/Yr'),th('From'),th('To')))
     for details in historicStocks:
         stockRow = tr()
         detailLocation = f"./{accountSummary.name}/{details.symbol}.txt"
         stockRow.appendChild(td(a(f"{details.symbol}", _href=detailLocation)))
         if (allAccounts):
             stockRow.appendChild(td(f"{details.account}"))
+        stockRow.appendChild(td(f"{details.fundOverview.fundType.name if details.fundOverview else 'None'}"))
         stockRow.appendChild(td(f"{details.name}"))
         stockRow.appendChild(td(f"£{details.cashInvested:,.0f}"))
         stockRow.appendChild(td(f"£{details.realisedCapitalGain():,.0f}"))

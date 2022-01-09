@@ -4,6 +4,7 @@ from dataclasses_json import dataclass_json
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from enum import Enum, IntEnum
+from copy import deepcopy
 
 CASH_IN = 'Cash in'
 CASH_OUT = 'Cash out'
@@ -44,15 +45,21 @@ class Risk(IntEnum):
 
 class FundType(Enum):
     FUND = 1
-    GILT = 2
-    CORP_BOND = 3
-    ETF = 4
+    LONG_GILT = 2
+    SHORT_GILT = 3
+    CORP_BOND = 4
+    STOCK_ETF = 5
+    BOND_ETF = 6
+    SHARE = 7
+    CASH = 8
+    GOLD = 9
 
 @dataclass
 class FundOverview:
     isin: str
     name: str
     fundType: FundType
+    institution: str = None
     income: bool = False
     fees: float = 0.0
     risk: Risk = Risk.MED
@@ -73,23 +80,109 @@ class FundOverview:
     stdDev3Yr: float = 0.0
     return3Yr: float = 0.0
     return5Yr: float = 0.0
+    totalValue: Decimal = Decimal(0.0)
+    totalInvested: Decimal = Decimal(0.0)
+    actualReturn: float = 0.0
+    totRiskVal: Decimal = Decimal(0.0)
+    totGeoVal: Decimal = Decimal(0.0)
+    totDivVal: Decimal = Decimal(0.0)
+    totMatVal: Decimal = Decimal(0.0)
 
     def getStr(self):
         retStr = "Fund overview:\n"
-        retStr += f"Type: {self.fundType}\n"
+        retStr += f"Type: {self.fundType.name}\n"
         retStr += f"Income fund? {'Yes' if self.income else 'No'}\n" 
         retStr += f"Annual fees: {self.fees}%\n"
-        retStr += f"Risk: {self.risk}\n"
-        if (self.fundType == FundType.GILT or self.fundType == FundType.CORP_BOND):
+        retStr += f"Risk: {self.risk.name}\n"
+        if self.isBondType():
             retStr += f"Bond Maturity Average: {self.maturity} years\n"
-            retStr += f"Bond Grade: {self.bondGrade}\n"
+            retStr += f"Bond Grade: {self.bondGrade.name}\n"
         else:
             retStr += f"Stock spread: Cyclical {self.cyclical}%, Sensitive {self.sensitive}%, Defensive {self.defensive}%\n"
         retStr += f"Geographical Spread: Americas {self.americas}%, Americas Emerging {self.americasEmerging}%,"
         retStr += f"Europe {self.europe}%, Europe Emerging {self.europeEmerging}%,"
         retStr += f"Asia {self.asia}%, Asia Emerging {self.asiaEmerging}%\n"
-        retStr += f"3 year Stats: Alpha {self.alpha3Yr} Beta {self.beta3Yr} Sharpe {self.sharpe3Yr} Return {self.return5Yr}% 5yr Return {self.return5Yr}\n"
+        retStr += f"3 year Stats: Alpha {self.alpha3Yr} Beta {self.beta3Yr} Sharpe {self.sharpe3Yr} Standard Dev {self.stdDev3Yr}\n"
+        retStr += f"3 year Return: {self.return3Yr}% 5 year Return: {self.return5Yr}%\n"
         return retStr
+
+    def isBondType(self):
+        return self.fundType == FundType.LONG_GILT or \
+                    self.fundType == FundType.BOND_ETF or \
+                    self.fundType == FundType.CORP_BOND
+
+    def isStockType(self):
+        return self.fundType == FundType.FUND or \
+                    self.fundType == FundType.SHARE or \
+                    self.fundType == FundType.STOCK_ETF 
+
+    def isCashType(self):
+        return self.fundType == FundType.SHORT_GILT or \
+                    self.fundType == FundType.CASH
+
+    def isGoldType(self):
+        return self.fundType == FundType.GOLD
+
+    def merge(self, fund):
+        currVal = float(self.totalValue)
+        self.totalValue += fund.totalValue
+        totValue = float(self.totalValue)
+        val = float(fund.totalValue)
+        self.totalInvested += fund.totalInvested
+
+        if (totValue > 0):
+            self.actualReturn = (self.actualReturn * currVal + fund.actualReturn * val) / totValue
+            self.fees = (self.fees * currVal + fund.fees * val) / totValue
+            self.return3Yr = (self.return3Yr * currVal + fund.return3Yr * val) / totValue
+            self.return5Yr = (self.return5Yr * currVal + fund.return5Yr * val) / totValue
+
+            if (self.maturity == 0 and fund.maturity != 0):
+                self.maturity = fund.maturity
+            elif (self.maturity != 0 and self.maturity != 0):
+                self.maturity = (self.maturity * currVal + fund.maturity * val) / totValue
+
+            ownTotRisk = self.alpha3Yr + self.beta3Yr + self.sharpe3Yr + self.stdDev3Yr
+            newTotRisk = fund.alpha3Yr + fund.beta3Yr + fund.sharpe3Yr + fund.stdDev3Yr
+            if (ownTotRisk == 0 and newTotRisk != 0):
+                #Copy
+                self.alpha3Yr = fund.alpha3Yr
+                self.beta3Yr = fund.beta3Yr
+                self.sharpe3Yr = fund.sharpe3Yr
+                self.stdDev3Yr = fund.stdDev3Yr
+            elif (ownTotRisk != 0 and newTotRisk != 0):
+                #Merge
+                self.alpha3Yr = (self.alpha3Yr * currVal + fund.alpha3Yr * val) / totValue
+                self.beta3Yr = (self.beta3Yr * currVal + fund.beta3Yr * val) / totValue
+                self.sharpe3Yr = (self.sharpe3Yr * currVal + fund.sharpe3Yr * val) / totValue
+                self.stdDev3Yr = (self.stdDev3Yr * currVal + fund.stdDev3Yr * val) / totValue
+
+            ownTotGeo = self.americas + self.americasEmerging + self.asia + self.asiaEmerging + self.europe + self.europeEmerging
+            newTotGeo = fund.americas + fund.americasEmerging + fund.asia + fund.asiaEmerging + fund.europe + fund.europeEmerging
+            if (ownTotGeo == 0 and newTotGeo != 0):
+                self.americas = fund.americas
+                self.americasEmerging = fund.americasEmerging
+                self.asia = fund.asia
+                self.asiaEmerging = fund.asiaEmerging
+                self.europe = fund.europe
+                self.europeEmerging = fund.europeEmerging
+            elif (ownTotGeo != 0 and newTotGeo != 0):
+                self.americas = (self.americas * currVal + fund.americas * val) / totValue
+                self.americasEmerging = (self.americasEmerging * currVal + fund.americasEmerging * val) / totValue
+                self.asia = (self.asia * currVal + fund.asia * val) / totValue
+                self.asiaEmerging = (self.asiaEmerging * currVal + fund.asiaEmerging * val) / totValue
+                self.europe = (self.europe * currVal + fund.europe * val) / totValue
+                self.europeEmerging = (self.europeEmerging * currVal + fund.europeEmerging * val) / totValue
+
+            ownTotDiv = self.cyclical + self.defensive + self.sensitive
+            newTotDiv = fund.cyclical + fund.defensive + fund.sensitive
+            if (ownTotDiv == 0 and newTotDiv != 0):
+                self.cyclical = fund.cyclical
+                self.defensive = fund.defensive
+                self.sensitive = fund.sensitive
+            elif (ownTotDiv != 0 and ownTotDiv != 0):
+                self.cyclical = (self.cyclical * currVal + fund.cyclical * val) / totValue
+                self.defensive = (self.defensive * currVal + fund.defensive * val) / totValue
+                self.sensitive = (self.sensitive * currVal + fund.sensitive * val) / totValue
 
 
 @dataclass_json
@@ -240,6 +333,8 @@ class AccountSummary:
     dealingCostsByYear: dict[str, Decimal(0.0)] = field(default_factory=dict)
     dividendsByYear: dict[str, Decimal(0.0)] = field(default_factory=dict)
     dividendYieldByYear: dict[str, Decimal(0.0)] = field(default_factory=dict)
+    fundTotals: dict[FundType, FundOverview] = field(default_factory=dict)
+    totalByInstitution: dict[str, Decimal] = field(default_factory=dict)
 
     def mergeInAccountSummary(self, summary):
         if (summary.dateOpened < self.dateOpened):
@@ -301,6 +396,21 @@ class AccountSummary:
             if (yr not in self.dividendYieldByYear):
                 self.dividendYieldByYear[yr] = summary.dividendYieldByYear[yr]
 
+        for inst in self.totalByInstitution.keys():
+            self.totalByInstitution[inst] += summary.totalByInstitution.get(inst, Decimal(0.0))
+        for inst in summary.totalByInstitution.keys():
+            if (inst not in self.totalByInstitution):
+                self.totalByInstitution[inst] = summary.totalByInstitution[inst]
+
+        for ft, fund in summary.fundTotals.items():
+            current = self.fundTotals.get(ft, None)
+            if current:
+                current.merge(fund)
+            else:
+                #Copy
+                self.fundTotals[ft] = deepcopy(fund)
+
+
     def totalInvested(self): 
         return sum(self.cashInByYear.values()) - sum(self.cashOutByYear.values())
     def totalFees(self):
@@ -308,17 +418,26 @@ class AccountSummary:
     def totalValue(self):
         return self.totalMarketValue + self.cashBalance
     def totalPaperGainForTaxPerc(self):
-        return 100.0 * float(self.totalPaperGainForTax) / float(self.totalInvestedInSecurities)
+        if self.totalInvestedInSecurities > 0:
+            return 100.0 * float(self.totalPaperGainForTax) / float(self.totalInvestedInSecurities)
+        else:
+            return 0
     def totalRealisedGain(self):
         return sum(self.realisedGainForTaxByYear.values()) if len(self.realisedGainForTaxByYear) > 0 else Decimal(0.0)
     def totalGainFromInvestments(self):
         return self.totalMarketValue - self.totalInvested()
     def totalGainFromInvPerc(self):
-        return 100 * float(self.totalGainFromInvestments()) / float(self.totalInvestedInSecurities)
+        if self.totalInvestedInSecurities > 0:
+            return 100 * float(self.totalGainFromInvestments()) / float(self.totalInvestedInSecurities)
+        else:
+            return 0
     def totalGainLessFees(self):
         return self.totalGain - self.totalFees()  #Dealing costs are wrapped up in stock price received
     def totalGainPerc(self):
-        return 100 * float(self.totalGainLessFees()) / float(self.totalInvestedInSecurities)
+        if self.totalInvestedInSecurities > 0:
+            return 100 * float(self.totalGainLessFees()) / float(self.totalInvestedInSecurities)
+        else:
+            return 0
     def totalDividends(self):
         return sum(self.dividendsByYear.values()) if len(self.dividendsByYear) > 0 else Decimal(0.0)
     def avgDividends(self):
@@ -328,7 +447,10 @@ class AccountSummary:
         # endYear = datetime.now(timezone.utc) + timedelta(days=365) # Make sure we have this tax year
         endYear = datetime.now(timezone.utc)
         timeHeld = endYear - startYear
-        return float(self.totalGain) / (timeHeld.days / 365)
+        if timeHeld.days != 0:
+            return float(self.totalGain) / (timeHeld.days / 365)
+        else:
+            return 0
 
 def convertToSterling(currencyTxns, txn, amount):
     if (currencyTxns):

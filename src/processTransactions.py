@@ -155,7 +155,10 @@ def processStockTxns(account: AccountSummary, securities, funds, stocks: dict[st
     if not details.symbol:
         #Its a fund
         details.symbol = details.sedol
-    security = securities.get(details.symbol, None)
+    if (securities):
+        security = securities.get(details.symbol, None)
+    else:
+        security = None
     if security:
         details.currentSharePrice = security.currentPrice
         details.currentSharePriceDate = security.date

@@ -27,15 +27,61 @@ def summarisePerformance(accountSummary: AccountSummary, stockSummary: list[Secu
     totalRealisedForTaxGain = dict()
     totalDealingCosts = dict()
     totalDivi = dict()
+    fundTotals: dict[FundType, FundOverview] = dict()
+    for typ in FundType:
+        fundTotals[typ] = FundOverview("None", "None", typ)
     aggInvestedByYear = dict()
     totalDiviYieldByYear = dict()
     totalMarketValue = Decimal(0.0)
-    detailsToProcess: SecurityDetails = list()
+    totalByInstituion: dict[str, Decimal] = dict()
+    detailsToProcess: list[SecurityDetails] = list()
     detailsToProcess.extend(stockSummary)
     for details in stockSummary:
         detailsToProcess.extend(details.historicHoldings)
     
     for details in detailsToProcess:
+        value = float(details.marketValue())
+        fund = details.fundOverview
+        if (fund):
+            if value == 0:
+                value = float(details.totalInvested)
+            fundType = fund.fundType
+            if totalByInstituion.get(fund.institution, None):
+               totalByInstituion[fund.institution] += Decimal(value)
+            else:
+               totalByInstituion[fund.institution] = Decimal(value) 
+            fundTotals[fundType].alpha3Yr += fund.alpha3Yr * value
+            fundTotals[fundType].americas += fund.americas * value
+            fundTotals[fundType].americasEmerging += fund.americasEmerging * value
+            fundTotals[fundType].asia += fund.asia * value
+            fundTotals[fundType].asiaEmerging += fund.asiaEmerging * value
+            fundTotals[fundType].beta3Yr += fund.beta3Yr * value
+            fundTotals[fundType].cyclical += fund.cyclical * value
+            fundTotals[fundType].defensive += fund.defensive * value
+            fundTotals[fundType].europe += fund.europe * value
+            fundTotals[fundType].europeEmerging += fund.europeEmerging * value
+            fundTotals[fundType].fees += fund.fees * value
+            fundTotals[fundType].maturity += fund.maturity * value
+            fundTotals[fundType].return3Yr += fund.return3Yr * value
+            fundTotals[fundType].return5Yr += fund.return5Yr * value
+            fundTotals[fundType].sensitive += fund.sensitive * value
+            fundTotals[fundType].sharpe3Yr += fund.sharpe3Yr * value
+            fundTotals[fundType].stdDev3Yr += fund.stdDev3Yr * value
+            fundTotals[fundType].totalValue += Decimal(value)
+            fundTotals[fundType].totalInvested += details.totalInvested
+            fundTotals[fundType].actualReturn += details.avgGainPerYearPerc() * value
+            if (fund.alpha3Yr + fund.beta3Yr + fund.sharpe3Yr + fund.stdDev3Yr >0): fundTotals[fundType].totRiskVal += Decimal(value)
+            if (fund.cyclical + fund.defensive + fund.sensitive >0): fundTotals[fundType].totDivVal += Decimal(value)
+            if (fund.americasEmerging + fund.americas + fund.asia + fund.asiaEmerging + fund.europe + fund.europeEmerging >0): fundTotals[fundType].totGeoVal += Decimal(value)
+            if (fund.maturity): fundTotals[fundType].totMatVal += Decimal(value)
+        else:
+            #Assume a share stock
+            fundTotals[FundType.SHARE].totalValue += Decimal(value)
+            fundTotals[FundType.SHARE].europe += 100 * value  #Assume all shares are UK based
+            fundTotals[FundType.SHARE].totGeoVal += Decimal(value)  #Assume all shares are UK based
+            fundTotals[FundType.SHARE].totalInvested += details.totalInvested
+            fundTotals[FundType.SHARE].actualReturn += details.avgGainPerYearPerc() * value
+
         totalMarketValue += details.marketValue()
         totalCashInvested += details.cashInvested
         totalDiviReInvested += details.diviInvested
@@ -49,6 +95,29 @@ def summarisePerformance(accountSummary: AccountSummary, stockSummary: list[Secu
             totalDealingCosts[year] = totalDealingCosts.get(year, Decimal(0.0)) + costs
         for year,divi in details.dividendsByYear.items():
             totalDivi[year] = totalDivi.get(year, Decimal(0.0)) + divi
+
+    for typ, fund in fundTotals.items():
+        value = float(fund.totalValue)
+        if value == 0:
+            continue
+        fund.alpha3Yr = fund.alpha3Yr / float(fund.totRiskVal) if fund.totRiskVal != 0 else 0.0
+        fund.americas = fund.americas / float(fund.totGeoVal) if fund.totGeoVal != 0 else 0.0
+        fund.americasEmerging = fund.americasEmerging / float(fund.totGeoVal) if fund.totGeoVal != 0 else 0.0
+        fund.asia = fund.asia / float(fund.totGeoVal) if fund.totGeoVal != 0 else 0.0
+        fund.asiaEmerging = fund.asiaEmerging / float(fund.totGeoVal) if fund.totGeoVal != 0 else 0.0
+        fund.beta3Yr = fund.beta3Yr / float(fund.totRiskVal) if fund.totRiskVal != 0 else 0.0
+        fund.cyclical = fund.cyclical / float(fund.totDivVal) if fund.totDivVal != 0 else 0.0
+        fund.defensive = fund.defensive / float(fund.totDivVal) if fund.totDivVal != 0 else 0.0
+        fund.europe = fund.europe / float(fund.totGeoVal) if fund.totGeoVal != 0 else 0.0
+        fund.europeEmerging = fund.europeEmerging / float(fund.totGeoVal) if fund.totGeoVal != 0 else 0.0
+        fund.fees = fund.fees / value
+        fund.maturity = fund.maturity / float(fund.totMatVal) if fund.totMatVal != 0 else 0.0
+        fund.return3Yr = fund.return3Yr / value
+        fund.return5Yr = fund.return5Yr / value
+        fund.sensitive = fund.sensitive / float(fund.totDivVal) if fund.totDivVal != 0 else 0.0
+        fund.sharpe3Yr = fund.sharpe3Yr / float(fund.totRiskVal) if fund.totRiskVal != 0 else 0.0
+        fund.stdDev3Yr = fund.stdDev3Yr / float(fund.totRiskVal) if fund.totRiskVal != 0 else 0.0
+        fund.actualReturn = fund.actualReturn / value
 
     startYear = accountSummary.dateOpened
     endYear = datetime.now(timezone.utc) + timedelta(days=365) # Make sure we have this tax year
@@ -86,6 +155,8 @@ def summarisePerformance(accountSummary: AccountSummary, stockSummary: list[Secu
     accountSummary.dealingCostsByYear  = totalDealingCosts
     accountSummary.dividendsByYear = totalDivi
     accountSummary.dividendYieldByYear = totalDiviYieldByYear
+    accountSummary.fundTotals = fundTotals
+    accountSummary.totalByInstitution = totalByInstituion
 
 def getPortfolioOverviews(config):
     #List portfolio directory for account portfolio files
@@ -161,7 +232,7 @@ def processLatestTxnFiles(config, stockListByAcc):
                 if (len(row['Date'])) == 8: 
                     fmt = "%d/%m/%y"
                 else:
-                    fmt = "%d/%m/%Y"
+                    fmt = "%Y-%m-%d"
                 txn = Transaction(
                     date = datetime.strptime(row['Date'], fmt).replace(tzinfo=timezone.utc),
                     ref = row['Reference'],
@@ -185,33 +256,31 @@ def processLatestTxnFiles(config, stockListByAcc):
                         or '(di)' in desc
                         or 'optional dividend' in desc):
                     txn.type = DIVIDEND
-                elif (txn.isin.startswith(NO_STOCK) or (txn.isin == '' and txn.symbol == '')):
-                    txn.isin = NO_STOCK
-                    if (desc.startswith("debit card") 
-                            or 'subscription' in desc 
-                            or desc.startswith("trf")
-                            or 'transfer' in desc
-                            or 'cashback' in desc
-                            or '(di)' in desc
-                            or 'lump sum' in desc):
-                        if (txn.credit != 0):
-                            txn.type = CASH_IN
-                        else:
-                            txn.type = CASH_OUT 
-                    elif (('fee' in desc
-                            or 'payment' in desc)
-                                and txn.debit != 0):
-                        txn.type = FEES
-                    elif ('refund' in desc
-                            and txn.credit != 0):
-                        txn.type = REFUND
-                    else:
-                        print(f"Unknown transaction type {txn}")
                 elif (txn.qty != 0):
                     if (txn.credit != 0): 
                         txn.type = SELL
                     else:
                         txn.type = BUY
+                elif (desc.startswith("debit card") 
+                            or 'subscription' in desc 
+                            or desc.startswith("trf")
+                            or 'transfer' in desc
+                            or 'interest' in desc
+                            or 'faster payment' in desc
+                            or 'cashback' in desc
+                            # or '(di)' in desc
+                            or 'lump sum' in desc):
+                        if (txn.credit != 0):
+                            txn.type = CASH_IN
+                        else:
+                            txn.type = CASH_OUT 
+                elif (('fee' in desc
+                        or 'payment' in desc)
+                            and txn.debit != 0):
+                    txn.type = FEES
+                elif ('refund' in desc
+                        and txn.credit != 0):
+                    txn.type = REFUND
                 else:
                     print(f"Unknown transaction type {txn}")
     
@@ -280,7 +349,7 @@ def processLatestTxnFiles(config, stockListByAcc):
                 jsonTxns = dict()
                 for key, txn in txns.items():
                     jsonTxns[key] = txn.to_json() 
-                saveStockTransactions(config, account, stock, jsonTxns)
+                saveStockTransactions(configStore, account, stock, jsonTxns)
             elif noTxns > 0:
                 print(f"WARNING: {noTxns} Transactions have no stock name set")
             else:
@@ -300,7 +369,8 @@ def getFundOverviews(config):
                 fund = FundOverview (
                     isin = isin,
                     name = row['Name'],
-                    fundType = FundType[row['Type'].strip().upper()]
+                    fundType = FundType[row['Type'].strip().upper()],
+                    institution= row['Institution'].strip()
                 )
                 fundOverviews[isin] = fund
                 if (row['Income'].strip().lower() == 'inc'):
@@ -359,7 +429,7 @@ def processTransactions(config):
                 #Dont process currency conversion txns
                 continue
             if (stock != NO_STOCK):
-                stockLedger[stock] = processStockTxns(accountSummary, securitiesByAccount[account], fundOverviews, sortedStocks, stock) 
+                stockLedger[stock] = processStockTxns(accountSummary, securitiesByAccount.get(account, None), fundOverviews, sortedStocks, stock) 
             else:
                 processAccountTxns(accountSummary, sortedStocks[stock])
         #Summarise transactions and yields etc
