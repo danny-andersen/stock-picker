@@ -14,6 +14,7 @@ DIVIDEND = 'Dividend'
 FEES = 'Fees'
 REFUND ='Refund'
 NO_STOCK = 'No stock'
+INTEREST = 'Interest'
 STERLING = 'STERLING'
 USD = 'USDUSDUSDUS1'
 EUR = 'EUREUREUREU1'
@@ -203,6 +204,7 @@ class Transaction:
     credit: Decimal = Decimal(0.0)
     creditCurrency: str = '£'
     type: str = 'Unknown'
+    accountBalance: Decimal = Decimal(0.0)
 
 @dataclass_json
 @dataclass
@@ -335,6 +337,7 @@ class AccountSummary:
     dividendYieldByYear: dict[str, Decimal(0.0)] = field(default_factory=dict)
     fundTotals: dict[FundType, FundOverview] = field(default_factory=dict)
     totalByInstitution: dict[str, Decimal] = field(default_factory=dict)
+    transactions: list[Transaction] = field(default_factory=list)
 
     def mergeInAccountSummary(self, summary):
         if (summary.dateOpened < self.dateOpened):
@@ -347,6 +350,9 @@ class AccountSummary:
         self.totalInvestedInSecurities += summary.totalInvestedInSecurities
         self.totalPaperGainForTax += summary.totalPaperGainForTax
         self.totalGain += summary.totalGain
+        self.transactions.extend(summary.transactions)
+        #Sort all transactions by date
+        self.transactions = sorted(self.transactions, key= lambda txn: txn.date)
 
         for yr in self.cashInByYear.keys():
             self.cashInByYear[yr] += summary.cashInByYear.get(yr, Decimal(0.0))
@@ -416,7 +422,7 @@ class AccountSummary:
     def totalFees(self):
         return sum(self.feesByYear.values()) if len(self.feesByYear) > 0 else Decimal(0.0)
     def totalValue(self):
-        return self.totalMarketValue + self.cashBalance
+        return self.totalMarketValue
     def totalPaperGainForTaxPerc(self):
         if self.totalInvestedInSecurities > 0:
             return 100.0 * float(self.totalPaperGainForTax) / float(self.totalInvestedInSecurities)

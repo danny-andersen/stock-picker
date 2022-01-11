@@ -25,8 +25,8 @@ def summarisePerformance(accountSummary: AccountSummary, stockSummary: list[Secu
     totalPaperGainForTax = Decimal(0.0)
     totalGain = Decimal(0.0)
     totalRealisedForTaxGain = dict()
-    totalDealingCosts = dict()
-    totalDivi = dict()
+    totalDealingCosts = accountSummary.feesByYear
+    totalDivi = accountSummary.dividendsByYear
     fundTotals: dict[FundType, FundOverview] = dict()
     for typ in FundType:
         fundTotals[typ] = FundOverview("None", "None", typ)
@@ -145,7 +145,7 @@ def summarisePerformance(accountSummary: AccountSummary, stockSummary: list[Secu
 
     accountSummary.totalCashInvested = totalCashInvested
     accountSummary.totalDiviReInvested = totalDiviReInvested
-    accountSummary.totalMarketValue = totalMarketValue
+    accountSummary.totalMarketValue = totalMarketValue + accountSummary.cashBalance
     accountSummary.totalInvestedInSecurities = totalShareInvested
     accountSummary.totalDealingCosts = totalCosts
     accountSummary.totalPaperGainForTax = totalPaperGainForTax
@@ -210,6 +210,7 @@ def processLatestTxnFiles(config, stockListByAcc):
     transDir = config['files']['transactionsLocation']
     changedStockTxnsByAcc = dict() #Dict keyed by account with Set of stocks whose transactions have been appended to and so need to be saved back to HDFS
     #List transactions directory for account history files
+    allTxnsByAcc: dict[str,list[Transaction]] = dict()
     dirEntries = os.scandir(transDir)
     txnFiles = list()
     for dirEntry in dirEntries:
@@ -229,10 +230,18 @@ def processLatestTxnFiles(config, stockListByAcc):
         with open('transactions/' + txnFile) as csvFile:
             csv_reader = csv.DictReader(csvFile)
             for row in csv_reader:
-                if (len(row['Date'])) == 8: 
-                    fmt = "%d/%m/%y"
-                else:
+                dt = row['Date']
+                fmt = None
+                if ('/' in dt):
+                    if len(dt) == 8: 
+                        fmt = "%d/%m/%y"
+                    elif len(dt) == 10:
+                        fmt = "%d/%m/%Y"
+                elif ('-' in dt and len(dt) == 10):
                     fmt = "%Y-%m-%d"
+                if (not fmt):
+                    print(f"Unsupported date format: {dt}. Exiting!! \n")
+                    exit()
                 txn = Transaction(
                     date = datetime.strptime(row['Date'], fmt).replace(tzinfo=timezone.utc),
                     ref = row['Reference'],
@@ -249,11 +258,13 @@ def processLatestTxnFiles(config, stockListByAcc):
                 if (txn.isin != ''):
                     #Map any old isin to new isin
                     txn.isin = isinMapping.get(txn.isin, txn.isin)
+                if (txn.isin.startswith(NO_STOCK) or (txn.isin == '' and txn.symbol == '')):
+                    txn.isin = NO_STOCK
                 if (desc.startswith('div') 
                         or desc.startswith('equalisation')
                         or desc.endswith('distribution')
                         or desc.endswith('rights')
-                        or '(di)' in desc
+                        or 'final frac pay' in desc
                         or 'optional dividend' in desc):
                     txn.type = DIVIDEND
                 elif (txn.qty != 0):
@@ -265,7 +276,6 @@ def processLatestTxnFiles(config, stockListByAcc):
                             or 'subscription' in desc 
                             or desc.startswith("trf")
                             or 'transfer' in desc
-                            or 'interest' in desc
                             or 'faster payment' in desc
                             or 'cashback' in desc
                             # or '(di)' in desc
@@ -274,6 +284,8 @@ def processLatestTxnFiles(config, stockListByAcc):
                             txn.type = CASH_IN
                         else:
                             txn.type = CASH_OUT 
+                elif 'interest' in desc:
+                    txn.type = INTEREST
                 elif (('fee' in desc
                         or 'payment' in desc)
                             and txn.debit != 0):
@@ -292,7 +304,7 @@ def processLatestTxnFiles(config, stockListByAcc):
                 if (not existingTxns):
                     existingTxns = dict()
                     stockList[txn.isin] = existingTxns
-                txnKey = f"{accountName}-{txn.date}-{txn.ref}" 
+                txnKey = f"{accountName}-{txn.date}-{txn.ref}-{txn.debit}-{txn.credit}" 
                 # Update existing transactions - this will overwrite a transaction if it already exists
                 # And so allows updates to existing transactions to be made
                 existingTxns[txnKey] = txn
@@ -303,16 +315,19 @@ def processLatestTxnFiles(config, stockListByAcc):
                     changedStockTxnsByAcc[accountName] = changed
                 changed.add(txn.isin)
 
-    #Extract all descriptions of BUY transactions
-    #These are used to match Divi payments to stocks that have not ISIN
     txnByDesc = dict() #Dict of buy txns by their description - allows stock details to be found by description
     for acc in stockListByAcc.keys():
+        if (not allTxnsByAcc.get(acc, None)):
+            allTxnsByAcc[acc] = list()
+        txns = allTxnsByAcc[acc]
         for stock in stockListByAcc[acc].keys():
             for txKey in stockListByAcc[acc][stock].keys():
                 tx = stockListByAcc[acc][stock][txKey]
                 if (tx.type == BUY or tx.type == SELL) and tx.isin != '':
                     desc = tx.desc.replace(' ', '') #Strip out whitespace
                     txnByDesc[desc] = tx
+                txns.append(tx)
+                
     for acc in stockListByAcc.keys():
         for stock in stockListByAcc[acc].keys():
             stockTxns = stockListByAcc[acc][stock].copy()
@@ -355,6 +370,10 @@ def processLatestTxnFiles(config, stockListByAcc):
             else:
                 #Remove empty stock
                 stockListByAcc[account].pop('')
+    #Sort all transactions by date
+    for acc in allTxnsByAcc.keys():
+        allTxnsByAcc[acc] = sorted(allTxnsByAcc[acc], key= lambda txn: txn.date)
+    return allTxnsByAcc
 
 def getFundOverviews(config):
     fundsFile = config['files']['fundsOverview']
@@ -407,7 +426,7 @@ def processTransactions(config):
     #Get previously stored transactions
     stockListByAcc = getStoredTransactions(configStore)
     #Process any new transactions
-    processLatestTxnFiles(config, stockListByAcc)
+    allTxns: dict[str,list[Transaction]] = processLatestTxnFiles(config, stockListByAcc)
     #Get Latest Account Portfolio positions
     securitiesByAccount = getPortfolioOverviews(config)
     #Get Fund overview stats
@@ -425,13 +444,10 @@ def processTransactions(config):
             #Sort all transactions by date first
             sortedStocks[stock] = sorted(list(stocks[stock].values()), key= lambda txn: txn.date)
         for stock in stocks:
-            if (stock == USD or stock == EUR):
-                #Dont process currency conversion txns
-                continue
-            if (stock != NO_STOCK):
+            if (stock != NO_STOCK and stock != USD and stock != EUR):
+                #Dont process currency conversion txns or ones that are not related to a security
                 stockLedger[stock] = processStockTxns(accountSummary, securitiesByAccount.get(account, None), fundOverviews, sortedStocks, stock) 
-            else:
-                processAccountTxns(accountSummary, sortedStocks[stock])
+        processAccountTxns(accountSummary, allTxns[account], sortedStocks)
         #Summarise transactions and yields etc
         stockLedgerList = sorted(list(stockLedger.values()), key = lambda stock: stock.avgGainPerYearPerc(), reverse = True)
         allStocks.extend(stockLedgerList)

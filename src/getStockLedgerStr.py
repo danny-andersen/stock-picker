@@ -101,7 +101,7 @@ def getAccountSummaryHtml(accountSummary: AccountSummary, stockLedgerList: list[
     summary.appendChild(tr(td("Total Fees paid"), td(f"£{accountSummary.totalFees():,.0f}")))
     summary.appendChild(tr(td("Total Dealing costs"), td(f"£{accountSummary.totalDealingCosts:,.0f}")))
     summary.appendChild(tr(td("Total Return (Paper gain, dividends paid, realised gain, less fees and costs)"),td(f"£{accountSummary.totalGainLessFees():,.0f} ({accountSummary.totalGainPerc():,.0f}%)")))
-    summary.appendChild(tr(td("Actual Return (Market value less Cash invested"), td(f"£{accountSummary.totalGainFromInvestments():,.0f} ({accountSummary.totalGainFromInvPerc():0.2f}%)")))
+    summary.appendChild(tr(td("Actual Return (Market value less Cash invested)"), td(f"£{accountSummary.totalGainFromInvestments():,.0f} ({accountSummary.totalGainFromInvPerc():0.2f}%)")))
 
     summary.appendChild(tr(td("Average return per year"),td(f"£{accountSummary.avgReturnPerYear():,.0f}")))
     dom.appendChild(summary)
@@ -121,7 +121,7 @@ def getAccountSummaryHtml(accountSummary: AccountSummary, stockLedgerList: list[
     tot5yrRet = 0.0
     totStocks = Decimal(0.0)
     totBonds = Decimal(0.0)
-    totCash = Decimal(0.0)
+    totCash = accountSummary.cashBalance
     totGold = Decimal(0.0)
     for typ, fund in funds.items():
         fs.appendChild(tr(td(typ.name),td(f"£{fund.totalInvested:,.0f}"), td(f"£{fund.totalValue:,.0f}"),td(f"{100*fund.totalValue/totalAccountValue:0.2f}%"),
@@ -330,6 +330,17 @@ def getAccountSummaryHtml(accountSummary: AccountSummary, stockLedgerList: list[
         stockRow.appendChild(td(f"{details.endDate.date()}"))
         stockTable.appendChild(stockRow)
     dom.append(stockTable)
+
+    dom.append(h2('Account transactions'))
+    txnTable = table()
+    txnTable.appendChild(tr(th('Date'),th('Txn Type'), th('Desc'),th('Amount'),th('Balance')))
+    for txn in accountSummary.transactions:
+        detailLocation = f"./{accountSummary.name}/{txn.symbol}.txt"
+        txnTable.appendChild(tr(td(f"{txn.date}"),td(f"{txn.type}"),td(f"{txn.desc}"),
+                    td(f"{txn.credit if txn.credit != 0 else -txn.debit:0.2f}"), 
+                    td(f"{txn.accountBalance:0.2f}") ))
+
+    dom.appendChild(txnTable)
 
     ht = html(meta(_charset='UTF-8'))
     ht.append(dom)

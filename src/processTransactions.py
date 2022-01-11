@@ -8,7 +8,7 @@ from processStock import calcPriceData
 from getStockLedgerStr import getTaxYear
 from transactionDefs import *
 
-def processAccountTxns(summary: AccountSummary, txns: list[Transaction]):
+def processAccountTxns(account: AccountSummary, txns: list[Transaction], stocks: dict[str, list[Transaction]]):
     cashInByYear = dict()
     cashOutByYear = dict()
     feesByYear = dict()
@@ -22,21 +22,42 @@ def processAccountTxns(summary: AccountSummary, txns: list[Transaction]):
             dateOpened = txn.date
         if type == CASH_IN:
             cashInByYear[taxYear] = cashInByYear.get(taxYear, Decimal(0.0)) + txn.credit
-            summary.cashBalance += txn.credit
+            account.cashBalance += txn.credit
         elif type == CASH_OUT:
             cashOutByYear[taxYear] = cashOutByYear.get(taxYear, Decimal(0.0)) + txn.debit
-            summary.cashBalance -= txn.debit
+            account.cashBalance -= txn.debit
         elif type == FEES:
             feesByYear[taxYear] = feesByYear.get(taxYear, Decimal(0.0)) + txn.debit
-            summary.cashBalance -= txn.debit
+            account.cashBalance -= txn.debit
         elif type == REFUND:
             feesByYear[taxYear] = feesByYear.get(taxYear, Decimal(0.0)) - txn.credit
-            summary.cashBalance += txn.credit
-    summary.dateOpened = dateOpened
-    summary.cashInByYear = cashInByYear
-    summary.cashOutByYear = cashOutByYear
-    summary.feesByYear = feesByYear
-    return summary
+            account.cashBalance += txn.credit
+        elif type == BUY:
+            debit = convertToSterling(stocks.get(txn.debitCurrency, None), txn, txn.debit)
+            account.cashBalance -= debit
+        elif type == SELL:
+            if (txn.isin != USD and txn.isin != EUR):
+                #Ignore currency sells as we have factored this in from dividends already
+                credit = convertToSterling(stocks.get(txn.creditCurrency, None), txn, txn.credit)
+                account.cashBalance += credit
+        elif type == DIVIDEND:
+            interest = convertToSterling(stocks.get(txn.creditCurrency, None), txn, txn.credit)
+            account.cashBalance += interest
+        elif type == INTEREST:
+            interest = convertToSterling(stocks.get(txn.creditCurrency, None), txn, txn.credit)
+            account.cashBalance += interest
+            yr = getTaxYear(txn.date)
+            account.dividendsByYear[yr] = account.dividendsByYear.get(yr, 0) + interest
+        else:
+            print(f"Got a transaction type '{type}' that isn't recognised for {account.name}: Detail: {txn}\n")
+        txn.accountBalance = account.cashBalance #Capture running balance in transaction
+        
+    account.dateOpened = dateOpened
+    account.cashInByYear = cashInByYear
+    account.cashOutByYear = cashOutByYear
+    account.feesByYear = feesByYear
+    account.transactions = txns
+    return account
 
 def processStockTxns(account: AccountSummary, securities, funds, stocks: dict[str, list[Transaction]], stock):
     txns = stocks[stock]
@@ -66,7 +87,6 @@ def processStockTxns(account: AccountSummary, securities, funds, stocks: dict[st
                 details.startDate = txn.date
             details.qtyHeld += txn.qty
             debit = convertToSterling(stocks.get(txn.debitCurrency, None), txn, txn.debit)
-            account.cashBalance -= debit
             priceIncCosts =  debit / txn.qty
             if (txn.price != 0):
                 costs = debit - (txn.qty * txn.price)
@@ -90,7 +110,6 @@ def processStockTxns(account: AccountSummary, securities, funds, stocks: dict[st
                     details.name = details.isin
                     details.symbol = details.isin
             credit = convertToSterling(stocks.get(txn.creditCurrency, None), txn, txn.credit)
-            account.cashBalance += credit
             priceIncCosts = credit / txn.qty
             gain = (priceIncCosts - details.avgSharePrice) * txn.qty #CGT uses average purchase price at time of selling
             details.realisedCapitalGainByYear[taxYear] = details.realisedCapitalGainByYear.get(taxYear, Decimal(0.0)) + gain
@@ -117,7 +136,6 @@ def processStockTxns(account: AccountSummary, securities, funds, stocks: dict[st
                 details = newDetails
         elif type == DIVIDEND:
             divi = convertToSterling(stocks.get(txn.creditCurrency, None), txn, txn.credit)
-            account.cashBalance += divi
             lastDivi = divi
             lastDiviDate = txn.date
             details.dividendsByYear[taxYear] = details.dividendsByYear.get(taxYear, Decimal(0.0)) + divi
@@ -126,6 +144,8 @@ def processStockTxns(account: AccountSummary, securities, funds, stocks: dict[st
             else:
                 yearYield = 0.0
             details.dividendYieldByYear[taxYear] = yearYield
+        else:
+            print(f"Got a transaction type {type} that dont recognise for account {account.name} and stock {stock}: Detail: {txn}\n")
 
     #From remaining stock history workout paper gain
     # totalPaperGain = 0
