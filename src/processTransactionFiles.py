@@ -17,7 +17,7 @@ def saveAccountSummary(config, accountSummary: AccountSummary, stockLedgerList: 
     accSummaryHtml = getAccountSummaryHtml(accountSummary, stockLedgerList)
     saveStringToDropbox(config, f"/performance/{accountSummary.name}-Summary.html", accSummaryHtml)
 
-def summarisePerformance(accountSummary: AccountSummary, stockSummary: list[SecurityDetails]):
+def summarisePerformance(accountSummary: AccountSummary, stockSummary: list[SecurityDetails], funds: dict[str, FundOverview]):
     totalShareInvested = Decimal(0.0)
     totalCashInvested = Decimal(0.0)
     totalDiviReInvested = Decimal(0.0)
@@ -32,8 +32,8 @@ def summarisePerformance(accountSummary: AccountSummary, stockSummary: list[Secu
         fundTotals[typ] = FundOverview("None", "None", typ)
     aggInvestedByYear = dict()
     totalDiviYieldByYear = dict()
-    totalMarketValue = Decimal(0.0)
-    totalByInstituion: dict[str, Decimal] = dict()
+    totalMarketValue = accountSummary.cashBalance
+    totalByInstitution: dict[str, Decimal] = dict()
     detailsToProcess: list[SecurityDetails] = list()
     detailsToProcess.extend(stockSummary)
     for details in stockSummary:
@@ -46,10 +46,10 @@ def summarisePerformance(accountSummary: AccountSummary, stockSummary: list[Secu
             if value == 0:
                 value = float(details.totalInvested)
             fundType = fund.fundType
-            if totalByInstituion.get(fund.institution, None):
-               totalByInstituion[fund.institution] += Decimal(value)
+            if totalByInstitution.get(fund.institution, None):
+               totalByInstitution[fund.institution] += Decimal(value)
             else:
-               totalByInstituion[fund.institution] = Decimal(value) 
+               totalByInstitution[fund.institution] = Decimal(value) 
             fundTotals[fundType].alpha3Yr += fund.alpha3Yr * value
             fundTotals[fundType].americas += fund.americas * value
             fundTotals[fundType].americasEmerging += fund.americasEmerging * value
@@ -58,6 +58,7 @@ def summarisePerformance(accountSummary: AccountSummary, stockSummary: list[Secu
             fundTotals[fundType].beta3Yr += fund.beta3Yr * value
             fundTotals[fundType].cyclical += fund.cyclical * value
             fundTotals[fundType].defensive += fund.defensive * value
+            fundTotals[fundType].uk += fund.uk * value
             fundTotals[fundType].europe += fund.europe * value
             fundTotals[fundType].europeEmerging += fund.europeEmerging * value
             fundTotals[fundType].fees += fund.fees * value
@@ -72,13 +73,13 @@ def summarisePerformance(accountSummary: AccountSummary, stockSummary: list[Secu
             fundTotals[fundType].actualReturn += details.avgGainPerYearPerc() * value
             if (fund.alpha3Yr + fund.beta3Yr + fund.sharpe3Yr + fund.stdDev3Yr >0): fundTotals[fundType].totRiskVal += Decimal(value)
             if (fund.cyclical + fund.defensive + fund.sensitive >0): fundTotals[fundType].totDivVal += Decimal(value)
-            if (fund.americasEmerging + fund.americas + fund.asia + fund.asiaEmerging + fund.europe + fund.europeEmerging >0): fundTotals[fundType].totGeoVal += Decimal(value)
+            if (fund.americasEmerging + fund.americas + fund.asia + fund.asiaEmerging + fund.uk + fund.europe + fund.europeEmerging >0): fundTotals[fundType].totGeoVal += Decimal(value)
             if (fund.maturity): fundTotals[fundType].totMatVal += Decimal(value)
         else:
             #Assume a share stock
             fundTotals[FundType.SHARE].totalValue += Decimal(value)
-            fundTotals[FundType.SHARE].europe += 100 * value  #Assume all shares are UK based
-            fundTotals[FundType.SHARE].totGeoVal += Decimal(value)  #Assume all shares are UK based
+            fundTotals[FundType.SHARE].uk += 100 * value  #Assume all shares are UK based
+            fundTotals[FundType.SHARE].totGeoVal += Decimal(value)
             fundTotals[FundType.SHARE].totalInvested += details.totalInvested
             fundTotals[FundType.SHARE].actualReturn += details.avgGainPerYearPerc() * value
 
@@ -96,6 +97,26 @@ def summarisePerformance(accountSummary: AccountSummary, stockSummary: list[Secu
         for year,divi in details.dividendsByYear.items():
             totalDivi[year] = totalDivi.get(year, Decimal(0.0)) + divi
 
+    #If a cash account, add in to CASH type
+    if accountSummary.name in funds.keys():
+        fund = funds[accountSummary.name]
+        fundType = fund.fundType
+        if totalByInstitution.get(fund.institution, None):
+            totalByInstitution[fund.institution] += Decimal(accountSummary.cashBalance)
+        else:
+            totalByInstitution[fund.institution] = Decimal(accountSummary.cashBalance) 
+        fundTotals[fundType].totalValue += accountSummary.cashBalance
+        fundTotals[fundType].totalInvested += accountSummary.totalInvested()
+        fundTotals[fundType].uk += 100 * float(accountSummary.cashBalance)  #Assume UK based
+        fundTotals[fundType].totGeoVal += accountSummary.cashBalance
+        fundTotals[fundType].actualReturn += 100 * float(accountSummary.cashBalance - accountSummary.totalInvested()) #This is a %
+    else:
+        #Add any cash balance of account to Cash fund
+        fundType = FundType.CASH
+        fundTotals[fundType].totalValue += accountSummary.cashBalance
+        fundTotals[fundType].uk += 100 * float(accountSummary.cashBalance)  #Assume UK based
+        fundTotals[fundType].totGeoVal += accountSummary.cashBalance
+
     for typ, fund in fundTotals.items():
         value = float(fund.totalValue)
         if value == 0:
@@ -108,6 +129,7 @@ def summarisePerformance(accountSummary: AccountSummary, stockSummary: list[Secu
         fund.beta3Yr = fund.beta3Yr / float(fund.totRiskVal) if fund.totRiskVal != 0 else 0.0
         fund.cyclical = fund.cyclical / float(fund.totDivVal) if fund.totDivVal != 0 else 0.0
         fund.defensive = fund.defensive / float(fund.totDivVal) if fund.totDivVal != 0 else 0.0
+        fund.uk = fund.uk / float(fund.totGeoVal) if fund.totGeoVal != 0 else 0.0
         fund.europe = fund.europe / float(fund.totGeoVal) if fund.totGeoVal != 0 else 0.0
         fund.europeEmerging = fund.europeEmerging / float(fund.totGeoVal) if fund.totGeoVal != 0 else 0.0
         fund.fees = fund.fees / value
@@ -143,9 +165,10 @@ def summarisePerformance(accountSummary: AccountSummary, stockSummary: list[Secu
             feesPerYear[taxYear] = feesPerYear.get(taxYear, Decimal(0.0)) + Decimal(9.99)
             feesDirectDebitDate += increment 
 
+
     accountSummary.totalCashInvested = totalCashInvested
     accountSummary.totalDiviReInvested = totalDiviReInvested
-    accountSummary.totalMarketValue = totalMarketValue + accountSummary.cashBalance
+    accountSummary.totalMarketValue = totalMarketValue
     accountSummary.totalInvestedInSecurities = totalShareInvested
     accountSummary.totalDealingCosts = totalCosts
     accountSummary.totalPaperGainForTax = totalPaperGainForTax
@@ -156,7 +179,7 @@ def summarisePerformance(accountSummary: AccountSummary, stockSummary: list[Secu
     accountSummary.dividendsByYear = totalDivi
     accountSummary.dividendYieldByYear = totalDiviYieldByYear
     accountSummary.fundTotals = fundTotals
-    accountSummary.totalByInstitution = totalByInstituion
+    accountSummary.totalByInstitution = totalByInstitution
 
 def getPortfolioOverviews(config):
     #List portfolio directory for account portfolio files
@@ -396,7 +419,7 @@ def getFundOverviews(config):
                     fund.income = True
                 else:
                     fund.income = False
-                fund.fees = float(row['Fees'])
+                fund.fees = float(row['Fees']) if row['Fees'].strip() != '' else float(0.0)
                 fund.maturity = float(row['Maturity']) if row['Maturity'].strip() != '' else float(0.0)
                 fund.risk = Risk[row['Risk'].strip().upper()]
                 grade = row['Bond-Grade'].strip()
@@ -404,6 +427,7 @@ def getFundOverviews(config):
                     fund.bondGrade = BondGrade[grade]
                 fund.americas = float(row['Americas']) if row['Americas'].strip() != '' else float(0.0)
                 fund.americasEmerging = float(row['Americas-Emerging']) if row['Americas-Emerging'].strip() != '' else float(0.0)
+                fund.uk = float(row['UK']) if row['UK'].strip() != '' else float(0.0)
                 fund.europe = float(row['Europe']) if row['Europe'].strip() != '' else float(0.0)
                 fund.europeEmerging = float(row['Euro-Emerging']) if row['Euro-Emerging'].strip() != '' else float(0.0)
                 fund.asia = float(row['Asia']) if row['Asia'].strip() != '' else float(0.0)
@@ -430,7 +454,7 @@ def processTransactions(config):
     #Get Latest Account Portfolio positions
     securitiesByAccount = getPortfolioOverviews(config)
     #Get Fund overview stats
-    fundOverviews: dict[FundOverview] = getFundOverviews(config) 
+    fundOverviews: dict[str, FundOverview] = getFundOverviews(config) 
 
     #For each account process each stock transactions to work out cash flow and share ledger
     totalCosts = 0
@@ -454,7 +478,7 @@ def processTransactions(config):
         #Save to Dropbox file
         saveStockLedger(configStore, accountSummary, stockLedgerList)
         #Summarise account performance
-        summarisePerformance(accountSummary, stockLedgerList)
+        summarisePerformance(accountSummary, stockLedgerList, fundOverviews)
         allAccounts.append(accountSummary)
         saveAccountSummary(configStore, accountSummary, stockLedgerList)    #Create overall summary
     totalStockList = sorted(allStocks, key = lambda stock: stock.avgGainPerYearPerc(), reverse = True)

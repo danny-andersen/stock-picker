@@ -68,6 +68,7 @@ class FundOverview:
     bondGrade: BondGrade = BondGrade.NONE
     americas: float = 0.0
     americasEmerging: float = 0.0
+    uk: float = 0.0
     europe: float = 0.0
     europeEmerging: float = 0.0
     asia: float = 0.0
@@ -100,7 +101,7 @@ class FundOverview:
             retStr += f"Bond Grade: {self.bondGrade.name}\n"
         else:
             retStr += f"Stock spread: Cyclical {self.cyclical}%, Sensitive {self.sensitive}%, Defensive {self.defensive}%\n"
-        retStr += f"Geographical Spread: Americas {self.americas}%, Americas Emerging {self.americasEmerging}%,"
+        retStr += f"Geographical Spread: Americas {self.americas}%, Americas Emerging {self.americasEmerging}%, UK {self.uk}%"
         retStr += f"Europe {self.europe}%, Europe Emerging {self.europeEmerging}%,"
         retStr += f"Asia {self.asia}%, Asia Emerging {self.asiaEmerging}%\n"
         retStr += f"3 year Stats: Alpha {self.alpha3Yr} Beta {self.beta3Yr} Sharpe {self.sharpe3Yr} Standard Dev {self.stdDev3Yr}\n"
@@ -157,13 +158,14 @@ class FundOverview:
                 self.sharpe3Yr = (self.sharpe3Yr * currVal + fund.sharpe3Yr * val) / totValue
                 self.stdDev3Yr = (self.stdDev3Yr * currVal + fund.stdDev3Yr * val) / totValue
 
-            ownTotGeo = self.americas + self.americasEmerging + self.asia + self.asiaEmerging + self.europe + self.europeEmerging
-            newTotGeo = fund.americas + fund.americasEmerging + fund.asia + fund.asiaEmerging + fund.europe + fund.europeEmerging
+            ownTotGeo = self.americas + self.americasEmerging + self.asia + self.asiaEmerging + self.europe + self.europeEmerging + self.uk
+            newTotGeo = fund.americas + fund.americasEmerging + fund.asia + fund.asiaEmerging + fund.europe + fund.europeEmerging + fund.uk
             if (ownTotGeo == 0 and newTotGeo != 0):
                 self.americas = fund.americas
                 self.americasEmerging = fund.americasEmerging
                 self.asia = fund.asia
                 self.asiaEmerging = fund.asiaEmerging
+                self.uk = fund.uk
                 self.europe = fund.europe
                 self.europeEmerging = fund.europeEmerging
             elif (ownTotGeo != 0 and newTotGeo != 0):
@@ -173,6 +175,8 @@ class FundOverview:
                 self.asiaEmerging = (self.asiaEmerging * currVal + fund.asiaEmerging * val) / totValue
                 self.europe = (self.europe * currVal + fund.europe * val) / totValue
                 self.europeEmerging = (self.europeEmerging * currVal + fund.europeEmerging * val) / totValue
+                self.uk = (self.uk * currVal + fund.uk * val) / totValue
+
 
             ownTotDiv = self.cyclical + self.defensive + self.sensitive
             newTotDiv = fund.cyclical + fund.defensive + fund.sensitive

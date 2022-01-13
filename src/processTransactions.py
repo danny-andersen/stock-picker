@@ -51,7 +51,7 @@ def processAccountTxns(account: AccountSummary, txns: list[Transaction], stocks:
         else:
             print(f"Got a transaction type '{type}' that isn't recognised for {account.name}: Detail: {txn}\n")
         txn.accountBalance = account.cashBalance #Capture running balance in transaction
-        
+
     account.dateOpened = dateOpened
     account.cashInByYear = cashInByYear
     account.cashOutByYear = cashOutByYear
@@ -59,7 +59,7 @@ def processAccountTxns(account: AccountSummary, txns: list[Transaction], stocks:
     account.transactions = txns
     return account
 
-def processStockTxns(account: AccountSummary, securities, funds, stocks: dict[str, list[Transaction]], stock):
+def processStockTxns(account: AccountSummary, securities, funds: dict[str, FundOverview], stocks: dict[str, list[Transaction]], stock):
     txns = stocks[stock]
     lastDiviDate = None
     lastDivi = Decimal(0.0)

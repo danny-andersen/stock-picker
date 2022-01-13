@@ -121,7 +121,7 @@ def getAccountSummaryHtml(accountSummary: AccountSummary, stockLedgerList: list[
     tot5yrRet = 0.0
     totStocks = Decimal(0.0)
     totBonds = Decimal(0.0)
-    totCash = accountSummary.cashBalance
+    totCash = Decimal(0.0)
     totGold = Decimal(0.0)
     for typ, fund in funds.items():
         fs.appendChild(tr(td(typ.name),td(f"£{fund.totalInvested:,.0f}"), td(f"£{fund.totalValue:,.0f}"),td(f"{100*fund.totalValue/totalAccountValue:0.2f}%"),
@@ -192,35 +192,37 @@ def getAccountSummaryHtml(accountSummary: AccountSummary, stockLedgerList: list[
     dom.appendChild(fr)
     dom.appendChild(h3("\nGeographical Spread\n"))
     fr = table()
-    fr.appendChild(tr(th('Type'),th('Americas'),th('Americas-Emerging'),th('Asia'),th('Asia-Emerging'),th('Europe'),th('Europe-Emerging'),th('Total') ))
+    fr.appendChild(tr(th('Type'),th('Americas'),th('Americas-Emerging'),th('Asia'),th('Asia-Emerging'),th('UK'),th('Europe'),th('Europe-Emerging'),th('Total') ))
     totamer = 0.0
     totamerem = 0.0
     totasia = 0.0
     totasiaem = 0.0
+    totuk = 0.0
     toteuro = 0.0
     toteuroem = 0.0
     totVal = 0.0
     for typ, fund in funds.items():
-            totPerc = fund.americas + fund.americasEmerging + fund.asia + fund.asiaEmerging + fund.europe + fund.europeEmerging
-            fr.appendChild(tr(td(typ.name),td(f"{fund.americas:0.2f}"), td(f"{fund.americasEmerging:0.2f}"),
-                        td(f"{fund.asia:0.2f}"),td(f"{fund.asiaEmerging:0.2f}"),
-                        td(f"{fund.europe:0.2f}"),td(f"{fund.europeEmerging:0.2f}"),
-                        td(f"{totPerc:0.2f}") ))
+            totPerc = fund.americas + fund.americasEmerging + fund.asia + fund.asiaEmerging + fund.uk + fund.europe + fund.europeEmerging
+            fr.appendChild(tr(td(typ.name),td(f"{fund.americas:0.2f}%"), td(f"{fund.americasEmerging:0.2f}%"),
+                        td(f"{fund.asia:0.2f}%"),td(f"{fund.asiaEmerging:0.2f}%"), td(f"{fund.uk:0.2f}%"),
+                        td(f"{fund.europe:0.2f}%"),td(f"{fund.europeEmerging:0.2f}%"),
+                        td(f"{totPerc:0.2f}%") ))
             if (totPerc != 0):
                 val = float(fund.totalValue)
-                totamer += fund.americas * val
-                totamerem += fund.americasEmerging * val
-                totasia += fund.asia * val
-                totasiaem += fund.asiaEmerging * val
-                toteuro += fund.europe * val
-                toteuroem += fund.europeEmerging * val
+                totamer += (fund.americas * val)
+                totamerem += (fund.americasEmerging * val)
+                totasia += (fund.asia * val)
+                totasiaem += (fund.asiaEmerging * val)
+                totuk += (fund.uk * val)
+                toteuro += (fund.europe * val)
+                toteuroem += (fund.europeEmerging * val)
                 totVal += val
     totVal = totVal if totVal else 1.0
-    totPerc = (totamer + totamerem + totasia + totasiaem + toteuro + toteuroem)/totVal
-    fr.appendChild(tr(td("Overall"),td(f"{totamer/totVal:0.2f}"), td(f"{totamerem/totVal:0.2f}"),
-                        td(f"{totasia/totVal:0.2f}"),td(f"{totasiaem/totVal:0.2f}"),
-                        td(f"{toteuro/totVal:0.2f}"),td(f"{toteuroem/totVal:0.2f}"),
-                        td(f"{totPerc:0.2f}") ))
+    totPerc = (totamer + totamerem + totasia + totasiaem + totuk + toteuro + toteuroem)/totVal
+    fr.appendChild(tr(td("Overall"),td(f"{totamer/totVal:0.2f}%"), td(f"{totamerem/totVal:0.2f}%"),
+                        td(f"{totasia/totVal:0.2f}%"),td(f"{totasiaem/totVal:0.2f}%"),td(f"{totuk/totVal:0.2f}%"),
+                        td(f"{toteuro/totVal:0.2f}%"),td(f"{toteuroem/totVal:0.2f}%"),
+                        td(f"{totPerc:0.2f}%") ))
     dom.appendChild(fr)
     dom.appendChild(h3("\nFund Diversity\n"))
     fr = table()
@@ -232,7 +234,7 @@ def getAccountSummaryHtml(accountSummary: AccountSummary, stockLedgerList: list[
     for typ, fund in funds.items():
         if (typ != FundType.SHARE):
             totPerc = fund.cyclical+fund.sensitive+fund.defensive
-            fr.appendChild(tr(td(typ.name),td(f"{fund.cyclical:0.2f}"), td(f"{fund.sensitive:0.2f}"),td(f"{fund.defensive:0.2f}"),td(f"{totPerc:0.2f}")))
+            fr.appendChild(tr(td(typ.name),td(f"{fund.cyclical:0.2f}%"), td(f"{fund.sensitive:0.2f}%"),td(f"{fund.defensive:0.2f}%"),td(f"{totPerc:0.2f}%")))
             if (totPerc != 0):
                 val = float(fund.totalValue)
                 totCyc += fund.cyclical * val
@@ -241,7 +243,7 @@ def getAccountSummaryHtml(accountSummary: AccountSummary, stockLedgerList: list[
                 totVal += val
     totVal = totVal if totVal else 1.0
     totPerc = (totCyc + totSens + totDef)/totVal
-    fr.appendChild(tr(td("Overall"),td(f"{totCyc/totVal:0.2f}"), td(f"{totSens/totVal:0.2f}"),td(f"{totDef/totVal:0.2f}"),td(f"{totPerc:0.2f}")))
+    fr.appendChild(tr(td("Overall"),td(f"{totCyc/totVal:0.2f}%"), td(f"{totSens/totVal:0.2f}%"),td(f"{totDef/totVal:0.2f}%"),td(f"{totPerc:0.2f}%")))
     dom.appendChild(fr)
 
     startYear = accountSummary.dateOpened
