@@ -149,7 +149,7 @@ def getAccountSummaryHtml(accountSummary: AccountSummary, stockLedgerList: list[
     dom.appendChild(fs)
     dom.appendChild(h3("\nPortfolio Percentages and guardrails\n"))
     fs = table()
-    fs.appendChild(tr(th('Type'),th('Total Invested'),th('Total Market Value'),th('Portfolio%'),th('Min%'),th('Ideal%'),th('Max%'),th('Buy / (Sell)')))
+    fs.appendChild(tr(th('Type'),th(' Total Market Value '),th(' Portfolio% '),th('  Min%  '),th('  Ideal%'  ),th('  Max%'  ),th('  Buy / (Sell)  ')))
     stocksPerc = 100*totStocks/totalAccountValue
     min = int(portPerc['stocks_min'])
     max = int(portPerc['stocks_max'])
@@ -158,8 +158,8 @@ def getAccountSummaryHtml(accountSummary: AccountSummary, stockLedgerList: list[
     if stocksPerc <= min:
         buy = f"£{(ideal-stocksPerc)*totalAccountValue/100:,.0f}"
     elif stocksPerc >= max:
-        buy = f"(£{(max-stocksPerc)*totalAccountValue/100:,.0f}"
-    fs.appendChild(tr(td("Stocks"),td("-"), td(f"£{totStocks:,.0f}"),td(f"{stocksPerc:0.02f}%"),
+        buy = f"(£{(stocksPerc-ideal)*totalAccountValue/100:,.0f})"
+    fs.appendChild(tr(td("Stocks"),td(f"£{totStocks:,.0f}"),td(f"{stocksPerc:0.02f}%"),
                         td(f"{min:0.01f}%"), td(f"{ideal:0.01f}%"), td(f"{max:0.01f}%"), td(buy) ))
     bondsPerc = 100*totBonds/totalAccountValue
     min = int(portPerc['bonds_min'])
@@ -169,8 +169,8 @@ def getAccountSummaryHtml(accountSummary: AccountSummary, stockLedgerList: list[
     if bondsPerc <= min:
         buy = f"£{(ideal-bondsPerc)*totalAccountValue/100:,.0f}"
     elif bondsPerc >= max:
-        buy = f"(£{(max-bondsPerc)*totalAccountValue/100:,.0f})"
-    fs.appendChild(tr(td("Bonds"),td("-"), td(f"£{totBonds:,.0f}"),td(f"{bondsPerc:0.02f}%"),
+        buy = f"(£{(bondsPerc-ideal)*totalAccountValue/100:,.0f})"
+    fs.appendChild(tr(td("Bonds"),td(f"£{totBonds:,.0f}"),td(f"{bondsPerc:0.02f}%"),
                         td(f"{min:0.01f}%"), td(f"{ideal:0.01f}%"), td(f"{max:0.01f}%"), td(buy) ))
     cashPerc = 100*totCash/totalAccountValue
     min = int(portPerc['cash_min'])
@@ -180,8 +180,8 @@ def getAccountSummaryHtml(accountSummary: AccountSummary, stockLedgerList: list[
     if cashPerc <= min:
         buy = f"£{(ideal-cashPerc)*totalAccountValue/100:,.0f}"
     elif cashPerc >= max:
-        buy = f"(£{(max-cashPerc)*totalAccountValue/100:,.0f})"
-    fs.appendChild(tr(td("Cash"),td("-"), td(f"£{totCash:,.0f}"),td(f"{cashPerc:0.02f}%"),
+        buy = f"(£{(cashPerc-ideal)*totalAccountValue/100:,.0f})"
+    fs.appendChild(tr(td("Cash"),td(f"£{totCash:,.0f}"),td(f"{cashPerc:0.02f}%"),
                         td(f"{min:0.01f}%"), td(f"{ideal:0.01f}%"), td(f"{max:0.01f}%"), td(buy) ))
     goldPerc = 100*totGold/totalAccountValue
     min = int(portPerc['gold_min'])
@@ -191,8 +191,8 @@ def getAccountSummaryHtml(accountSummary: AccountSummary, stockLedgerList: list[
     if goldPerc <= min:
         buy = f"£{(ideal-goldPerc)*totalAccountValue/100:,.0f}"
     elif cashPerc >= max:
-        buy = f"(£{(max-goldPerc)*totalAccountValue/100:,.0f})"
-    fs.appendChild(tr(td("Gold"),td("-"), td(f"£{totGold:,.0f}"),td(f"{goldPerc:0.02f}%"),
+        buy = f"(£{(goldPerc-ideal)*totalAccountValue/100:,.0f})"
+    fs.appendChild(tr(td("Gold"), td(f"£{totGold:,.0f}"),td(f"{goldPerc:0.02f}%"),
                         td(f"{min:0.01f}%"), td(f"{ideal:0.01f}%"), td(f"{max:0.01f}%"), td(buy) ))
     dom.appendChild(fs)
     if (len(accountSummary.totalByInstitution) > 0):
