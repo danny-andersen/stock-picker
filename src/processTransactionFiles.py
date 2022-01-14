@@ -462,7 +462,7 @@ def processTransactions(config):
     allAccounts = list()
     for account, stocks in stockListByAcc.items():
         stockLedger = dict()
-        accountSummary = AccountSummary(name = account)
+        accountSummary = AccountSummary(name = account, portfolioPerc = config['portfolio_ratios'])
         sortedStocks = dict()
         for stock in stocks:
             #Sort all transactions by date first
@@ -482,7 +482,7 @@ def processTransactions(config):
         allAccounts.append(accountSummary)
         saveAccountSummary(configStore, accountSummary, stockLedgerList)    #Create overall summary
     totalStockList = sorted(allStocks, key = lambda stock: stock.avgGainPerYearPerc(), reverse = True)
-    totalSummary = AccountSummary(name = 'Total')
+    totalSummary = AccountSummary(name = 'Total', portfolioPerc = config['portfolio_ratios'])
     for summary in allAccounts:
         totalSummary.mergeInAccountSummary(summary)
     saveAccountSummary(configStore, totalSummary, totalStockList)    #Create overall summary

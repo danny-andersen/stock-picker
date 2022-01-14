@@ -321,6 +321,7 @@ class SecurityDetails:
 @dataclass
 class AccountSummary:
     name: str
+    portfolioPerc: dict
     dateOpened: datetime = datetime.now(timezone.utc)
     totalCashInvested: Decimal = Decimal(0.0)
     totalDiviReInvested: Decimal = Decimal(0.0)
