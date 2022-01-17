@@ -92,6 +92,8 @@ def getAccountSummaryHtml(accountSummary: AccountSummary, stockLedgerList: list[
     summary.appendChild(tr(td("Total invested in securities"), td(f"£{accountSummary.totalInvestedInSecurities:,.0f}")))
     summary.appendChild(tr(td("Total current market value"), td(f"£{accountSummary.totalMarketValue:,.0f}")))
     summary.appendChild(tr(td("Cash Balance"), td(f"£{accountSummary.cashBalance:,.0f}")))
+    if (accountSummary.totalOtherAccounts > 0):
+        summary.appendChild(tr(td("Total held in other accounts"), td(f"£{accountSummary.totalOtherAccounts:,.0f}")))
     summary.appendChild(tr(td("Total Account Value"), td(f"£{accountSummary.totalValue():,.0f}")))
     summary.appendChild(tr(td("Paper Capital Gain"), td(f"£{accountSummary.totalPaperGainForTax:,.0f} ({accountSummary.totalPaperGainForTaxPerc():0.2f}%)")))
     summary.appendChild(tr(td("Realised Capital gain"), td(f"£{accountSummary.totalRealisedGain():,.0f}")))
@@ -107,7 +109,7 @@ def getAccountSummaryHtml(accountSummary: AccountSummary, stockLedgerList: list[
     dom.appendChild(summary)
 
     dom.appendChild(h2("\nStatistics By Investment Type\n"))
-    dom.appendChild(h3("\nFund values and returns\n"))
+    dom.appendChild(h3("\nFund values and returns (including other acccounts)\n"))
     fs = table()
     funds = accountSummary.fundTotals
     totalAccountValue = accountSummary.totalValue()
@@ -194,6 +196,7 @@ def getAccountSummaryHtml(accountSummary: AccountSummary, stockLedgerList: list[
         buy = f"(£{(goldPerc-ideal)*totalAccountValue/100:,.0f})"
     fs.appendChild(tr(td("Gold"), td(f"£{totGold:,.0f}"),td(f"{goldPerc:0.02f}%"),
                         td(f"{min:0.01f}%"), td(f"{ideal:0.01f}%"), td(f"{max:0.01f}%"), td(buy) ))
+    fs.appendChild(tr(td("Total"), td(f"£{totGold+totCash+totBonds+totStocks:,.0f}"),td(f"{goldPerc+cashPerc+bondsPerc+stocksPerc:0.02f}%") ))
     dom.appendChild(fs)
     if (len(accountSummary.totalByInstitution) > 0):
         dom.appendChild(h3("\nValue by Institution\n"))

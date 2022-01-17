@@ -327,6 +327,7 @@ class AccountSummary:
     totalDiviReInvested: Decimal = Decimal(0.0)
     totalDealingCosts: Decimal = Decimal(0.0)
     cashBalance: Decimal = Decimal(0.0)
+    totalOtherAccounts: Decimal = Decimal(0.0)
     totalMarketValue: Decimal = Decimal(0.0)
     totalInvestedInSecurities: Decimal = Decimal(0.0)
     totalPaperGainForTax: Decimal = Decimal(0.0)
@@ -427,7 +428,7 @@ class AccountSummary:
     def totalFees(self):
         return sum(self.feesByYear.values()) if len(self.feesByYear) > 0 else Decimal(0.0)
     def totalValue(self):
-        return self.totalMarketValue
+        return self.totalMarketValue + self.totalOtherAccounts
     def totalPaperGainForTaxPerc(self):
         if self.totalInvestedInSecurities > 0:
             return 100.0 * float(self.totalPaperGainForTax) / float(self.totalInvestedInSecurities)

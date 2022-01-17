@@ -165,7 +165,6 @@ def summarisePerformance(accountSummary: AccountSummary, stockSummary: list[Secu
             feesPerYear[taxYear] = feesPerYear.get(taxYear, Decimal(0.0)) + Decimal(9.99)
             feesDirectDebitDate += increment 
 
-
     accountSummary.totalCashInvested = totalCashInvested
     accountSummary.totalDiviReInvested = totalDiviReInvested
     accountSummary.totalMarketValue = totalMarketValue
@@ -485,6 +484,14 @@ def processTransactions(config):
     totalSummary = AccountSummary(name = 'Total', portfolioPerc = config['portfolio_ratios'])
     for summary in allAccounts:
         totalSummary.mergeInAccountSummary(summary)
+
+    #Add in other account totals that are outside of the scope of these calcs
+    otherAccs = config['other_accs']
+    for ft in otherAccs.keys():
+        val = Decimal(otherAccs[ft])
+        totalSummary.fundTotals[FundType[ft.upper()]].totalValue += val
+        totalSummary.totalOtherAccounts += val
+    
     saveAccountSummary(configStore, totalSummary, totalStockList)    #Create overall summary
     
     
