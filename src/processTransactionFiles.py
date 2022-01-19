@@ -116,6 +116,9 @@ def summarisePerformance(accountSummary: AccountSummary, stockSummary: list[Secu
     if accountSummary.name in funds.keys():
         fund = funds[accountSummary.name]
         fundType = fund.fundType
+        for year,divi in totalDivi.items():
+            totalInterest[year] = totalInterest.get(year, Decimal(0.0)) + divi
+        totalDivi = dict() #Reset dividends to zero as all txns classified as dividends are interest payments
         if totalByInstitution.get(fund.institution, None):
             totalByInstitution[fund.institution] += Decimal(accountSummary.cashBalance)
         else:
@@ -281,7 +284,7 @@ def processLatestTxnFiles(config, stockListByAcc):
         with open('transactions/' + txnFile) as csvFile:
             csv_reader = csv.DictReader(csvFile)
             for row in csv_reader:
-                dt = row['Date']
+                dt = row['Date'].strip()
                 fmt = None
                 if ('/' in dt):
                     if len(dt) == 8: 
@@ -315,6 +318,7 @@ def processLatestTxnFiles(config, stockListByAcc):
                         or desc.startswith('equalisation')
                         or desc.endswith('distribution')
                         or desc.endswith('rights')
+                        or 'prize' in desc
                         or 'final frac pay' in desc
                         or 'optional dividend' in desc):
                     txn.type = DIVIDEND

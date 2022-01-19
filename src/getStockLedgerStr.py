@@ -110,21 +110,24 @@ def getAccountSummaryHtml(accountSummary: AccountSummary, stockLedgerList: list[
     summary.appendChild(tr(td("Average return per year"),td(f"£{accountSummary.avgReturnPerYear():,.0f}")))
     dom.appendChild(summary)
 
-    dom.appendChild(h3("\nTax liability\n"))
+    dom.appendChild(h2("\nTax liability\n"))
     currentTaxYear = getTaxYear(datetime.now())
     lastTaxYear = getTaxYear(datetime.now() - timedelta(weeks=52))
-    tx = table()
     if len(accountSummary.mergedAccounts) == 0:
         #Single account
         accounts = [accountSummary]
     else:
         accounts = accountSummary.mergedAccounts
-    tx.appendChild(tr(th(' Account '),th(' Tax Year '),th(' Capital Gain '),th(' CG Tax '),th(' CGT Rem Allowance '),
-                                th(' Dividends '),th(' Dividend Tax '),th(' Income '),th(' Income Tax ')))
-    for yr in [currentTaxYear, lastTaxYear]:
+    for yr in [lastTaxYear, currentTaxYear]:
+        dom.appendChild(h3(f"\nTax Year {yr}\n"))
+        tx = table()
+        tx.appendChild(tr(th(' Account '),th(' Capital Gain '),th(' Taxable CG '),th(' CG Tax '),th(' CGT Rem Allowance '),
+                                th(' Divi '),th(' Taxable Divi '),th(' Divi Tax '),th(' Divi All Rem '),th(' Taxable Income '),th(' Income Tax ')))
         totalCG = Decimal(0.0)
+        totalTaxableCG = Decimal(0.0)
         totalCGT = Decimal(0.0)
         totalDivi = Decimal(0.0)
+        totalTaxableDivi = Decimal(0.0)
         totalDiviTax = Decimal(0.0)
         totalIncome = Decimal(0.0)
         totalIncomeTax = Decimal(0.0)
@@ -132,32 +135,37 @@ def getAccountSummaryHtml(accountSummary: AccountSummary, stockLedgerList: list[
             band = account.taxBandByYear.get(yr, Decimal(0.0))
             cg = account.realisedGainForTaxByYear.get(yr, Decimal(0.0)) if len(account.realisedGainForTaxByYear) > 0 else Decimal(0.0)
             totalCG += cg
+            taxablecg = account.taxableCG(yr)
+            totalTaxableCG += taxablecg
             cgt = account.calcCGT(band, yr)
             totalCGT += cgt
             divi = account.dividendsByYear.get(yr, Decimal(0.0))
             totalDivi += divi
+            taxableDivi = account.taxableDivi(yr)
+            totalTaxableDivi += taxableDivi
             diviTax = account.calcDividendTax(band, yr)
             totalDiviTax += diviTax
-            income = account.taxableIncome(yr) + account.interestByYear.get(yr, Decimal(0.0))
+            income = account.taxableIncome(yr)
             totalIncome += income
             incomeTax = account.calcIncomeTax(band, yr)
             totalIncomeTax += incomeTax
-            tx.appendChild(tr(td(account.name),td(yr),td(f"£{cg:,.0f}"), 
+            tx.appendChild(tr(td(account.name),td(f"£{cg:,.0f}"), td(f"£{taxablecg:,.0f}"),
                         td(f"£{cgt:,.0f}"), td("-"),
                         td(f"£{divi:,.0f}"), 
-                        td(f"£{diviTax:,.0f}"), td("-"),
+                        td(f"£{diviTax:,.0f}"), td(f"£{taxableDivi:,.0f}"), td("-"),
                         td(f"£{income:,.0f}"),
                         td(f"£{incomeTax:,.0f}"),
                     ))
         #Note: Use last account processed to get remaining allowance info
-        tx.appendChild(tr(td("Total"), td(yr),td(f"£{totalCG:,.0f}"), 
-                        td(f"£{totalCGT:,.0f}"), td(f"£{account.cgtAllowance(totalCG):,.0f}"),
+        tx.appendChild(tr(td("Total"), td(f"£{totalCG:,.0f}"), td(f"£{totalTaxableCG:,.0f}"), 
+                        td(f"£{totalCGT:,.0f}"), td(f"£{account.getRemainingCGTAllowance(totalTaxableCG):,.0f}"),
                         td(f"£{totalDivi:,.0f}"), 
-                        td(f"£{totalDiviTax:,.0f}"), td(f"£{account.diviAllowance(totalDivi):,.0f}"),
+                        td(f"£{totalTaxableDivi:,.0f}"), td(f"£{totalDiviTax:,.0f}"),
+                        td(f"£{account.getRemainingDiviAllowance(totalTaxableDivi):,.0f}"),
                         td(f"£{totalIncome:,.0f}"),
                         td(f"£{totalIncomeTax:,.0f}"),
                         ))
-    dom.appendChild(tx)
+        dom.appendChild(tx)
 
     dom.appendChild(h2("\nStatistics By Investment Type\n"))
     dom.appendChild(h3("\nFund values and returns (including other acccounts)\n"))

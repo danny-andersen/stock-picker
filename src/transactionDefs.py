@@ -499,27 +499,33 @@ class AccountSummary:
             return float(self.totalGain) / (timeHeld.days / 365)
         else:
             return 0
-    def availableCGTAllowance(self, taxYear):
-            cgt = self.realisedGainForTaxByYear.get(taxYear, Decimal(0.0)) if len(self.realisedGainForTaxByYear) > 0 else Decimal(0.0)
-            return self.cgtAllowance(cgt)
 
-    def cgtAllowance(self, cgt):
+    def getRemainingCGTAllowance(self, cg):
         cgtAllowance = Decimal(self.taxRates['capitalgaintaxallowance'])
-        return cgtAllowance - cgt
-
-    def getTaxableCGT(self, taxYear):
-        if Decimal(self.taxRates['capitalgainlowertax']) != 0:
-            #Add in any capital gain for the tax year above the allowance
-            available = self.availableCGTAllowance(taxYear)
-            taxableCGT = -available if available < 0 else Decimal(0.0)
+        if cg > cgtAllowance:
+            rem = Decimal(0)
         else:
-            taxableCGT = Decimal(0.0)
-        return taxableCGT
+            rem = cgtAllowance - cg
+        return rem
+
+    def taxableCG(self, taxYear):
+        if (Decimal(self.taxRates['capitalgainlowertax']) == 0):
+            cg = Decimal(0)
+        else:
+            cg = self.realisedGainForTaxByYear.get(taxYear, Decimal(0.0)) if len(self.realisedGainForTaxByYear) > 0 else Decimal(0.0)
+        return cg
 
     def calcCGT(self, taxBand, taxYear):
-        taxableCGT = self.getTaxableCGT(taxYear)
         rate = Decimal(self.taxRates['capitalgain' + taxBand + 'tax'])
-        cgt = taxableCGT * rate / 100        
+        if rate == 0:
+            cgt = Decimal(0.0)
+        else:
+            cg = self.taxableCG(taxYear)
+            cgtAllowance = Decimal(self.taxRates['capitalgaintaxallowance'])
+            if cgtAllowance > cg:
+                cgt = Decimal(0)
+            else:
+                cgt = (cg - cgtAllowance) * rate / 100        
         return cgt
 
     def calcIncomeTax(self, taxBand, taxYear):
@@ -529,33 +535,43 @@ class AccountSummary:
             allowance = self.getInterestAllowance(taxBand)
             if allowance < interest:
                 income += (interest - allowance)
-        cashOutTax = Decimal(self.taxRates['withdrawl' + taxBand + 'tax'])
-        if cashOutTax != 0:
-            income += self.cashOutByYear.get(taxYear, Decimal(0.0))
         rate = Decimal(self.taxRates['income' + taxBand + 'tax'])
         tax = income * rate / 100        
+        #For a pension (SIPP) cash out is treated as income
+        cashOutTax = Decimal(self.taxRates['withdrawl' + taxBand + 'tax'])
+        if cashOutTax != 0:
+            tax += cashOutTax * self.cashOutByYear.get(taxYear, Decimal(0.0)) / 100
         return tax
 
     def getInterestAllowance(self, taxBand):
         if not taxBand or taxBand == 'lower':
-            allowance = Decimal(self.taxRates['interestLowerAllowance'])
+            allowance = Decimal(self.taxRates['interestlowerallowance'])
         else:
-            allowance = Decimal(self.taxRates['interestUpperAllowance'])
+            allowance = Decimal(self.taxRates['interestupperallowance'])
         return allowance
 
+    def taxableDivi(self, taxYear):
+        rate = Decimal(self.taxRates['dividendlowertax'])
+        if rate == 0:
+            divi = Decimal(0)
+        else:
+            divi = self.dividendsByYear.get(taxYear, Decimal(0.0)) if len(self.dividendsByYear) > 0 else Decimal(0.0)
+        return divi
+
     def calcDividendTax(self, taxBand, taxYear):
-        divi = self.dividendsByYear.get(taxYear, Decimal(0.0)) if len(self.dividendsByYear) > 0 else Decimal(0.0)
-        allowance = Decimal(self.taxRates['dividendtaxallowance'])
-        taxable = divi - allowance
+        divi = self.taxableDivi(taxYear)
         rate = Decimal(self.taxRates['dividend' + taxBand + 'tax'])
-        tax =  taxable * rate / 100        
+        if rate == 0:
+            tax = Decimal(0.0)
+        elif divi != 0:
+            allowance = Decimal(self.taxRates['dividendtaxallowance'])
+            taxable = divi - allowance if divi > allowance else Decimal(0.0)
+            tax =  taxable * rate / 100        
+        else:
+            tax = Decimal(0)
         return tax
     
-    def getRemainingDiviAllowance(self, taxYear):
-        divi = self.dividendsByYear.get(taxYear, Decimal(0.0)) if len(self.dividendsByYear) > 0 else Decimal(0.0)
-        return self.diviAllowance(divi)
-
-    def diviAllowance(self, divi):
+    def getRemainingDiviAllowance(self, divi):
         allowance = Decimal(self.taxRates['dividendtaxallowance'])
         return allowance - divi if allowance > divi else Decimal(0.0)
 
@@ -567,13 +583,10 @@ class AccountSummary:
         if Decimal(self.taxRates['withdrawllowertax']) != 0:
             #Add in any withdrawals liable to tax for the tax year
             income += self.cashOutByYear.get(taxYear, Decimal(0.0)) if len(self.cashOutByYear) > 0 else Decimal(0.0)
-        if Decimal(self.taxRates['dividendlowertax']) != 0:
-            #Add in any dividends for the tax year
-            income += self.dividendsByYear.get(taxYear, Decimal(0.0)) if len(self.dividendsByYear) > 0 else Decimal(0.0)
-        income += self.getTaxableCGT(taxYear)
         if Decimal(self.taxRates['incomelowertax']) != 0:
-            #Add in any bond or interest income for the tax year
+            #Add in any bond income for the tax year
             income += self.incomeByYear.get(taxYear, Decimal(0.0)) if len(self.incomeByYear) > 0 else Decimal(0.0)
+            #Add in any interest income for the tax year
             income += self.interestByYear.get(taxYear, Decimal(0.0)) if len(self.interestByYear) > 0 else Decimal(0.0)
         
         return income
