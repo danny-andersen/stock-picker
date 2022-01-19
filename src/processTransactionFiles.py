@@ -27,11 +27,15 @@ def summarisePerformance(accountSummary: AccountSummary, stockSummary: list[Secu
     totalRealisedForTaxGain = dict()
     totalDealingCosts = accountSummary.feesByYear
     totalDivi = accountSummary.dividendsByYear
+    totalIncome = accountSummary.incomeByYear
+    totalInterest = accountSummary.interestByYear
     fundTotals: dict[FundType, FundOverview] = dict()
     for typ in FundType:
         fundTotals[typ] = FundOverview("None", "None", typ)
     aggInvestedByYear = dict()
     totalDiviYieldByYear = dict()
+    totalIncomeYieldByYear = dict()
+    totalYieldByYear = dict()
     totalMarketValue = accountSummary.cashBalance
     totalByInstitution: dict[str, Decimal] = dict()
     detailsToProcess: list[SecurityDetails] = list()
@@ -94,8 +98,19 @@ def summarisePerformance(accountSummary: AccountSummary, stockSummary: list[Secu
             totalRealisedForTaxGain[year] = totalRealisedForTaxGain.get(year, Decimal(0.0)) + gain
         for year,costs in details.costsByYear.items():
             totalDealingCosts[year] = totalDealingCosts.get(year, Decimal(0.0)) + costs
-        for year,divi in details.dividendsByYear.items():
-            totalDivi[year] = totalDivi.get(year, Decimal(0.0)) + divi
+        if fund:
+            if fund.isBondType:
+                #A bond payment is treated as income for tax reasons
+                for year,inc in details.dividendsByYear.items():
+                    totalIncome[year] = totalIncome.get(year, Decimal(0.0)) + inc
+            elif fund.isCashType:
+                #Savings interest
+                for year,inc in details.dividendsByYear.items():
+                    totalInterest[year] = totalInterest.get(year, Decimal(0.0)) + inc
+        if (not fund or not(fund.isBondType or fund.isCashType)):
+            for year,divi in details.dividendsByYear.items():
+                totalDivi[year] = totalDivi.get(year, Decimal(0.0)) + divi
+
 
     #If a cash account, add in to CASH type
     if accountSummary.name in funds.keys():
@@ -110,6 +125,7 @@ def summarisePerformance(accountSummary: AccountSummary, stockSummary: list[Secu
         fundTotals[fundType].uk += 100 * float(accountSummary.cashBalance)  #Assume UK based
         fundTotals[fundType].totGeoVal += accountSummary.cashBalance
         fundTotals[fundType].actualReturn += 100 * float(accountSummary.cashBalance - accountSummary.totalInvested()) #This is a %
+        #If its a cash account, convert 
     else:
         #Add any cash balance of account to Cash fund
         fundType = FundType.CASH
@@ -150,8 +166,18 @@ def summarisePerformance(accountSummary: AccountSummary, stockSummary: list[Secu
         sumInvested += accountSummary.cashInByYear.get(year, Decimal(0.0)) - accountSummary.cashOutByYear.get(year,Decimal(0.0))
         aggInvestedByYear[year] = sumInvested
         if sumInvested > 0:
+            totYld = 0
             if totalDivi.get(year, Decimal(0.0)) != 0:
-                totalDiviYieldByYear[year] = 100*totalDivi.get(year, Decimal(0.0)) / sumInvested
+                yld = 100*totalDivi.get(year, Decimal(0.0)) / sumInvested
+                totalDiviYieldByYear[year] = yld
+                totYld += yld
+            if totalIncome.get(year, Decimal(0.0)) != 0 or totalInterest.get(year, Decimal(0.0)) != 0:
+                yld = 100*(totalIncome.get(year, Decimal(0.0)) + totalInterest.get(year, Decimal(0.0))) / sumInvested
+                totalIncomeYieldByYear[year] = yld
+                totYld += yld
+            if totYld > 0:
+                totalYieldByYear[year] = totYld
+
         procYear += timedelta(days=365)
 
     #Add in monthly fees trading account that is taken by DD since Jan 2020
@@ -177,9 +203,12 @@ def summarisePerformance(accountSummary: AccountSummary, stockSummary: list[Secu
     accountSummary.dealingCostsByYear  = totalDealingCosts
     accountSummary.dividendsByYear = totalDivi
     accountSummary.dividendYieldByYear = totalDiviYieldByYear
+    accountSummary.incomeByYear = totalIncome
+    accountSummary.incomeYieldByYear = totalIncomeYieldByYear
+    accountSummary.interestByYear = totalInterest
+    accountSummary.totalYieldByYear = totalYieldByYear
     accountSummary.fundTotals = fundTotals
     accountSummary.totalByInstitution = totalByInstitution
-
 def getPortfolioOverviews(config):
     #List portfolio directory for account portfolio files
     overviewDir = config['files']['portfoliosLocation']
@@ -459,9 +488,15 @@ def processTransactions(config):
     totalCosts = 0
     allStocks = list()
     allAccounts = list()
+    taxAllowances = dict()
+    for allowance, val in config['tax_thresholds'].items():
+        taxAllowances[allowance] = val
     for account, stocks in stockListByAcc.items():
         stockLedger = dict()
-        accountSummary = AccountSummary(name = account, portfolioPerc = config['portfolio_ratios'])
+        rates = taxAllowances.copy()
+        for rate, val in config[account+'_tax_rates'].items():
+            rates[rate] = val
+        accountSummary = AccountSummary(name = account, portfolioPerc = config['portfolio_ratios'], taxRates=rates)
         sortedStocks = dict()
         for stock in stocks:
             #Sort all transactions by date first
@@ -479,13 +514,29 @@ def processTransactions(config):
         #Summarise account performance
         summarisePerformance(accountSummary, stockLedgerList, fundOverviews)
         allAccounts.append(accountSummary)
-        saveAccountSummary(configStore, accountSummary, stockLedgerList)    #Create overall summary
     totalStockList = sorted(allStocks, key = lambda stock: stock.avgGainPerYearPerc(), reverse = True)
     totalSummary = AccountSummary(name = 'Total', portfolioPerc = config['portfolio_ratios'])
+    currentTaxableIncome = Decimal(0.0)
+    lastTaxableIncome = Decimal(0.0)
+    currentTaxYear = getTaxYear(datetime.now())
+    lastTaxYear = getTaxYear(datetime.now() - timedelta(weeks=52))
     for summary in allAccounts:
+        currentTaxableIncome += summary.taxableIncome(currentTaxYear)
+        lastTaxableIncome += summary.taxableIncome(lastTaxYear)
         totalSummary.mergeInAccountSummary(summary)
 
+    otherIncome = config['other_income']
+    currentTaxableIncome += Decimal(otherIncome['salary_current']) + Decimal(otherIncome['pension_current'])
+    lastTaxableIncome += Decimal(otherIncome['salary_last']) + Decimal(otherIncome['pension_last'])
+    #Based on total income, calculate the taxband
+    totalSummary.taxBandByYear[currentTaxYear] = calcTaxBand(taxAllowances, currentTaxableIncome)
+    totalSummary.taxBandByYear[lastTaxYear] = calcTaxBand(taxAllowances, lastTaxableIncome)
+    for summary in allAccounts:
+        summary.taxBandByYear = totalSummary.taxBandByYear 
+        saveAccountSummary(configStore, summary, stockLedgerList)    #Create overall summary of account
+
     #Add in other account totals that are outside of the scope of these calcs
+    #NOTE: If these have a (significant) impact on taxable earnings, they need to be brought into scope and account created for them
     otherAccs = config['other_accs']
     for ft in otherAccs.keys():
         val = Decimal(otherAccs[ft])

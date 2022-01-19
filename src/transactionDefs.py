@@ -341,11 +341,19 @@ class AccountSummary:
     dealingCostsByYear: dict[str, Decimal(0.0)] = field(default_factory=dict)
     dividendsByYear: dict[str, Decimal(0.0)] = field(default_factory=dict)
     dividendYieldByYear: dict[str, Decimal(0.0)] = field(default_factory=dict)
+    incomeByYear: dict[str, Decimal(0.0)] = field(default_factory=dict)
+    interestByYear: dict[str, Decimal(0.0)] = field(default_factory=dict)
+    incomeYieldByYear: dict[str, Decimal(0.0)] = field(default_factory=dict)
+    totalYieldByYear: dict[str, Decimal(0.0)] = field(default_factory=dict)
     fundTotals: dict[FundType, FundOverview] = field(default_factory=dict)
     totalByInstitution: dict[str, Decimal] = field(default_factory=dict)
     transactions: list[Transaction] = field(default_factory=list)
+    taxRates: dict = field(default_factory=dict)
+    taxBandByYear: dict[str, str] = field(default_factory=dict)
+    mergedAccounts: list = field(default_factory=list)
 
     def mergeInAccountSummary(self, summary):
+        self.mergedAccounts.append(summary)
         if (summary.dateOpened < self.dateOpened):
             self.dateOpened = summary.dateOpened
         self.totalCashInvested += summary.totalCashInvested
@@ -402,11 +410,35 @@ class AccountSummary:
             if (yr not in self.dividendsByYear):
                 self.dividendsByYear[yr] = summary.dividendsByYear[yr]
 
+        for yr in self.incomeByYear.keys():
+            self.incomeByYear[yr] += summary.incomeByYear.get(yr, Decimal(0.0))
+        for yr in summary.incomeByYear.keys():
+            if (yr not in self.incomeByYear):
+                self.incomeByYear[yr] = summary.incomeByYear[yr]
+
+        for yr in self.interestByYear.keys():
+            self.interestByYear[yr] += summary.interestByYear.get(yr, Decimal(0.0))
+        for yr in summary.interestByYear.keys():
+            if (yr not in self.interestByYear):
+                self.interestByYear[yr] = summary.interestByYear[yr]
+
         for yr in self.dividendYieldByYear.keys():
             self.dividendYieldByYear[yr] += summary.dividendYieldByYear.get(yr, Decimal(0.0))
         for yr in summary.dividendYieldByYear.keys():
             if (yr not in self.dividendYieldByYear):
                 self.dividendYieldByYear[yr] = summary.dividendYieldByYear[yr]
+
+        for yr in self.totalYieldByYear.keys():
+            self.totalYieldByYear[yr] += summary.totalYieldByYear.get(yr, Decimal(0.0))
+        for yr in summary.totalYieldByYear.keys():
+            if (yr not in self.totalYieldByYear):
+                self.totalYieldByYear[yr] = summary.totalYieldByYear[yr]
+
+        for yr in self.incomeYieldByYear.keys():
+            self.incomeYieldByYear[yr] += summary.incomeYieldByYear.get(yr, Decimal(0.0))
+        for yr in summary.incomeYieldByYear.keys():
+            if (yr not in self.incomeYieldByYear):
+                self.incomeYieldByYear[yr] = summary.incomeYieldByYear[yr]
 
         for inst in self.totalByInstitution.keys():
             self.totalByInstitution[inst] += summary.totalByInstitution.get(inst, Decimal(0.0))
@@ -452,6 +484,10 @@ class AccountSummary:
             return 0
     def totalDividends(self):
         return sum(self.dividendsByYear.values()) if len(self.dividendsByYear) > 0 else Decimal(0.0)
+    def totalIncome(self):
+        return sum(self.incomeByYear.values()) if len(self.incomeByYear) > 0 else Decimal(0.0)
+    def totalInterest(self):
+        return sum(self.incomeByYear.values()) if len(self.incomeByYear) > 0 else Decimal(0.0)
     def avgDividends(self):
         return mean(self.dividendYieldByYear.values()) if len(self.dividendYieldByYear) > 0 else Decimal(0.0)
     def avgReturnPerYear(self):
@@ -463,6 +499,84 @@ class AccountSummary:
             return float(self.totalGain) / (timeHeld.days / 365)
         else:
             return 0
+    def availableCGTAllowance(self, taxYear):
+            cgt = self.realisedGainForTaxByYear.get(taxYear, Decimal(0.0)) if len(self.realisedGainForTaxByYear) > 0 else Decimal(0.0)
+            return self.cgtAllowance(cgt)
+
+    def cgtAllowance(self, cgt):
+        cgtAllowance = Decimal(self.taxRates['capitalgaintaxallowance'])
+        return cgtAllowance - cgt
+
+    def getTaxableCGT(self, taxYear):
+        if Decimal(self.taxRates['capitalgainlowertax']) != 0:
+            #Add in any capital gain for the tax year above the allowance
+            available = self.availableCGTAllowance(taxYear)
+            taxableCGT = -available if available < 0 else Decimal(0.0)
+        else:
+            taxableCGT = Decimal(0.0)
+        return taxableCGT
+
+    def calcCGT(self, taxBand, taxYear):
+        taxableCGT = self.getTaxableCGT(taxYear)
+        rate = Decimal(self.taxRates['capitalgain' + taxBand + 'tax'])
+        cgt = taxableCGT * rate / 100        
+        return cgt
+
+    def calcIncomeTax(self, taxBand, taxYear):
+        income = self.incomeByYear.get(taxYear, Decimal(0.0))
+        interest = self.interestByYear.get(taxYear, Decimal(0.0))
+        if (interest > 0):
+            allowance = self.getInterestAllowance(taxBand)
+            if allowance < interest:
+                income += (interest - allowance)
+        cashOutTax = Decimal(self.taxRates['withdrawl' + taxBand + 'tax'])
+        if cashOutTax != 0:
+            income += self.cashOutByYear.get(taxYear, Decimal(0.0))
+        rate = Decimal(self.taxRates['income' + taxBand + 'tax'])
+        tax = income * rate / 100        
+        return tax
+
+    def getInterestAllowance(self, taxBand):
+        if not taxBand or taxBand == 'lower':
+            allowance = Decimal(self.taxRates['interestLowerAllowance'])
+        else:
+            allowance = Decimal(self.taxRates['interestUpperAllowance'])
+        return allowance
+
+    def calcDividendTax(self, taxBand, taxYear):
+        divi = self.dividendsByYear.get(taxYear, Decimal(0.0)) if len(self.dividendsByYear) > 0 else Decimal(0.0)
+        allowance = Decimal(self.taxRates['dividendtaxallowance'])
+        taxable = divi - allowance
+        rate = Decimal(self.taxRates['dividend' + taxBand + 'tax'])
+        tax =  taxable * rate / 100        
+        return tax
+    
+    def getRemainingDiviAllowance(self, taxYear):
+        divi = self.dividendsByYear.get(taxYear, Decimal(0.0)) if len(self.dividendsByYear) > 0 else Decimal(0.0)
+        return self.diviAllowance(divi)
+
+    def diviAllowance(self, divi):
+        allowance = Decimal(self.taxRates['dividendtaxallowance'])
+        return allowance - divi if allowance > divi else Decimal(0.0)
+
+    def getTotalTax(self, taxBand, taxYear):
+        return self.calcCGT(taxBand, taxYear) + self.calcDividendTax(taxBand, taxYear) + self.calcIncomeTax(taxBand, taxYear)
+
+    def taxableIncome(self, taxYear):
+        income = Decimal(0.0)
+        if Decimal(self.taxRates['withdrawllowertax']) != 0:
+            #Add in any withdrawals liable to tax for the tax year
+            income += self.cashOutByYear.get(taxYear, Decimal(0.0)) if len(self.cashOutByYear) > 0 else Decimal(0.0)
+        if Decimal(self.taxRates['dividendlowertax']) != 0:
+            #Add in any dividends for the tax year
+            income += self.dividendsByYear.get(taxYear, Decimal(0.0)) if len(self.dividendsByYear) > 0 else Decimal(0.0)
+        income += self.getTaxableCGT(taxYear)
+        if Decimal(self.taxRates['incomelowertax']) != 0:
+            #Add in any bond or interest income for the tax year
+            income += self.incomeByYear.get(taxYear, Decimal(0.0)) if len(self.incomeByYear) > 0 else Decimal(0.0)
+            income += self.interestByYear.get(taxYear, Decimal(0.0)) if len(self.interestByYear) > 0 else Decimal(0.0)
+        
+        return income
 
 def convertToSterling(currencyTxns, txn, amount):
     if (currencyTxns):
@@ -524,3 +638,20 @@ def priceStrToDec(strValue):
         else:
             val = Decimal(valStr)
     return (currency, val)
+
+def calcTaxBand(thresholds, income):
+    incomeTaxAllowance = Decimal(thresholds['incometaxallowance'])
+    incomeUpperThreshold = Decimal(thresholds['incomeupperthreshold'])
+    incomeAdditionalThreshold = Decimal(thresholds['incomeadditionalthreshold'])
+
+    if income > incomeTaxAllowance and income <= incomeUpperThreshold:
+        taxBand = 'lower'
+    elif income > incomeUpperThreshold and income <= incomeAdditionalThreshold:
+        taxBand = 'upper'
+    elif income > incomeAdditionalThreshold:
+        taxBand = 'additional'
+    else:
+        taxBand = None
+
+    return taxBand
+
