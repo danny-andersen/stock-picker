@@ -1,7 +1,6 @@
 import csv
 import os
 from saveRetreiveFiles import getAllStockTxnSaved, saveStringToDropbox, saveStockTransactions
-from getStockLedgerStr import getTaxYear
 from transactionDefs import *
 from processTransactions import processAccountTxns, processStockTxns
 from getStockLedgerStr import getStockLedgerStr, getAccountSummaryStr, getAccountSummaryHtml
@@ -103,13 +102,29 @@ def summarisePerformance(accountSummary: AccountSummary, stockSummary: list[Secu
                 #A bond payment is treated as income for tax reasons
                 for year,inc in details.dividendsByYear.items():
                     totalIncome[year] = totalIncome.get(year, Decimal(0.0)) + inc
+                for year in details.dividendTxnsByYear.keys():
+                    if year in accountSummary.incomeTxnsByYear.keys():
+                        accountSummary.incomeTxnsByYear[year].update(details.dividendTxnsByYear[year])
+                    else:
+                        accountSummary.incomeTxnsByYear[year] = details.dividendTxnsByYear[year]
             elif fund.isCashType:
                 #Savings interest
                 for year,inc in details.dividendsByYear.items():
                     totalInterest[year] = totalInterest.get(year, Decimal(0.0)) + inc
+                for year in details.dividendTxnsByYear.keys():
+                    if year in accountSummary.dividendTxnsByYear.keys():
+                        accountSummary.interestTxnsByYear[year].update(details.dividendTxnsByYear[year])
+                    else:
+                        accountSummary.interestTxnsByYear[year] = details.dividendTxnsByYear[year]
         if (not fund or not(fund.isBondType or fund.isCashType)):
             for year,divi in details.dividendsByYear.items():
                 totalDivi[year] = totalDivi.get(year, Decimal(0.0)) + divi
+            for year in details.dividendTxnsByYear.keys():
+                for year in details.dividendTxnsByYear.keys():
+                    if year in accountSummary.dividendTxnsByYear.keys():
+                        accountSummary.dividendTxnsByYear[year].update(details.dividendTxnsByYear[year])
+                    else:
+                        accountSummary.dividendTxnsByYear[year] = details.dividendTxnsByYear[year]
 
 
     #If a cash account, add in to CASH type
@@ -128,7 +143,9 @@ def summarisePerformance(accountSummary: AccountSummary, stockSummary: list[Secu
         fundTotals[fundType].uk += 100 * float(accountSummary.cashBalance)  #Assume UK based
         fundTotals[fundType].totGeoVal += accountSummary.cashBalance
         fundTotals[fundType].actualReturn += 100 * float(accountSummary.cashBalance - accountSummary.totalInvested()) #This is a %
-        #If its a cash account, convert 
+        #If its a cash account, update invested totals 
+        totalShareInvested += accountSummary.totalInvested()
+        totalGain += accountSummary.totalInterest()
     else:
         #Add any cash balance of account to Cash fund
         fundType = FundType.CASH
@@ -212,6 +229,7 @@ def summarisePerformance(accountSummary: AccountSummary, stockSummary: list[Secu
     accountSummary.totalYieldByYear = totalYieldByYear
     accountSummary.fundTotals = fundTotals
     accountSummary.totalByInstitution = totalByInstitution
+
 def getPortfolioOverviews(config):
     #List portfolio directory for account portfolio files
     overviewDir = config['files']['portfoliosLocation']

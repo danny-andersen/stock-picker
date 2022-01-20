@@ -7,15 +7,6 @@ from domonic.html import *
 
 from transactionDefs import *
 
-def getTaxYear(inDate):
-    taxYearStart = date(year=2021, month=4, day=6)
-    d = date(year=2021, month=inDate.month, day=inDate.day)
-    if (d < taxYearStart):
-        year = f"{inDate.year - 1}-{inDate.year}"
-    else:
-        year = f"{inDate.year}-{inDate.year+1}"
-    return year
-
 def getAccountSummaryStr(accountSummary: AccountSummary, stockLedgerList: list[SecurityDetails]):
     retStr = f"Summary for Account: {accountSummary.name}\n"
     retStr += f"Date account opened: {accountSummary.dateOpened.date()}\n"
@@ -101,6 +92,8 @@ def getAccountSummaryHtml(accountSummary: AccountSummary, stockLedgerList: list[
     summary.appendChild(tr(td("Total Dividends"), td(f"£{accountSummary.totalDividends():,.0f}")))
     summary.appendChild(tr(td("Avg Dividend Yield"), td(f"{mean(accountSummary.dividendYieldByYear.values()) if len(accountSummary.dividendYieldByYear) > 0 else 0:,.0f}%")))
     summary.appendChild(tr(td("Total Income"), td(f"£{accountSummary.totalIncome():,.0f}")))
+    summary.appendChild(tr(td("Avg Income Yield"), td(f"{accountSummary.avgIncomeYield():.2f}%")))
+    summary.appendChild(tr(td("Avg Total Yield"), td(f"{accountSummary.avgTotalYield():.2f}%")))
     summary.appendChild(tr(td("Total Divi + Income"), td(f"£{accountSummary.totalIncome() + accountSummary.totalDividends():,.0f}")))
     summary.appendChild(tr(td("Total Fees paid"), td(f"£{accountSummary.totalFees():,.0f}")))
     summary.appendChild(tr(td("Total Dealing costs"), td(f"£{accountSummary.totalDealingCosts:,.0f}")))
@@ -449,6 +442,29 @@ def getAccountSummaryHtml(accountSummary: AccountSummary, stockLedgerList: list[
         stockRow.appendChild(td(f"{details.endDate.date()}"))
         stockTable.appendChild(stockRow)
     dom.append(stockTable)
+
+    dom.appendChild(h2(f"\nDividend payments by Tax Year\n"))
+    for yr in [lastTaxYear, currentTaxYear]:
+        dom.appendChild(h3(f"\nTax Year {yr}\n"))
+        txnTable = table()
+        if (allAccounts):
+            txnTable.appendChild(tr(th('Account'),th('Date'),th('Txn Type'), th('Desc'),th('Amount')))
+        else:
+            txnTable.appendChild(tr(th('Date'),th('Txn Type'), th('Desc'),th('Amount')))
+        total = Decimal(0)
+        txns = sorted(accountSummary.dividendTxnsByYear[yr] if yr in accountSummary.dividendTxnsByYear else list(), key= lambda txn: txn.date)
+        for txn in txns:
+            row = tr()
+            if (allAccounts):
+                row.appendChild(td(f"{txn.account}"))
+            row.appendChild(td(f"{txn.date}"))
+            row.appendChild(td(f"{txn.type}"))
+            row.appendChild(td(f"{txn.desc}"))
+            row.appendChild(td(f"{txn.credit if txn.credit != 0 else -txn.debit:0.2f}"))
+            total += txn.credit
+            txnTable.appendChild(row)
+        txnTable.appendChild(tr(td(" "),td("Total"),td(" "),td(f"{total:,.0f}")))
+        dom.append(txnTable)
 
     dom.append(h2('Account transactions'))
     txnTable = table()

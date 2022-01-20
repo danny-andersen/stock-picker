@@ -5,7 +5,6 @@ from statistics import mean
 
 from getLatestPrices import getAndSaveStockPrices
 from processStock import calcPriceData
-from getStockLedgerStr import getTaxYear
 from transactionDefs import *
 
 def processAccountTxns(account: AccountSummary, txns: list[Transaction], stocks: dict[str, list[Transaction]]):
@@ -144,6 +143,10 @@ def processStockTxns(account: AccountSummary, securities, funds: dict[str, FundO
             else:
                 yearYield = 0.0
             details.dividendYieldByYear[taxYear] = yearYield
+            if taxYear in details.dividendTxnsByYear.keys():
+                details.dividendTxnsByYear[taxYear].add(txn)
+            else:
+                details.dividendTxnsByYear[taxYear] = {txn}
         else:
             print(f"Got a transaction type {type} that dont recognise for account {account.name} and stock {stock}: Detail: {txn}\n")
 

@@ -1,3 +1,4 @@
+from ast import DictComp
 from statistics import mean
 from dataclasses import dataclass, field
 from dataclasses_json import dataclass_json
@@ -20,6 +21,8 @@ USD = 'USDUSDUSDUS1'
 EUR = 'EUREUREUREU1'
 
 SECONDS_IN_YEAR = 365.25*24*3600
+
+TAX_YEAR_START = date(year=2021, month=4, day=6)
 
 class BondGrade(IntEnum):
     AAA = 1
@@ -210,6 +213,19 @@ class Transaction:
     type: str = 'Unknown'
     accountBalance: Decimal = Decimal(0.0)
 
+    def __eq__(self, other):
+        if not isinstance(other, Transaction):
+            return False
+        return self.date == other.date and \
+                self.ref == other.ref and \
+                self.sedol == other.sedol and \
+                self.isin == other.isin and \
+                self.desc == other.desc and \
+                self.credit == other.credit and \
+                self.debit == other.debit
+    def __hash__(self):
+        return hash((self.date, self.ref, self.sedol, self.isin, self.desc, self.credit, self.debit))
+
 @dataclass_json
 @dataclass
 class Security:
@@ -264,7 +280,8 @@ class SecurityDetails:
     dividendsByYear: dict[str, Decimal(0.0)] = field(default_factory=dict)
     dividendYieldByYear: dict[str, Decimal(0.0)] = field(default_factory=dict)
     investmentHistory: list[CapitalGain] = field(default_factory=list)
-    transactions: list[Transaction] = field(default_factory=list)
+    transactions: set[Transaction] = field(default_factory=set)
+    dividendTxnsByYear: dict[str, set[Transaction]] = field(default_factory=dict)
     historicHoldings: list = field(default_factory=list)
     fundOverview: FundOverview = None
 
@@ -340,9 +357,12 @@ class AccountSummary:
     realisedGainForTaxByYear: dict[str, Decimal(0.0)] = field(default_factory=dict)
     dealingCostsByYear: dict[str, Decimal(0.0)] = field(default_factory=dict)
     dividendsByYear: dict[str, Decimal(0.0)] = field(default_factory=dict)
+    dividendTxnsByYear: dict[str, set[Transaction]] = field(default_factory=dict)
     dividendYieldByYear: dict[str, Decimal(0.0)] = field(default_factory=dict)
     incomeByYear: dict[str, Decimal(0.0)] = field(default_factory=dict)
+    incomeTxnsByYear: dict[str, set[Transaction]] = field(default_factory=dict)
     interestByYear: dict[str, Decimal(0.0)] = field(default_factory=dict)
+    interestTxnsByYear: dict[str, set[Transaction]] = field(default_factory=dict)
     incomeYieldByYear: dict[str, Decimal(0.0)] = field(default_factory=dict)
     totalYieldByYear: dict[str, Decimal(0.0)] = field(default_factory=dict)
     fundTotals: dict[FundType, FundOverview] = field(default_factory=dict)
@@ -410,17 +430,37 @@ class AccountSummary:
             if (yr not in self.dividendsByYear):
                 self.dividendsByYear[yr] = summary.dividendsByYear[yr]
 
+        for yr in self.dividendTxnsByYear.keys():
+            self.dividendTxnsByYear[yr].update(summary.dividendTxnsByYear.get(yr, set()))
+        for yr in summary.dividendTxnsByYear.keys():
+            if (yr not in self.dividendsByYear):
+                self.dividendTxnsByYear[yr] = summary.dividendTxnsByYear[yr]
+
         for yr in self.incomeByYear.keys():
             self.incomeByYear[yr] += summary.incomeByYear.get(yr, Decimal(0.0))
         for yr in summary.incomeByYear.keys():
             if (yr not in self.incomeByYear):
                 self.incomeByYear[yr] = summary.incomeByYear[yr]
 
+        for yr in self.incomeTxnsByYear.keys():
+            self.incomeTxnsByYear[yr].update(summary.incomeTxnsByYear.get(yr, set()))
+            # self.incomeTxnsByYear[yr] = sorted(self.incomeTxnsByYear[yr], key= lambda txn: txn.date)
+        for yr in summary.incomeTxnsByYear.keys():
+            if (yr not in self.incomeTxnsByYear):
+                self.incomeTxnsByYear[yr] = summary.incomeTxnsByYear[yr]
+
         for yr in self.interestByYear.keys():
             self.interestByYear[yr] += summary.interestByYear.get(yr, Decimal(0.0))
         for yr in summary.interestByYear.keys():
             if (yr not in self.interestByYear):
                 self.interestByYear[yr] = summary.interestByYear[yr]
+
+        for yr in self.interestTxnsByYear.keys():
+            self.interestTxnsByYear[yr].update(summary.interestTxnsByYear.get(yr, list()))
+            # self.interestTxnsByYear[yr] = sorted(self.interestTxnsByYear[yr], key= lambda txn: txn.date)
+        for yr in summary.interestTxnsByYear.keys():
+            if (yr not in self.interestTxnsByYear):
+                self.interestTxnsByYear[yr] = summary.interestTxnsByYear[yr]
 
         for yr in self.dividendYieldByYear.keys():
             self.dividendYieldByYear[yr] += summary.dividendYieldByYear.get(yr, Decimal(0.0))
@@ -485,11 +525,19 @@ class AccountSummary:
     def totalDividends(self):
         return sum(self.dividendsByYear.values()) if len(self.dividendsByYear) > 0 else Decimal(0.0)
     def totalIncome(self):
-        return sum(self.incomeByYear.values()) if len(self.incomeByYear) > 0 else Decimal(0.0)
+            inc = sum(self.incomeByYear.values()) if len(self.incomeByYear) > 0 else Decimal(0.0)
+            inc += sum(self.interestByYear.values()) if len(self.interestByYear) > 0 else Decimal(0.0)
+            return inc
     def totalInterest(self):
         return sum(self.incomeByYear.values()) if len(self.incomeByYear) > 0 else Decimal(0.0)
     def avgDividends(self):
         return mean(self.dividendYieldByYear.values()) if len(self.dividendYieldByYear) > 0 else Decimal(0.0)
+    def avgIncomeYield(self):
+        incYield = mean(self.incomeYieldByYear.values()) if len(self.incomeYieldByYear) > 0 else 0
+        return incYield
+    def avgTotalYield(self):
+        yld = mean(self.totalYieldByYear.values()) if len(self.totalYieldByYear) > 0 else 0
+        return yld
     def avgReturnPerYear(self):
         startYear = self.dateOpened
         # endYear = datetime.now(timezone.utc) + timedelta(days=365) # Make sure we have this tax year
@@ -590,6 +638,14 @@ class AccountSummary:
             income += self.interestByYear.get(taxYear, Decimal(0.0)) if len(self.interestByYear) > 0 else Decimal(0.0)
         
         return income
+
+def getTaxYear(inDate):
+    d = date(year=2021, month=inDate.month, day=inDate.day)
+    if (d < TAX_YEAR_START):
+        year = f"{inDate.year - 1}-{inDate.year}"
+    else:
+        year = f"{inDate.year}-{inDate.year+1}"
+    return year
 
 def convertToSterling(currencyTxns, txn, amount):
     if (currencyTxns):
