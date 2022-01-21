@@ -145,7 +145,7 @@ def getAccountSummaryHtml(accountSummary: AccountSummary, stockLedgerList: list[
             tx.appendChild(tr(td(account.name),td(f"£{cg:,.0f}"), td(f"£{taxablecg:,.0f}"),
                         td(f"£{cgt:,.0f}"), td("-"),
                         td(f"£{divi:,.0f}"), 
-                        td(f"£{diviTax:,.0f}"), td(f"£{taxableDivi:,.0f}"), td("-"),
+                        td(f"£{taxableDivi:,.0f}"), td(f"£{diviTax:,.0f}"), td("-"),
                         td(f"£{income:,.0f}"),
                         td(f"£{incomeTax:,.0f}"),
                     ))

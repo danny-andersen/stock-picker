@@ -144,7 +144,11 @@ def processStockTxns(account: AccountSummary, securities, funds: dict[str, FundO
                 yearYield = 0.0
             details.dividendYieldByYear[taxYear] = yearYield
             if taxYear in details.dividendTxnsByYear.keys():
+                prelen = len(details.dividendTxnsByYear[taxYear])
                 details.dividendTxnsByYear[taxYear].add(txn)
+                postlen = len(details.dividendTxnsByYear[taxYear])
+                if postlen == prelen:
+                    print (f"Failed to add new txn {txn} to set - dupe or broken hash?")
             else:
                 details.dividendTxnsByYear[taxYear] = {txn}
         else:

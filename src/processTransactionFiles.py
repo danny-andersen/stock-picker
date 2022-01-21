@@ -97,34 +97,37 @@ def summarisePerformance(accountSummary: AccountSummary, stockSummary: list[Secu
             totalRealisedForTaxGain[year] = totalRealisedForTaxGain.get(year, Decimal(0.0)) + gain
         for year,costs in details.costsByYear.items():
             totalDealingCosts[year] = totalDealingCosts.get(year, Decimal(0.0)) + costs
-        if fund:
-            if fund.isBondType:
-                #A bond payment is treated as income for tax reasons
-                for year,inc in details.dividendsByYear.items():
-                    totalIncome[year] = totalIncome.get(year, Decimal(0.0)) + inc
-                for year in details.dividendTxnsByYear.keys():
-                    if year in accountSummary.incomeTxnsByYear.keys():
-                        accountSummary.incomeTxnsByYear[year].update(details.dividendTxnsByYear[year])
-                    else:
-                        accountSummary.incomeTxnsByYear[year] = details.dividendTxnsByYear[year]
-            elif fund.isCashType:
-                #Savings interest
-                for year,inc in details.dividendsByYear.items():
-                    totalInterest[year] = totalInterest.get(year, Decimal(0.0)) + inc
-                for year in details.dividendTxnsByYear.keys():
-                    if year in accountSummary.dividendTxnsByYear.keys():
-                        accountSummary.interestTxnsByYear[year].update(details.dividendTxnsByYear[year])
-                    else:
-                        accountSummary.interestTxnsByYear[year] = details.dividendTxnsByYear[year]
-        if (not fund or not(fund.isBondType or fund.isCashType)):
+        if fund and fund.isBondType():
+            #A bond payment is treated as income for tax reasons
+            for year,inc in details.dividendsByYear.items():
+                totalIncome[year] = totalIncome.get(year, Decimal(0.0)) + inc
+            for year in details.dividendTxnsByYear.keys():
+                if year in accountSummary.incomeTxnsByYear.keys():
+                    accountSummary.incomeTxnsByYear[year].update(details.dividendTxnsByYear[year])
+                else:
+                    accountSummary.incomeTxnsByYear[year] = details.dividendTxnsByYear[year].copy()
+        elif fund and fund.isCashType():
+            #Savings interest
+            for year,inc in details.dividendsByYear.items():
+                totalInterest[year] = totalInterest.get(year, Decimal(0.0)) + inc
+            for year in details.dividendTxnsByYear.keys():
+                if year in accountSummary.dividendTxnsByYear.keys():
+                    accountSummary.interestTxnsByYear[year].update(details.dividendTxnsByYear[year])
+                else:
+                    accountSummary.interestTxnsByYear[year] = details.dividendTxnsByYear[year].copy()
+        else:
             for year,divi in details.dividendsByYear.items():
                 totalDivi[year] = totalDivi.get(year, Decimal(0.0)) + divi
             for year in details.dividendTxnsByYear.keys():
-                for year in details.dividendTxnsByYear.keys():
-                    if year in accountSummary.dividendTxnsByYear.keys():
-                        accountSummary.dividendTxnsByYear[year].update(details.dividendTxnsByYear[year])
-                    else:
-                        accountSummary.dividendTxnsByYear[year] = details.dividendTxnsByYear[year]
+                if year in accountSummary.dividendTxnsByYear.keys():
+                    prelen = len(accountSummary.dividendTxnsByYear[year])
+                    uplen = len(details.dividendTxnsByYear[year])
+                    accountSummary.dividendTxnsByYear[year].update(details.dividendTxnsByYear[year])
+                    postlen = len(accountSummary.dividendTxnsByYear[year])
+                    if postlen != prelen + uplen:
+                        print (f"Failed to update txns {uplen} into set pre:{prelen} post:{postlen} - dupe or broken hash?")
+                else:
+                    accountSummary.dividendTxnsByYear[year] = details.dividendTxnsByYear[year].copy()
 
 
     #If a cash account, add in to CASH type
