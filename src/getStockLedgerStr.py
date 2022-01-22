@@ -164,9 +164,15 @@ def getAccountSummaryHtml(accountSummary: AccountSummary, stockLedgerList: list[
     dom.appendChild(h3("\nFund values and returns (including other acccounts)\n"))
     fs = table()
     funds = accountSummary.fundTotals
+    isTotalAcc = len(accountSummary.mergedAccounts) > 0
     totalAccountValue = accountSummary.totalValue()
     if (totalAccountValue == 0): totalAccountValue = Decimal(1.0)
-    fs.appendChild(tr(th('Type'),th('Total Invested'),th('Total Market Value'),th('%Account'),th('Avg Fees'),th('Avg Ret'),th('3yr Ret'),th('5yr Ret')))
+    if isTotalAcc:
+        fs.appendChild(tr(th('Type'),th('Total Invested'),th('Total Market Value'),th('%Account'),
+            ''.join([f'{th(acc.name)}' for acc in accountSummary.mergedAccounts]),
+            th('Avg Fees'),th('Avg Ret'),th('3yr Ret'),th('5yr Ret')))
+    else:
+        fs.appendChild(tr(th('Type'),th('Total Invested'),th('Total Market Value'),th('%Account'),th('Avg Fees'),th('Avg Ret'),th('3yr Ret'),th('5yr Ret')))
     totInvested = Decimal(0.0)
     totValue = Decimal(0.0)
     totfees = 0.0
@@ -179,8 +185,14 @@ def getAccountSummaryHtml(accountSummary: AccountSummary, stockLedgerList: list[
     totGold = Decimal(0.0)
     portPerc = accountSummary.portfolioPerc
     for typ, fund in funds.items():
-        fs.appendChild(tr(td(typ.name),td(f"£{fund.totalInvested:,.0f}"), td(f"£{fund.totalValue:,.0f}"),td(f"{100*fund.totalValue/totalAccountValue:0.2f}%"),
-                td(f"{fund.fees:0.2f}%"), td(f"{fund.actualReturn:0.2f}%"), td(f"{fund.return3Yr:0.2f}%"), td(f"{fund.return5Yr:0.2f}%") ))
+        if isTotalAcc:
+            accFunds = (f"{acc.fundTotals[typ].totalValue:,.0f}" for acc in accountSummary.mergedAccounts)
+            fs.appendChild(tr(td(typ.name),td(f"£{fund.totalInvested:,.0f}"), td(f"£{fund.totalValue:,.0f}"),td(f"{100*fund.totalValue/totalAccountValue:0.2f}%"),
+                    ''.join([f"{td(acc)}" for acc in accFunds]),
+                    td(f"{fund.fees:0.2f}%"), td(f"{fund.actualReturn:0.2f}%"), td(f"{fund.return3Yr:0.2f}%"), td(f"{fund.return5Yr:0.2f}%") ))
+        else:
+            fs.appendChild(tr(td(typ.name),td(f"£{fund.totalInvested:,.0f}"), td(f"£{fund.totalValue:,.0f}"),td(f"{100*fund.totalValue/totalAccountValue:0.2f}%"),
+                    td(f"{fund.fees:0.2f}%"), td(f"{fund.actualReturn:0.2f}%"), td(f"{fund.return3Yr:0.2f}%"), td(f"{fund.return5Yr:0.2f}%") ))
         totInvested += fund.totalInvested
         totValue += fund.totalValue
         val = float(fund.totalValue)
@@ -198,7 +210,13 @@ def getAccountSummaryHtml(accountSummary: AccountSummary, stockLedgerList: list[
             totGold += fund.totalValue
     totValue = totValue if totValue else Decimal(1.0)
     tot = float(totValue)
-    fs.appendChild(tr(td("Overall"),td(f"£{totInvested:,.0f}"), td(f"£{totValue:,.0f}"),td(f"{100*totValue/totalAccountValue:0.02f}%"),
+    if isTotalAcc:
+        accTots = (f"{acc.totalValue():,.0f}" for acc in accountSummary.mergedAccounts)
+        fs.appendChild(tr(td("Overall"),td(f"£{totInvested:,.0f}"), td(f"£{totValue:,.0f}"),td(f"{100*totValue/totalAccountValue:0.02f}%"),
+                    ''.join([f'{td(accTot)}' for accTot in accTots]),
+                    td(f"{totfees/tot:0.02f}%"), td(f"{totRet/tot:0.02f}%"), td(f"{tot3yrRet/tot:0.02f}%"), td(f"{tot5yrRet/tot:0.02f}%") ))
+    else:
+        fs.appendChild(tr(td("Overall"),td(f"£{totInvested:,.0f}"), td(f"£{totValue:,.0f}"),td(f"{100*totValue/totalAccountValue:0.02f}%"),
                 td(f"{totfees/tot:0.02f}%"), td(f"{totRet/tot:0.02f}%"), td(f"{tot3yrRet/tot:0.02f}%"), td(f"{tot5yrRet/tot:0.02f}%") ))
     dom.appendChild(fs)
     dom.appendChild(h3("\nPortfolio Percentages and guardrails\n"))
