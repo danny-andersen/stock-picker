@@ -12,6 +12,7 @@ CASH_OUT = 'Cash out'
 SELL = 'Sell'
 BUY = 'Buy'
 DIVIDEND = 'Dividend'
+EQUALISATION = 'Equalisation' #This is a return of part of the initial principle, so should be taken off the investment amount
 FEES = 'Fees'
 REFUND ='Refund'
 NO_STOCK = 'No stock'
@@ -203,6 +204,7 @@ class Transaction:
     sedol: str
     isin: str
     desc: str
+    accountName: str
     qty: float = 0.0
     price: Decimal = Decimal(0.0)
     priceCurrency: str = '£'
@@ -246,17 +248,7 @@ class CapitalGain:
     date: datetime
     qty: int
     price: Decimal
-    transaction: str = BUY
-    def calcGain(self, sellDate, sellPrice, sellQty):
-        timeHeld = sellDate - self.date
-        gain = (sellPrice - self.price) * sellQty
-        yld = float(100*gain/self.price)
-        avgYieldPerYear = yld / (timeHeld.days / 365)
-        return (gain, sellQty - self.qty, avgYieldPerYear)
-    def calcTotalGain(self, sellDate, sellPrice):
-        return self.calcGain(sellDate, sellPrice, self.qty)
-    def calcTotalCurrentGain(self, sellPrice):
-        return self.calcTotalGain(datetime.now(timezone.utc), sellPrice)
+    transaction: str
 
 @dataclass
 class SecurityDetails:
@@ -326,7 +318,7 @@ class SecurityDetails:
         return self.realisedCapitalGain() + self.paperCGT()
     def paperCGT(self):
         if (self.currentSharePrice):
-            return self.marketValue() - (self.avgSharePrice * self.qtyHeld)
+            return self.marketValue() - self.totalInvested
         else:
             return Decimal(0.0)
     def paperCGTPerc(self):
@@ -338,7 +330,6 @@ class SecurityDetails:
 @dataclass
 class AccountSummary:
     name: str
-    portfolioPerc: dict
     dateOpened: datetime = datetime.now(timezone.utc)
     totalCashInvested: Decimal = Decimal(0.0)
     totalDiviReInvested: Decimal = Decimal(0.0)
@@ -350,6 +341,7 @@ class AccountSummary:
     totalPaperGainForTax: Decimal = Decimal(0.0)
     totalGain: Decimal = Decimal(0.0)
 
+    portfolioPerc: dict[str, str] = field(default_factory=dict) 
     cashInByYear: dict[str, Decimal(0.0)] = field(default_factory=dict)
     cashOutByYear: dict[str, Decimal(0.0)] = field(default_factory=dict)
     feesByYear: dict[str, Decimal(0.0)] = field(default_factory=dict)
@@ -368,6 +360,7 @@ class AccountSummary:
     fundTotals: dict[FundType, FundOverview] = field(default_factory=dict)
     totalByInstitution: dict[str, Decimal] = field(default_factory=dict)
     transactions: list[Transaction] = field(default_factory=list)
+    stocks: list[SecurityDetails] = field(default_factory=list)
     taxRates: dict = field(default_factory=dict)
     taxBandByYear: dict[str, str] = field(default_factory=dict)
     mergedAccounts: list = field(default_factory=list)
@@ -387,6 +380,9 @@ class AccountSummary:
         self.transactions.extend(summary.transactions)
         #Sort all transactions by date
         self.transactions = sorted(self.transactions, key= lambda txn: txn.date)
+        self.stocks.extend(summary.stocks)
+        #Sort all stocks by highest yearly gain
+        self.stocks = sorted(self.stocks, key = lambda stock: stock.avgGainPerYearPerc(), reverse = True)
 
         for yr in self.cashInByYear.keys():
             self.cashInByYear[yr] += summary.cashInByYear.get(yr, Decimal(0.0))
@@ -433,7 +429,7 @@ class AccountSummary:
         for yr in self.dividendTxnsByYear.keys():
             self.dividendTxnsByYear[yr].update(summary.dividendTxnsByYear.get(yr, set()))
         for yr in summary.dividendTxnsByYear.keys():
-            if (yr not in self.dividendsByYear):
+            if (yr not in self.dividendTxnsByYear):
                 self.dividendTxnsByYear[yr] = summary.dividendTxnsByYear[yr]
 
         for yr in self.incomeByYear.keys():
@@ -544,7 +540,7 @@ class AccountSummary:
         endYear = datetime.now(timezone.utc)
         timeHeld = endYear - startYear
         if timeHeld.days != 0:
-            return float(self.totalGain) / (timeHeld.days / 365)
+            return float(self.totalGainFromInvestments()) / (timeHeld.days / 365)
         else:
             return 0
 

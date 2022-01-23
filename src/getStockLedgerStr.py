@@ -7,7 +7,7 @@ from domonic.html import *
 
 from transactionDefs import *
 
-def getAccountSummaryStr(accountSummary: AccountSummary, stockLedgerList: list[SecurityDetails]):
+def getAccountSummaryStr(accountSummary: AccountSummary):
     retStr = f"Summary for Account: {accountSummary.name}\n"
     retStr += f"Date account opened: {accountSummary.dateOpened.date()}\n"
     retStr += f"Total cash invested in account: £{accountSummary.totalInvested():,.0f}\n"
@@ -61,12 +61,12 @@ def getAccountSummaryStr(accountSummary: AccountSummary, stockLedgerList: list[S
 
     retStr += tabulate(byYear, headers='keys')
     retStr += "\n\n\nStock Summary:\n"
-    for details in stockLedgerList:
+    for details in accountSummary.stocks:
         retStr += getStockSummaryStr(details)
     retStr += "\n\n" 
     return retStr
 
-def getAccountSummaryHtml(accountSummary: AccountSummary, stockLedgerList: list[SecurityDetails]):
+def getAccountSummaryHtml(accountSummary: AccountSummary):
     dom =  body()
     if (accountSummary.name == "Total"):
         allAccounts = True
@@ -103,7 +103,7 @@ def getAccountSummaryHtml(accountSummary: AccountSummary, stockLedgerList: list[
     summary.appendChild(tr(td("Average return per year"),td(f"£{accountSummary.avgReturnPerYear():,.0f}")))
     dom.appendChild(summary)
 
-    dom.appendChild(h2("\nTax liability\n"))
+    dom.appendChild(h2("Tax liability"))
     currentTaxYear = getTaxYear(datetime.now())
     lastTaxYear = getTaxYear(datetime.now() - timedelta(weeks=52))
     if len(accountSummary.mergedAccounts) == 0:
@@ -112,10 +112,10 @@ def getAccountSummaryHtml(accountSummary: AccountSummary, stockLedgerList: list[
     else:
         accounts = accountSummary.mergedAccounts
     for yr in [lastTaxYear, currentTaxYear]:
-        dom.appendChild(h3(f"\nTax Year {yr}\n"))
+        dom.appendChild(h3(f"Tax Year {yr}"))
         tx = table()
         tx.appendChild(tr(th(' Account '),th(' Capital Gain '),th(' Taxable CG '),th(' CG Tax '),th(' CGT Rem Allowance '),
-                                th(' Divi '),th(' Taxable Divi '),th(' Divi Tax '),th(' Divi All Rem '),th(' Taxable Income '),th(' Income Tax ')))
+                                th(' Divi '),th(' Taxable Divi '),th(' Divi Tax '),th(' Divi All Rem '),th(' Income '),th(' Income Tax ')))
         totalCG = Decimal(0.0)
         totalTaxableCG = Decimal(0.0)
         totalCGT = Decimal(0.0)
@@ -138,11 +138,12 @@ def getAccountSummaryHtml(accountSummary: AccountSummary, stockLedgerList: list[
             totalTaxableDivi += taxableDivi
             diviTax = account.calcDividendTax(band, yr)
             totalDiviTax += diviTax
-            income = account.taxableIncome(yr)
+            income = account.incomeByYear.get(yr, Decimal(0.0)) + account.interestByYear.get(yr, Decimal(0.0))
             totalIncome += income
             incomeTax = account.calcIncomeTax(band, yr)
             totalIncomeTax += incomeTax
-            tx.appendChild(tr(td(account.name),td(f"£{cg:,.0f}"), td(f"£{taxablecg:,.0f}"),
+            accountLocation = f"./{account.name}-Summary.html#Tax%20Liability"
+            tx.appendChild(tr(td(a(f"{account.name}", _href=accountLocation)),td(f"£{cg:,.0f}"), td(f"£{taxablecg:,.0f}"),
                         td(f"£{cgt:,.0f}"), td("-"),
                         td(f"£{divi:,.0f}"), 
                         td(f"£{taxableDivi:,.0f}"), td(f"£{diviTax:,.0f}"), td("-"),
@@ -160,8 +161,8 @@ def getAccountSummaryHtml(accountSummary: AccountSummary, stockLedgerList: list[
                         ))
         dom.appendChild(tx)
 
-    dom.appendChild(h2("\nStatistics By Investment Type\n"))
-    dom.appendChild(h3("\nFund values and returns (including other acccounts)\n"))
+    dom.appendChild(h2("Statistics By Investment Type"))
+    dom.appendChild(h3("Fund values and returns (including other acccounts)"))
     fs = table()
     funds = accountSummary.fundTotals
     isTotalAcc = len(accountSummary.mergedAccounts) > 0
@@ -169,7 +170,7 @@ def getAccountSummaryHtml(accountSummary: AccountSummary, stockLedgerList: list[
     if (totalAccountValue == 0): totalAccountValue = Decimal(1.0)
     if isTotalAcc:
         fs.appendChild(tr(th('Type'),th('Total Invested'),th('Total Market Value'),th('%Account'),
-            ''.join([f'{th(acc.name)}' for acc in accountSummary.mergedAccounts]),
+            ''.join([f'{th(a(acc.name, _href="./"+acc.name+"-Summary.html#Statistics%20By%20Investment%20Type"))}' for acc in accountSummary.mergedAccounts]),
             th('Avg Fees'),th('Avg Ret'),th('3yr Ret'),th('5yr Ret')))
     else:
         fs.appendChild(tr(th('Type'),th('Total Invested'),th('Total Market Value'),th('%Account'),th('Avg Fees'),th('Avg Ret'),th('3yr Ret'),th('5yr Ret')))
@@ -219,7 +220,7 @@ def getAccountSummaryHtml(accountSummary: AccountSummary, stockLedgerList: list[
         fs.appendChild(tr(td("Overall"),td(f"£{totInvested:,.0f}"), td(f"£{totValue:,.0f}"),td(f"{100*totValue/totalAccountValue:0.02f}%"),
                 td(f"{totfees/tot:0.02f}%"), td(f"{totRet/tot:0.02f}%"), td(f"{tot3yrRet/tot:0.02f}%"), td(f"{tot5yrRet/tot:0.02f}%") ))
     dom.appendChild(fs)
-    dom.appendChild(h3("\nPortfolio Percentages and guardrails\n"))
+    dom.appendChild(h3("Portfolio Percentages and guardrails"))
     fs = table()
     fs.appendChild(tr(th('Type'),th(' Total Market Value '),th(' Portfolio% '),th('  Min%  '),th('  Ideal%'  ),th('  Max%'  ),th('  Buy / (Sell)  ')))
     stocksPerc = 100*totStocks/totalAccountValue
@@ -269,7 +270,7 @@ def getAccountSummaryHtml(accountSummary: AccountSummary, stockLedgerList: list[
     fs.appendChild(tr(td("Total"), td(f"£{totGold+totCash+totBonds+totStocks:,.0f}"),td(f"{goldPerc+cashPerc+bondsPerc+stocksPerc:0.02f}%") ))
     dom.appendChild(fs)
     if (len(accountSummary.totalByInstitution) > 0):
-        dom.appendChild(h3("\nValue by Institution\n"))
+        dom.appendChild(h3("Value by Institution"))
         fi = table()
         totVal = Decimal(0.0)
         val = Decimal(0.0)
@@ -280,7 +281,7 @@ def getAccountSummaryHtml(accountSummary: AccountSummary, stockLedgerList: list[
         fi.appendChild(tr(td("Total"),td(f"£{totVal:,.0f}"), td(f"{100.0*float(totVal/totalAccountValue):0.02f}%") ))
         dom.appendChild(fi)
 
-    dom.appendChild(h3("\nFund Risks\n"))
+    dom.appendChild(h3("Fund Risks"))
     fr = table()
     fr.appendChild(tr(th('Type'),th('Alpha'),th('Beta'),th('Sharpe'),th('Std Dev'),th('Maturity yrs') ))
     totAlpha = 0.0
@@ -310,7 +311,7 @@ def getAccountSummaryHtml(accountSummary: AccountSummary, stockLedgerList: list[
     fr.appendChild(tr(td("Overall"),td(f"{totAlpha/totalNonShareVal:0.02f}"), td(f"{totBeta/totalNonShareVal:0.02f}"),
                 td(f"{totSharpe/totalNonShareVal:0.02f}"),td(f"{totSD/totalNonShareVal:0.02f}"),td(f"{totMat/totMatVal:0.02f}") ))
     dom.appendChild(fr)
-    dom.appendChild(h3("\nGeographical Spread\n"))
+    dom.appendChild(h3("Geographical Spread"))
     fr = table()
     fr.appendChild(tr(th('Type'),th('Americas'),th('Americas-Emerging'),th('Asia'),th('Asia-Emerging'),th('UK'),th('Europe'),th('Europe-Emerging'),th('Total') ))
     totamer = 0.0
@@ -344,7 +345,7 @@ def getAccountSummaryHtml(accountSummary: AccountSummary, stockLedgerList: list[
                         td(f"{toteuro/totVal:0.02f}%"),td(f"{toteuroem/totVal:0.02f}%"),
                         td(f"{totPerc:0.02f}%") ))
     dom.appendChild(fr)
-    dom.appendChild(h3("\nFund Diversity\n"))
+    dom.appendChild(h3("Fund Diversity"))
     fr = table()
     fr.appendChild(tr(th('Type'),th('Cyclical'),th('Sensitive'),th('Defensive'),th('Total') ))
     totCyc = 0.0
@@ -370,7 +371,7 @@ def getAccountSummaryHtml(accountSummary: AccountSummary, stockLedgerList: list[
     endYear = datetime.now(timezone.utc) + timedelta(days=365) # Make sure we have this tax year
     # endYear = datetime.now(timezone.utc)
     procYear = startYear
-    dom.appendChild(h2("\nYearly breakdown\n"))
+    dom.appendChild(h2("Yearly breakdown"))
     byYear = table()
     byYear.appendChild(tr(th('Year'),th('Cash In'),th('Cash Out'),th('Agg Invested'),th('Gain Realised'),th('Dividends'),th('Yield%'),th('Dealing Costs'),th('Fees')))
     while procYear < endYear:
@@ -396,14 +397,15 @@ def getAccountSummaryHtml(accountSummary: AccountSummary, stockLedgerList: list[
         stockTable.appendChild(tr(th('Stock'),th('Account'),th('Type'),th('Name'),th('Fees'),th('Cash inv'), th('Market Value'), th('Yield'),th('Return'),th('Years Held'),th('Annualised Ret'), th('3yr-Ret'), th('5yr-Ret'),th('Alpha'), th('Beta'), th('Sharpe')))
     else:
         stockTable.appendChild(tr(th('Stock'),th('Type'),th('Name'),th('Fees'),th('Cash inv'), th('Market Value'), th('Yield'),th('Return'),th('Years Held'),th('Annualised Ret'), th('3yr-Ret'), th('5yr-Ret'),th('Alpha'), th('Beta'), th('Sharpe')))
-    for details in stockLedgerList:
+    for details in accountSummary.stocks:
         historicStocks.extend(details.historicHoldings)
         if (details.totalInvested != 0):
             stockRow = tr()
             detailLocation = f"./{details.account}/{details.symbol}.txt"
             stockRow.appendChild(td(a(f"{details.symbol}", _href=detailLocation)))
             if (allAccounts):
-                stockRow.appendChild(td(f"{details.account}"))
+                accountLocation = f"./{details.account}-Summary.html#Stock%20Summary"
+                stockRow.appendChild(td(a(f"{details.account}", _href=accountLocation)))
             stockRow.appendChild(td(f"{details.fundOverview.fundType.name if details.fundOverview else 'None'}"))
             stockRow.appendChild(td(f"{details.name}"))
             if (details.fundOverview):
@@ -442,7 +444,8 @@ def getAccountSummaryHtml(accountSummary: AccountSummary, stockLedgerList: list[
         detailLocation = f"./{accountSummary.name}/{details.symbol}.txt"
         stockRow.appendChild(td(a(f"{details.symbol}", _href=detailLocation)))
         if (allAccounts):
-            stockRow.appendChild(td(f"{details.account}"))
+            accountLocation = f"./{details.account}-Summary.html#Stock%20Summary"
+            stockRow.appendChild(td(a(f"{details.account}", _href=accountLocation)))
         stockRow.appendChild(td(f"{details.fundOverview.fundType.name if details.fundOverview else 'None'}"))
         stockRow.appendChild(td(f"{details.name}"))
         if (details.fundOverview):
@@ -461,9 +464,10 @@ def getAccountSummaryHtml(accountSummary: AccountSummary, stockLedgerList: list[
         stockTable.appendChild(stockRow)
     dom.append(stockTable)
 
-    dom.appendChild(h2(f"\nDividend payments by Tax Year\n"))
+    dom.appendChild(h2(f"Payments by Tax Year"))
     for yr in [lastTaxYear, currentTaxYear]:
-        dom.appendChild(h3(f"\nTax Year {yr}\n"))
+        dom.appendChild(h3(f"Tax Year {yr}"))
+        dom.appendChild(h3(f"Dividend Payments"))
         txnTable = table()
         if (allAccounts):
             txnTable.appendChild(tr(th('Account'),th('Date'),th('Txn Type'), th('Desc'),th('Amount')))
@@ -474,7 +478,31 @@ def getAccountSummaryHtml(accountSummary: AccountSummary, stockLedgerList: list[
         for txn in txns:
             row = tr()
             if (allAccounts):
-                row.appendChild(td(f"{txn.account}"))
+                accountLocation = f"./{txn.accountName}-Summary.html#Dividend%20Payments"
+                row.appendChild(td(a(f"{txn.accountName}", _href=accountLocation)))
+            row.appendChild(td(f"{txn.date}"))
+            row.appendChild(td(f"{txn.type}"))
+            row.appendChild(td(f"{txn.desc}"))
+            row.appendChild(td(f"{txn.credit if txn.credit != 0 else -txn.debit:0.2f}"))
+            total += txn.credit
+            txnTable.appendChild(row)
+        txnTable.appendChild(tr(td(" "),td("Total"),td(" "),td(f"{total:,.0f}")))
+        dom.append(txnTable)
+        dom.appendChild(h3(f"Income Payments"))
+        txnTable = table()
+        if (allAccounts):
+            txnTable.appendChild(tr(th('Account'),th('Date'),th('Txn Type'), th('Desc'),th('Amount')))
+        else:
+            txnTable.appendChild(tr(th('Date'),th('Txn Type'), th('Desc'),th('Amount')))
+        total = Decimal(0)
+        txns = list(accountSummary.incomeTxnsByYear[yr]) if yr in accountSummary.incomeTxnsByYear else list()
+        txns.extend(accountSummary.interestTxnsByYear[yr] if yr in accountSummary.interestTxnsByYear else list())
+        txns = sorted(txns, key= lambda txn: txn.date)
+        for txn in txns:
+            row = tr()
+            if (allAccounts):
+                accountLocation = f"./{txn.accountName}-Summary.html#Income%20Payments"
+                row.appendChild(td(a(f"{txn.accountName}", _href=accountLocation)))
             row.appendChild(td(f"{txn.date}"))
             row.appendChild(td(f"{txn.type}"))
             row.appendChild(td(f"{txn.desc}"))
@@ -486,13 +514,22 @@ def getAccountSummaryHtml(accountSummary: AccountSummary, stockLedgerList: list[
 
     dom.append(h2('Account transactions'))
     txnTable = table()
-    txnTable.appendChild(tr(th('Date'),th('Txn Type'), th('Desc'),th('Amount'),th('Balance')))
+    if (allAccounts):
+        txnTable.appendChild(tr(th('Date'),th('Account'),th('Txn Type'), th('Desc'),th('Amount'),th('Balance')))
+    else:
+        txnTable.appendChild(tr(th('Date'),th('Txn Type'), th('Desc'),th('Amount'),th('Balance')))
     for txn in accountSummary.transactions:
-        detailLocation = f"./{accountSummary.name}/{txn.symbol}.txt"
-        txnTable.appendChild(tr(td(f"{txn.date}"),td(f"{txn.type}"),td(f"{txn.desc}"),
-                    td(f"{txn.credit if txn.credit != 0 else -txn.debit:0.2f}"), 
-                    td(f"{txn.accountBalance:0.2f}") ))
-
+        detailLocation = f"./{txn.accountName}/{txn.symbol}.txt"
+        row = tr()
+        row.appendChild(td(f"{txn.date}"))
+        if (allAccounts):
+            accountLocation = f"./{txn.accountName}-Summary.html#Income%20Payments"
+            row.appendChild(td(a(f"{txn.accountName}", _href=accountLocation)))
+        row.appendChild(td(f"{txn.type}"))
+        row.appendChild(td(f"{txn.desc}"))
+        row.appendChild(td(f"{txn.credit if txn.credit != 0 else -txn.debit:0.2f}"))
+        row.appendChild(td(f"{txn.accountBalance:0.2f}"))
+        txnTable.appendChild(row)
     dom.appendChild(txnTable)
 
     ht = html(meta(_charset='UTF-8'))

@@ -16,7 +16,6 @@ def processAccountTxns(account: AccountSummary, txns: list[Transaction], stocks:
     for txn in txns:
         type = txn.type
         taxYear = getTaxYear(txn.date)
-        # txn.date = txn.date.replace(tzinfo=None) #Make the date naive if not already
         if (txn.date < dateOpened):
             dateOpened = txn.date
         if type == CASH_IN:
@@ -40,13 +39,21 @@ def processAccountTxns(account: AccountSummary, txns: list[Transaction], stocks:
                 credit = convertToSterling(stocks.get(txn.creditCurrency, None), txn, txn.credit)
                 account.cashBalance += credit
         elif type == DIVIDEND:
-            interest = convertToSterling(stocks.get(txn.creditCurrency, None), txn, txn.credit)
-            account.cashBalance += interest
+            divi = convertToSterling(stocks.get(txn.creditCurrency, None), txn, txn.credit)
+            account.cashBalance += divi
         elif type == INTEREST:
             interest = convertToSterling(stocks.get(txn.creditCurrency, None), txn, txn.credit)
             account.cashBalance += interest
             yr = getTaxYear(txn.date)
-            account.dividendsByYear[yr] = account.dividendsByYear.get(yr, 0) + interest
+            #Interest is account level and so add transaction to account
+            account.interestByYear[yr] = account.interestByYear.get(yr, Decimal(0.0)) + interest
+            if yr in account.interestTxnsByYear:
+                account.interestTxnsByYear[yr].add(txn)
+            else:
+                account.interestTxnsByYear[yr] = {txn}
+        elif type == EQUALISATION:
+            divi = convertToSterling(stocks.get(txn.creditCurrency, None), txn, txn.credit)
+            account.cashBalance += divi
         else:
             print(f"Got a transaction type '{type}' that isn't recognised for {account.name}: Detail: {txn}\n")
         txn.accountBalance = account.cashBalance #Capture running balance in transaction
@@ -102,7 +109,7 @@ def processStockTxns(account: AccountSummary, securities, funds: dict[str, FundO
             details.avgSharePrice = details.totalInvested / details.qtyHeld
             details.costsByYear[taxYear] = details.costsByYear.get(taxYear, Decimal(0.0)) + costs #Stamp duty and charges
             details.totalCosts += costs
-            details.investmentHistory.append(CapitalGain(date = txn.date, qty = txn.qty, price = priceIncCosts))
+            details.investmentHistory.append(CapitalGain(date = txn.date, qty = txn.qty, price = priceIncCosts, transaction = BUY))
         elif type == SELL:
             if not details.name:
                 if (details.isin == USD or details.isin == EUR):
@@ -144,13 +151,15 @@ def processStockTxns(account: AccountSummary, securities, funds: dict[str, FundO
                 yearYield = 0.0
             details.dividendYieldByYear[taxYear] = yearYield
             if taxYear in details.dividendTxnsByYear.keys():
-                prelen = len(details.dividendTxnsByYear[taxYear])
                 details.dividendTxnsByYear[taxYear].add(txn)
-                postlen = len(details.dividendTxnsByYear[taxYear])
-                if postlen == prelen:
-                    print (f"Failed to add new txn {txn} to set - dupe or broken hash?")
             else:
                 details.dividendTxnsByYear[taxYear] = {txn}
+        elif type == EQUALISATION:
+            #This is a return of part of the initial principle, so should be taken off the investment amount
+            eql = convertToSterling(stocks.get(txn.creditCurrency, None), txn, txn.credit)
+            details.totalInvested -= eql
+            details.avgSharePrice = details.totalInvested / details.qtyHeld
+            details.cashInvested -= eql
         else:
             print(f"Got a transaction type {type} that dont recognise for account {account.name} and stock {stock}: Detail: {txn}\n")
 

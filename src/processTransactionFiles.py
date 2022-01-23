@@ -5,18 +5,18 @@ from transactionDefs import *
 from processTransactions import processAccountTxns, processStockTxns
 from getStockLedgerStr import getStockLedgerStr, getAccountSummaryStr, getAccountSummaryHtml
 
-def saveStockLedger(config, accountSummary: AccountSummary, stockLedgerList: list[SecurityDetails]):
-    for details in stockLedgerList:
+def saveStockLedger(config, accountSummary: AccountSummary):
+    for details in accountSummary.stocks:
         detailsStr = getStockLedgerStr(details)
         saveStringToDropbox(config, f"/performance/{accountSummary.name}/{details.symbol}.txt", detailsStr)
 
-def saveAccountSummary(config, accountSummary: AccountSummary, stockLedgerList: list[SecurityDetails]):
-    accSummaryTxt = getAccountSummaryStr(accountSummary, stockLedgerList)
+def saveAccountSummary(config, accountSummary: AccountSummary):
+    accSummaryTxt = getAccountSummaryStr(accountSummary)
     saveStringToDropbox(config, f"/performance/{accountSummary.name}-Summary.txt", accSummaryTxt)
-    accSummaryHtml = getAccountSummaryHtml(accountSummary, stockLedgerList)
+    accSummaryHtml = getAccountSummaryHtml(accountSummary)
     saveStringToDropbox(config, f"/performance/{accountSummary.name}-Summary.html", accSummaryHtml)
 
-def summarisePerformance(accountSummary: AccountSummary, stockSummary: list[SecurityDetails], funds: dict[str, FundOverview]):
+def summarisePerformance(accountSummary: AccountSummary, funds: dict[str, FundOverview]):
     totalShareInvested = Decimal(0.0)
     totalCashInvested = Decimal(0.0)
     totalDiviReInvested = Decimal(0.0)
@@ -38,8 +38,8 @@ def summarisePerformance(accountSummary: AccountSummary, stockSummary: list[Secu
     totalMarketValue = accountSummary.cashBalance
     totalByInstitution: dict[str, Decimal] = dict()
     detailsToProcess: list[SecurityDetails] = list()
-    detailsToProcess.extend(stockSummary)
-    for details in stockSummary:
+    detailsToProcess.extend(accountSummary.stocks)
+    for details in accountSummary.stocks:
         detailsToProcess.extend(details.historicHoldings)
     
     for details in detailsToProcess:
@@ -324,7 +324,8 @@ def processLatestTxnFiles(config, stockListByAcc):
                     sedol = row['Sedol'].strip(),
                     isin = row['ISIN'].strip(),
                     qty = 0 if row['Quantity'] == '' else int(row['Quantity']),
-                    desc = row['Description']
+                    desc = row['Description'],
+                    accountName = accountName
                     )
                 (txn.priceCurrency, txn.price) = priceStrToDec(row['Price'])
                 (txn.debitCurrency, txn.debit) = priceStrToDec(row['Debit'])
@@ -336,10 +337,8 @@ def processLatestTxnFiles(config, stockListByAcc):
                 if (txn.isin.startswith(NO_STOCK) or (txn.isin == '' and txn.symbol == '')):
                     txn.isin = NO_STOCK
                 if (desc.startswith('div') 
-                        or desc.startswith('equalisation')
                         or desc.endswith('distribution')
                         or desc.endswith('rights')
-                        or 'prize' in desc
                         or 'final frac pay' in desc
                         or 'optional dividend' in desc):
                     txn.type = DIVIDEND
@@ -360,8 +359,11 @@ def processLatestTxnFiles(config, stockListByAcc):
                             txn.type = CASH_IN
                         else:
                             txn.type = CASH_OUT 
-                elif 'interest' in desc:
+                elif ('interest' in desc
+                        or 'prize' in desc):
                     txn.type = INTEREST
+                elif desc.startswith('equalisation'):
+                    txn.type = EQUALISATION
                 elif (('fee' in desc
                         or 'payment' in desc)
                             and txn.debit != 0):
@@ -531,15 +533,12 @@ def processTransactions(config):
                 #Dont process currency conversion txns or ones that are not related to a security
                 stockLedger[stock] = processStockTxns(accountSummary, securitiesByAccount.get(account, None), fundOverviews, sortedStocks, stock) 
         processAccountTxns(accountSummary, allTxns[account], sortedStocks)
-        #Summarise transactions and yields etc
-        stockLedgerList = sorted(list(stockLedger.values()), key = lambda stock: stock.avgGainPerYearPerc(), reverse = True)
-        allStocks.extend(stockLedgerList)
+        accountSummary.stocks = sorted(list(stockLedger.values()), key = lambda stock: stock.avgGainPerYearPerc(), reverse = True)
         #Save to Dropbox file
-        saveStockLedger(configStore, accountSummary, stockLedgerList)
+        saveStockLedger(configStore, accountSummary)
         #Summarise account performance
-        summarisePerformance(accountSummary, stockLedgerList, fundOverviews)
+        summarisePerformance(accountSummary, fundOverviews)
         allAccounts.append(accountSummary)
-    totalStockList = sorted(allStocks, key = lambda stock: stock.avgGainPerYearPerc(), reverse = True)
     totalSummary = AccountSummary(name = 'Total', portfolioPerc = config['portfolio_ratios'])
     currentTaxableIncome = Decimal(0.0)
     lastTaxableIncome = Decimal(0.0)
@@ -558,7 +557,7 @@ def processTransactions(config):
     totalSummary.taxBandByYear[lastTaxYear] = calcTaxBand(taxAllowances, lastTaxableIncome)
     for summary in allAccounts:
         summary.taxBandByYear = totalSummary.taxBandByYear 
-        saveAccountSummary(configStore, summary, stockLedgerList)    #Create overall summary of account
+        saveAccountSummary(configStore, summary)    #Create overall summary of account
 
     #Add in other account totals that are outside of the scope of these calcs
     #NOTE: If these have a (significant) impact on taxable earnings, they need to be brought into scope and account created for them
@@ -568,6 +567,6 @@ def processTransactions(config):
         totalSummary.fundTotals[FundType[ft.upper()]].totalValue += val
         totalSummary.totalOtherAccounts += val
     
-    saveAccountSummary(configStore, totalSummary, totalStockList)    #Create overall summary
+    saveAccountSummary(configStore, totalSummary)    #Create overall summary
     
     
