@@ -1,8 +1,6 @@
 
 from decimal import Decimal
 from datetime import datetime, timedelta, date, timezone
-from statistics import mean
-from copy import deepcopy
 
 from getLatestPrices import getAndSaveStockPrices
 from processStock import calcPriceData
@@ -12,6 +10,7 @@ def processAccountTxns(account: AccountSummary, txns: list[Transaction], stocks:
     cashInByYear = dict()
     cashOutByYear = dict()
     feesByYear = dict()
+    account.taxfreeCashOutByYear = dict()
     # dateOpened = datetime.now().replace(tzinfo=None)
     dateOpened = datetime.now(timezone.utc)
     for txn in txns:
@@ -25,6 +24,8 @@ def processAccountTxns(account: AccountSummary, txns: list[Transaction], stocks:
         elif type == CASH_OUT:
             cashOutByYear[taxYear] = cashOutByYear.get(taxYear, Decimal(0.0)) + txn.debit
             account.cashBalance -= txn.debit
+            if 'tax-free' in txn.desc.lower():
+                account.taxfreeCashOutByYear[taxYear] = account.taxfreeCashOutByYear.get(taxYear, Decimal(0.0)) + txn.debit
         elif type == FEES:
             feesByYear[taxYear] = feesByYear.get(taxYear, Decimal(0.0)) + txn.debit
             account.cashBalance -= txn.debit
@@ -140,7 +141,7 @@ def processStockTxns(account: AccountSummary, securities, funds: dict[str, FundO
                 newDetails.symbol = details.symbol
                 newDetails.name = details.name
                 newDetails.account = details.account
-                newDetails.fundOverview = deepcopy(details.fundOverview)
+                newDetails.fundOverview = details.fundOverview
                 newDetails.historicHoldings.append(details)
                 details = newDetails
         elif type == DIVIDEND:

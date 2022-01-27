@@ -344,6 +344,7 @@ class AccountSummary:
     portfolioPerc: dict[str, str] = field(default_factory=dict) 
     cashInByYear: dict[str, Decimal(0.0)] = field(default_factory=dict)
     cashOutByYear: dict[str, Decimal(0.0)] = field(default_factory=dict)
+    taxfreeCashOutByYear: dict[str, Decimal(0.0)] = field(default_factory=dict)
     feesByYear: dict[str, Decimal(0.0)] = field(default_factory=dict)
     aggInvestedByYear: dict[str, Decimal(0.0)] = field(default_factory=dict)
     realisedGainForTaxByYear: dict[str, Decimal(0.0)] = field(default_factory=dict)
@@ -438,6 +439,12 @@ class AccountSummary:
             if (yr not in self.incomeByYear):
                 self.incomeByYear[yr] = summary.incomeByYear[yr]
 
+        for yr in self.taxfreeCashOutByYear.keys():
+            self.taxfreeCashOutByYear[yr] += summary.taxfreeCashOutByYear.get(yr, Decimal(0.0))
+        for yr in summary.taxfreeCashOutByYear.keys():
+            if (yr not in self.taxfreeCashOutByYear):
+                self.taxfreeCashOutByYear[yr] = summary.taxfreeCashOutByYear[yr]
+
         for yr in self.incomeTxnsByYear.keys():
             self.incomeTxnsByYear[yr].update(summary.incomeTxnsByYear.get(yr, set()))
             # self.incomeTxnsByYear[yr] = sorted(self.incomeTxnsByYear[yr], key= lambda txn: txn.date)
@@ -523,6 +530,10 @@ class AccountSummary:
     def totalIncome(self):
             inc = sum(self.incomeByYear.values()) if len(self.incomeByYear) > 0 else Decimal(0.0)
             inc += sum(self.interestByYear.values()) if len(self.interestByYear) > 0 else Decimal(0.0)
+            cashOutTax = float(self.taxRates.get('withdrawllowertax', 0))
+            if cashOutTax != 0:
+                #Cash out or withdrawl of funds is treated as income (e.g. a SIPP)
+                inc += sum(self.cashOutByYear.values()) if len(self.cashOutByYear) > 0 else Decimal(0.0)
             return inc
     def totalInterest(self):
         return sum(self.incomeByYear.values()) if len(self.incomeByYear) > 0 else Decimal(0.0)
@@ -584,7 +595,8 @@ class AccountSummary:
         #For a pension (SIPP) cash out is treated as income
         cashOutTax = Decimal(self.taxRates['withdrawl' + taxBand + 'tax'])
         if cashOutTax != 0:
-            tax += cashOutTax * self.cashOutByYear.get(taxYear, Decimal(0.0)) / 100
+            income = self.cashOutByYear.get(taxYear, Decimal(0.0)) - self.taxfreeCashOutByYear.get(taxYear, Decimal(0.0))
+            tax += cashOutTax * income / 100
         return tax
 
     def getInterestAllowance(self, taxBand):
@@ -624,10 +636,12 @@ class AccountSummary:
 
     def taxableIncome(self, taxYear):
         income = Decimal(0.0)
-        if Decimal(self.taxRates['withdrawllowertax']) != 0:
+        if self.taxRates['withdrawllowertax'] != 0:
             #Add in any withdrawals liable to tax for the tax year
             income += self.cashOutByYear.get(taxYear, Decimal(0.0)) if len(self.cashOutByYear) > 0 else Decimal(0.0)
-        if Decimal(self.taxRates['incomelowertax']) != 0:
+            #Remove any tax free cash
+            income -= self.taxfreeCashOutByYear.get(taxYear, Decimal(0.0)) if len(self.taxfreeCashOutByYear) > 0 else Decimal(0.0)
+        if self.taxRates['incomelowertax'] != 0:
             #Add in any bond income for the tax year
             income += self.incomeByYear.get(taxYear, Decimal(0.0)) if len(self.incomeByYear) > 0 else Decimal(0.0)
             #Add in any interest income for the tax year
