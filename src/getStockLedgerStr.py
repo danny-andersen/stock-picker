@@ -125,7 +125,7 @@ def getAccountSummaryHtml(accountSummary: AccountSummary):
         totalIncome = Decimal(0.0)
         totalIncomeTax = Decimal(0.0)
         for account in accounts:
-            band = account.taxBandByYear.get(yr, Decimal(0.0))
+            band = account.taxBandByYear.get(yr, 'lower')
             cg = account.realisedGainForTaxByYear.get(yr, Decimal(0.0)) if len(account.realisedGainForTaxByYear) > 0 else Decimal(0.0)
             totalCG += cg
             taxablecg = account.taxableCG(yr)
@@ -187,7 +187,7 @@ def getAccountSummaryHtml(accountSummary: AccountSummary):
     portPerc = accountSummary.portfolioPerc
     for typ, fund in funds.items():
         if isTotalAcc:
-            accFunds = (f"{acc.fundTotals[typ].totalValue:,.0f}" for acc in accountSummary.mergedAccounts)
+            accFunds = (f"{acc.fundTotals[typ].totalValue if typ in acc.fundTotals else 0:,.0f}" for acc in accountSummary.mergedAccounts)
             fs.appendChild(tr(td(typ.name),td(f"£{fund.totalInvested:,.0f}"), td(f"£{fund.totalValue:,.0f}"),td(f"{100*fund.totalValue/totalAccountValue:0.2f}%"),
                     ''.join([f"{td(acc)}" for acc in accFunds]),
                     td(f"{fund.fees:0.2f}%"), td(f"{fund.actualReturn:0.2f}%"), td(f"{fund.return3Yr:0.2f}%"), td(f"{fund.return5Yr:0.2f}%") ))
@@ -441,7 +441,10 @@ def getAccountSummaryHtml(accountSummary: AccountSummary):
         stockTable.appendChild(tr(th('Stock'),th('Type'),th('Name'),th('Fees'),th('Cash inv'), th('Capital Gain'), th('Dividends'), th('Yield'),th('Total Gain'),th('Years Held'),th('Avg Gain/Yr'),th('From'),th('To')))
     for details in historicStocks:
         stockRow = tr()
-        detailLocation = f"./{accountSummary.name}/{details.symbol}.txt"
+        if (allAccounts):
+            detailLocation = f"./{details.account}/{details.symbol}.txt"
+        else:
+            detailLocation = f"./{accountSummary.name}/{details.symbol}.txt"
         stockRow.appendChild(td(a(f"{details.symbol}", _href=detailLocation)))
         if (allAccounts):
             accountLocation = f"./{details.account}-Summary.html#Stock%20Summary"

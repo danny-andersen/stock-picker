@@ -562,10 +562,21 @@ def processTransactions(config):
     #Add in other account totals that are outside of the scope of these calcs
     #NOTE: If these have a (significant) impact on taxable earnings, they need to be brought into scope and account created for them
     otherAccs = config['other_accs']
+    otherAccounts = AccountSummary(name ='Other Accs', portfolioPerc = config['portfolio_ratios'], taxRates=rates)
+    total = Decimal(0)
+    totalInvested = Decimal(0)
     for ft in otherAccs.keys():
         val = Decimal(otherAccs[ft])
-        totalSummary.fundTotals[FundType[ft.upper()]].totalValue += val
-        totalSummary.totalOtherAccounts += val
+        fundt = FundType[ft.upper()]
+        if (fundt != FundType.CASH):
+            totalInvested += val
+        otherAccounts.fundTotals[fundt] = FundOverview(isin='None',name='Other savings', fundType=fundt, totalValue = val)
+        total += val
+    otherAccounts.totalCashInvested = total
+    otherAccounts.totalInvestedInSecurities = totalInvested
+    otherAccounts.totalMarketValue = total
+    otherAccounts.totalByInstitution['Other'] = total
+    totalSummary.mergeInAccountSummary(otherAccounts)
     
     saveAccountSummary(configStore, totalSummary)    #Create overall summary
     

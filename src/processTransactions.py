@@ -2,6 +2,7 @@
 from decimal import Decimal
 from datetime import datetime, timedelta, date, timezone
 from statistics import mean
+from copy import deepcopy
 
 from getLatestPrices import getAndSaveStockPrices
 from processStock import calcPriceData
@@ -89,6 +90,7 @@ def processStockTxns(account: AccountSummary, securities, funds: dict[str, FundO
                 details.sedol = txn.sedol
             if not details.isin:
                 details.isin = txn.isin
+                details.fundOverview = funds.get(details.isin, None)
             if not details.startDate:
                 details.startDate = txn.date
             details.qtyHeld += txn.qty
@@ -138,6 +140,7 @@ def processStockTxns(account: AccountSummary, securities, funds: dict[str, FundO
                 newDetails.symbol = details.symbol
                 newDetails.name = details.name
                 newDetails.account = details.account
+                newDetails.fundOverview = deepcopy(details.fundOverview)
                 newDetails.historicHoldings.append(details)
                 details = newDetails
         elif type == DIVIDEND:
@@ -198,5 +201,4 @@ def processStockTxns(account: AccountSummary, securities, funds: dict[str, FundO
     if security:
         details.currentSharePrice = security.currentPrice
         details.currentSharePriceDate = security.date
-    details.fundOverview = funds.get(details.isin, None)
     return details
