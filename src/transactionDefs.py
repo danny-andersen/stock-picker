@@ -105,7 +105,7 @@ class FundOverview:
             retStr += f"Bond Grade: {self.bondGrade.name}\n"
         else:
             retStr += f"Stock spread: Cyclical {self.cyclical}%, Sensitive {self.sensitive}%, Defensive {self.defensive}%\n"
-        retStr += f"Geographical Spread: Americas {self.americas}%, Americas Emerging {self.americasEmerging}%, UK {self.uk}%"
+        retStr += f"Geographical Spread: Americas {self.americas}%, Americas Emerging {self.americasEmerging}%, UK {self.uk}%,"
         retStr += f"Europe {self.europe}%, Europe Emerging {self.europeEmerging}%,"
         retStr += f"Asia {self.asia}%, Asia Emerging {self.asiaEmerging}%\n"
         retStr += f"3 year Stats: Alpha {self.alpha3Yr} Beta {self.beta3Yr} Sharpe {self.sharpe3Yr} Standard Dev {self.stdDev3Yr}\n"
@@ -268,7 +268,6 @@ class SecurityDetails:
     currentSharePrice: Decimal = Decimal(0.0)
     currentSharePriceDate: datetime = None
     costsByYear: dict[str, Decimal(0.0)] = field(default_factory=dict)
-    totalCosts: Decimal = Decimal(0.0)
     dividendsByYear: dict[str, Decimal(0.0)] = field(default_factory=dict)
     dividendYieldByYear: dict[str, Decimal(0.0)] = field(default_factory=dict)
     investmentHistory: list[CapitalGain] = field(default_factory=list)
@@ -304,6 +303,8 @@ class SecurityDetails:
             return float(self.totalGainPerc())/self.yearsHeld()
         else:
             return 0.0
+    def totalCosts(self):
+        return sum(self.costsByYear.values()) if len(self.costsByYear) > 0 else Decimal(0.0)
     def totalDividends(self):
         return sum(self.dividendsByYear.values()) if len(self.dividendsByYear) > 0 else Decimal(0.0)
     def averageYearlyDivi(self):
@@ -333,7 +334,6 @@ class AccountSummary:
     dateOpened: datetime = datetime.now(timezone.utc)
     totalCashInvested: Decimal = Decimal(0.0)
     totalDiviReInvested: Decimal = Decimal(0.0)
-    totalDealingCosts: Decimal = Decimal(0.0)
     cashBalance: Decimal = Decimal(0.0)
     totalOtherAccounts: Decimal = Decimal(0.0)
     totalMarketValue: Decimal = Decimal(0.0)
@@ -372,7 +372,6 @@ class AccountSummary:
             self.dateOpened = summary.dateOpened
         self.totalCashInvested += summary.totalCashInvested
         self.totalDiviReInvested += summary.totalDiviReInvested
-        self.totalDealingCosts += summary.totalDealingCosts
         self.totalMarketValue += summary.totalMarketValue
         self.cashBalance += summary.cashBalance
         self.totalInvestedInSecurities += summary.totalInvestedInSecurities
@@ -497,11 +496,12 @@ class AccountSummary:
                 #Copy
                 self.fundTotals[ft] = deepcopy(fund)
 
-
     def totalInvested(self): 
         return sum(self.cashInByYear.values()) - sum(self.cashOutByYear.values())
     def totalFees(self):
         return sum(self.feesByYear.values()) if len(self.feesByYear) > 0 else Decimal(0.0)
+    def totalDealingCosts(self):
+        return sum(self.dealingCostsByYear.values()) if len(self.dealingCostsByYear) > 0 else Decimal(0.0)
     def totalValue(self):
         return self.totalMarketValue + self.totalOtherAccounts
     def totalPaperGainForTaxPerc(self):
@@ -534,6 +534,14 @@ class AccountSummary:
             if cashOutTax != 0:
                 #Cash out or withdrawl of funds is treated as income (e.g. a SIPP)
                 inc += sum(self.cashOutByYear.values()) if len(self.cashOutByYear) > 0 else Decimal(0.0)
+            return inc
+    def totalIncomeByYear(self, year):
+            inc = self.incomeByYear.get(year, Decimal(0))
+            inc += self.interestByYear.get(year, Decimal(0))
+            cashOutTax = float(self.taxRates.get('withdrawllowertax', 0))
+            if cashOutTax != 0:
+                #Cash out or withdrawl of funds is treated as income (e.g. a SIPP)
+                inc += self.cashOutByYear.get(year, Decimal(0))
             return inc
     def totalInterest(self):
         return sum(self.incomeByYear.values()) if len(self.incomeByYear) > 0 else Decimal(0.0)

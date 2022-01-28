@@ -20,11 +20,10 @@ def summarisePerformance(accountSummary: AccountSummary, funds: dict[str, FundOv
     totalShareInvested = Decimal(0.0)
     totalCashInvested = Decimal(0.0)
     totalDiviReInvested = Decimal(0.0)
-    totalCosts = Decimal(0.0)
     totalPaperGainForTax = Decimal(0.0)
     totalGain = Decimal(0.0)
     totalRealisedForTaxGain = dict()
-    totalDealingCosts = accountSummary.feesByYear
+    totalDealingCostsByYear = dict()
     totalDivi = accountSummary.dividendsByYear
     totalIncome = accountSummary.incomeByYear
     totalInterest = accountSummary.interestByYear
@@ -90,13 +89,12 @@ def summarisePerformance(accountSummary: AccountSummary, funds: dict[str, FundOv
         totalCashInvested += details.cashInvested
         totalDiviReInvested += details.diviInvested
         totalShareInvested += details.totalInvested
-        totalCosts += details.totalCosts
         totalPaperGainForTax += details.paperCGT()
         totalGain += details.totalGain()
         for year,gain in details.realisedCapitalGainByYear.items():
             totalRealisedForTaxGain[year] = totalRealisedForTaxGain.get(year, Decimal(0.0)) + gain
         for year,costs in details.costsByYear.items():
-            totalDealingCosts[year] = totalDealingCosts.get(year, Decimal(0.0)) + costs
+            totalDealingCostsByYear[year] = totalDealingCostsByYear.get(year, Decimal(0.0)) + costs
         if fund and fund.isBondType():
             #A bond payment is treated as income for tax reasons
             for year,inc in details.dividendsByYear.items():
@@ -218,12 +216,11 @@ def summarisePerformance(accountSummary: AccountSummary, funds: dict[str, FundOv
     accountSummary.totalDiviReInvested = totalDiviReInvested
     accountSummary.totalMarketValue = totalMarketValue
     accountSummary.totalInvestedInSecurities = totalShareInvested
-    accountSummary.totalDealingCosts = totalCosts
     accountSummary.totalPaperGainForTax = totalPaperGainForTax
     accountSummary.totalGain = totalGain
     accountSummary.aggInvestedByYear = aggInvestedByYear
     accountSummary.realisedGainForTaxByYear = totalRealisedForTaxGain
-    accountSummary.dealingCostsByYear  = totalDealingCosts
+    accountSummary.dealingCostsByYear  = totalDealingCostsByYear
     accountSummary.dividendsByYear = totalDivi
     accountSummary.dividendYieldByYear = totalDiviYieldByYear
     accountSummary.incomeByYear = totalIncome
@@ -353,7 +350,7 @@ def processLatestTxnFiles(config, stockListByAcc):
                             or 'transfer' in desc
                             or 'faster payment' in desc
                             or 'cashback' in desc
-                            # or '(di)' in desc
+                            or ('payment' in desc and 'andersen' in desc)
                             or 'lump sum' in desc):
                         if (txn.credit != 0):
                             txn.type = CASH_IN
@@ -364,9 +361,9 @@ def processLatestTxnFiles(config, stockListByAcc):
                     txn.type = INTEREST
                 elif desc.startswith('equalisation'):
                     txn.type = EQUALISATION
-                elif (('fee' in desc
-                        or 'payment' in desc)
-                            and txn.debit != 0):
+                elif ('fee' in desc
+                        or ('payment' in desc and 'andersen' not in desc)
+                        and txn.debit != 0):
                     txn.type = FEES
                 elif ('refund' in desc
                         and txn.credit != 0):

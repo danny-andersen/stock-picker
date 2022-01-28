@@ -20,7 +20,7 @@ def getAccountSummaryStr(accountSummary: AccountSummary):
     retStr += f"Total Dividends: £{accountSummary.totalDividends():,.0f}\n"
     retStr += f"Avg Dividend Yield: {accountSummary.avgDividends():,.0f}%\n"
     retStr += f"Total Fees paid: £{accountSummary.totalFees():,.0f}\n"
-    retStr += f"Total Dealing costs: £{accountSummary.totalDealingCosts:,.0f}\n"
+    retStr += f"Total Dealing costs: £{accountSummary.totalDealingCosts():,.0f}\n"
     retStr += f"Total Return (Paper gain, dividends paid, realised gain, less fees and costs): £{accountSummary.totalGain:,.0f} ({accountSummary.totalGainPerc():0.2f}%) \n"
     retStr += f"Actual Return (Market value less Cash invested): £{accountSummary.totalGainFromInvestments():,.0f} ({accountSummary.totalGainFromInvPerc():0.2f}%) \n"
     retStr += f"Average return per year £{accountSummary.avgReturnPerYear():,.0f}\n"
@@ -96,9 +96,9 @@ def getAccountSummaryHtml(accountSummary: AccountSummary):
     summary.appendChild(tr(td("Avg Total Yield"), td(f"{accountSummary.avgTotalYield():.2f}%")))
     summary.appendChild(tr(td("Total Divi + Income"), td(f"£{accountSummary.totalIncome() + accountSummary.totalDividends():,.0f}")))
     summary.appendChild(tr(td("Total Fees paid"), td(f"£{accountSummary.totalFees():,.0f}")))
-    summary.appendChild(tr(td("Total Dealing costs"), td(f"£{accountSummary.totalDealingCosts:,.0f}")))
+    summary.appendChild(tr(td("Total Dealing costs"), td(f"£{accountSummary.totalDealingCosts():,.0f}")))
     summary.appendChild(tr(td("Total Return (Paper gain, dividends paid, realised gain, less fees and costs)"),td(f"£{accountSummary.totalGainLessFees():,.0f} ({accountSummary.totalGainPerc():,.0f}%)")))
-    summary.appendChild(tr(td("Actual Return (Market value less Cash invested)"), td(f"£{accountSummary.totalGainFromInvestments():,.0f} ({accountSummary.totalGainFromInvPerc():0.2f}%)")))
+    summary.appendChild(tr(td("Current Return of investments (Market value less Cash invested)"), td(f"£{accountSummary.totalGainFromInvestments():,.0f} ({accountSummary.totalGainFromInvPerc():0.2f}%)")))
 
     summary.appendChild(tr(td("Average return per year"),td(f"£{accountSummary.avgReturnPerYear():,.0f}")))
     dom.appendChild(summary)
@@ -138,7 +138,7 @@ def getAccountSummaryHtml(accountSummary: AccountSummary):
             totalTaxableDivi += taxableDivi
             diviTax = account.calcDividendTax(band, yr)
             totalDiviTax += diviTax
-            income = account.incomeByYear.get(yr, Decimal(0.0)) + account.interestByYear.get(yr, Decimal(0.0))
+            income = account.totalIncomeByYear(yr)
             totalIncome += income
             incomeTax = account.calcIncomeTax(band, yr)
             totalIncomeTax += incomeTax
@@ -486,10 +486,10 @@ def getAccountSummaryHtml(accountSummary: AccountSummary):
             row.appendChild(td(f"{txn.date}"))
             row.appendChild(td(f"{txn.type}"))
             row.appendChild(td(f"{txn.desc}"))
-            row.appendChild(td(f"{txn.credit if txn.credit != 0 else -txn.debit:0.2f}"))
+            row.appendChild(td(f"£{txn.credit if txn.credit != 0 else -txn.debit:0.2f}"))
             total += txn.credit
             txnTable.appendChild(row)
-        txnTable.appendChild(tr(td(" "),td("Total"),td(" "),td(f"{total:,.0f}")))
+        txnTable.appendChild(tr(td(" "),td("Total"),td(" "),td(f"£{total:,.0f}")))
         dom.append(txnTable)
         dom.appendChild(h3(f"Income Payments"))
         txnTable = table()
@@ -509,10 +509,10 @@ def getAccountSummaryHtml(accountSummary: AccountSummary):
             row.appendChild(td(f"{txn.date}"))
             row.appendChild(td(f"{txn.type}"))
             row.appendChild(td(f"{txn.desc}"))
-            row.appendChild(td(f"{txn.credit if txn.credit != 0 else -txn.debit:0.2f}"))
+            row.appendChild(td(f"£{txn.credit if txn.credit != 0 else -txn.debit:0.2f}"))
             total += txn.credit
             txnTable.appendChild(row)
-        txnTable.appendChild(tr(td(" "),td("Total"),td(" "),td(f"{total:,.0f}")))
+        txnTable.appendChild(tr(td(" "),td("Total"),td(" "),td(f"£{total:,.0f}")))
         dom.append(txnTable)
 
     dom.append(h2('Account transactions'))
@@ -530,8 +530,8 @@ def getAccountSummaryHtml(accountSummary: AccountSummary):
             row.appendChild(td(a(f"{txn.accountName}", _href=accountLocation)))
         row.appendChild(td(f"{txn.type}"))
         row.appendChild(td(f"{txn.desc}"))
-        row.appendChild(td(f"{txn.credit if txn.credit != 0 else -txn.debit:0.2f}"))
-        row.appendChild(td(f"{txn.accountBalance:0.2f}"))
+        row.appendChild(td(f"£{txn.credit if txn.credit != 0 else -txn.debit:0.2f}"))
+        row.appendChild(td(f"£{txn.accountBalance:0.2f}"))
         txnTable.appendChild(row)
     dom.appendChild(txnTable)
 
@@ -592,7 +592,7 @@ def getDetailsStr(details: SecurityDetails):
     retStr += f"Average Yearly Dividend £{details.averageYearlyDivi():,.0f}, Yield: {details.averageYearlyDiviYield():0.2f}%\n"
     retStr += f"Realised Capital gain £{details.realisedCapitalGain():,.0f}\n"
     retStr += f"Total Capital gain £{details.capitalGain():,.0f}\n"
-    retStr += f"Stock Dealing costs £{details.totalCosts:,.0f}\n"
+    retStr += f"Stock Dealing costs £{details.totalCosts():,.0f}\n"
     retStr += f"Total Gain: £{details.totalGain():,.0f}, ({details.totalGainPerc():0.2f}%) \n"
     retStr += f"Average Gain per year: £{details.avgGainPerYear():,.0f}, ({details.avgGainPerYearPerc():0.2f}%) \n"
 

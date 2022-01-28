@@ -111,7 +111,6 @@ def processStockTxns(account: AccountSummary, securities, funds: dict[str, FundO
                 details.cashInvested += debit
             details.avgSharePrice = details.totalInvested / details.qtyHeld
             details.costsByYear[taxYear] = details.costsByYear.get(taxYear, Decimal(0.0)) + costs #Stamp duty and charges
-            details.totalCosts += costs
             details.investmentHistory.append(CapitalGain(date = txn.date, qty = txn.qty, price = priceIncCosts, transaction = BUY))
         elif type == SELL:
             if not details.name:
@@ -124,7 +123,8 @@ def processStockTxns(account: AccountSummary, securities, funds: dict[str, FundO
             details.realisedCapitalGainByYear[taxYear] = details.realisedCapitalGainByYear.get(taxYear, Decimal(0.0)) + gain
             details.qtyHeld -= txn.qty
             if (txn.price != 0):
-                details.totalCosts += (txn.price * txn.qty) - credit #Diff between what should have received vs what was credited
+                costs = credit - (txn.price * txn.qty) #Diff between what should have received vs what was credited
+                details.costsByYear[taxYear] = details.costsByYear.get(taxYear, Decimal(0.0)) + costs #Stamp duty and charges
             details.totalInvested = details.avgSharePrice * details.qtyHeld
             details.investmentHistory.append(CapitalGain(date = txn.date, qty = txn.qty, price = priceIncCosts, transaction = SELL))
             if (details.qtyHeld <= 0):
