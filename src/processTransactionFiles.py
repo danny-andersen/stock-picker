@@ -3,7 +3,7 @@ import os
 from saveRetreiveFiles import getAllStockTxnSaved, saveStringToDropbox, saveStockTransactions
 from transactionDefs import *
 from processTransactions import processAccountTxns, processStockTxns
-from getStockLedgerStr import getStockLedgerStr, getAccountSummaryStr, getAccountSummaryHtml
+from getStockLedgerStr import getStockLedgerStr, getAccountSummaryStr, getAccountSummaryStrs
 
 def saveStockLedger(config, accountSummary: AccountSummary):
     for details in accountSummary.stocks:
@@ -11,10 +11,11 @@ def saveStockLedger(config, accountSummary: AccountSummary):
         saveStringToDropbox(config, f"/performance/{accountSummary.name}/{details.symbol}.txt", detailsStr)
 
 def saveAccountSummary(config, accountSummary: AccountSummary):
-    accSummaryTxt = getAccountSummaryStr(accountSummary)
-    saveStringToDropbox(config, f"/performance/{accountSummary.name}-Summary.txt", accSummaryTxt)
-    accSummaryHtml = getAccountSummaryHtml(accountSummary)
-    saveStringToDropbox(config, f"/performance/{accountSummary.name}-Summary.html", accSummaryHtml)
+    # accSummaryTxt = getAccountSummaryStr(accountSummary)
+    # saveStringToDropbox(config, f"/performance/{accountSummary.name}-Summary.txt", accSummaryTxt)
+    filesAndStrs: dict[str, str] = getAccountSummaryStrs(accountSummary)
+    for fileName, outStr in filesAndStrs.items():
+        saveStringToDropbox(config, f"/performance/{fileName}", outStr)
 
 def summarisePerformance(accountSummary: AccountSummary, funds: dict[str, FundOverview]):
     totalShareInvested = Decimal(0.0)

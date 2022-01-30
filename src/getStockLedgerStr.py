@@ -3,6 +3,9 @@ from tabulate import tabulate
 from datetime import timedelta, datetime, date, timezone
 from statistics import mean
 from dataclasses import asdict
+import io
+import csv
+
 from domonic.html import *
 
 from transactionDefs import *
@@ -66,7 +69,8 @@ def getAccountSummaryStr(accountSummary: AccountSummary):
     retStr += "\n\n" 
     return retStr
 
-def getAccountSummaryHtml(accountSummary: AccountSummary):
+def getAccountSummaryStrs(accountSummary: AccountSummary):
+    retStrs = dict()
     dom =  body()
     if (accountSummary.name == "Total"):
         allAccounts = True
@@ -390,82 +394,7 @@ def getAccountSummaryHtml(accountSummary: AccountSummary):
         procYear += timedelta(days=365)
     dom.append(byYear)
 
-    historicStocks: list[SecurityDetails] = list()
-    dom.append(h2('Stock Summary'))
-    stockTable = table()
-    if (allAccounts):
-        stockTable.appendChild(tr(th('Stock'),th('Account'),th('Type'),th('Name'),th('Fees'),th('Cash inv'), th('Market Value'), th('Yield'),th('Return'),th('Years Held'),th('Annualised Ret'), th('3yr-Ret'), th('5yr-Ret'),th('Alpha'), th('Beta'), th('Sharpe')))
-    else:
-        stockTable.appendChild(tr(th('Stock'),th('Type'),th('Name'),th('Fees'),th('Cash inv'), th('Market Value'), th('Yield'),th('Return'),th('Years Held'),th('Annualised Ret'), th('3yr-Ret'), th('5yr-Ret'),th('Alpha'), th('Beta'), th('Sharpe')))
-    for details in accountSummary.stocks:
-        historicStocks.extend(details.historicHoldings)
-        if (details.totalInvested != 0):
-            stockRow = tr()
-            detailLocation = f"./{details.account}/{details.symbol}.txt"
-            stockRow.appendChild(td(a(f"{details.symbol}", _href=detailLocation)))
-            if (allAccounts):
-                accountLocation = f"./{details.account}-Summary.html#Stock%20Summary"
-                stockRow.appendChild(td(a(f"{details.account}", _href=accountLocation)))
-            stockRow.appendChild(td(f"{details.fundOverview.fundType.name if details.fundOverview else 'None'}"))
-            stockRow.appendChild(td(f"{details.name}"))
-            if (details.fundOverview):
-                stockRow.appendChild(td(f"{details.fundOverview.fees:0.02f}%"))
-            else:
-                stockRow.appendChild(td("N/A"))
-            stockRow.appendChild(td(f"£{details.cashInvested:,.0f}"))
-            # stockRow.appendChild(td(f"£{details.totalInvested:,.0f}"))
-            stockRow.appendChild(td(f"£{details.marketValue():,.0f}"))
-            # stockRow.appendChild(td(f"£{details.capitalGain():,.0f}"))
-            # stockRow.appendChild(td(f"£{details.totalDividends():,.0f}"))
-            stockRow.appendChild(td(f"{details.averageYearlyDiviYield():,.0f}%"))
-            stockRow.appendChild(td(f"£{details.totalGain():,.0f} ({details.totalGainPerc():0.02f}%)"))
-            stockRow.appendChild(td(f"{details.yearsHeld():0.01f}"))
-            stockRow.appendChild(td(f"{details.avgGainPerYearPerc():0.02f}%"))
-            fund = details.fundOverview
-            if (fund):
-                stockRow.appendChild(td(f"{fund.return3Yr:0.02f}%"))
-                stockRow.appendChild(td(f"{fund.return5Yr:0.02f}%"))
-                stockRow.appendChild(td(f"{fund.alpha3Yr:0.02f}"))
-                stockRow.appendChild(td(f"{fund.beta3Yr:0.02f}"))
-                stockRow.appendChild(td(f"{fund.sharpe3Yr:0.02f}"))
-
-            stockTable.appendChild(stockRow)
-    dom.append(stockTable)
-
-    historicStocks = sorted(historicStocks, key = lambda stock: stock.avgGainPerYearPerc(), reverse = True)
-    dom.append(h2('Previous Stock Holdings'))
-    stockTable = table()
-    if (allAccounts):
-        stockTable.appendChild(tr(th('Stock'),th('Account'),th('Type'),th('Name'),th('Fees'),th('Cash inv'), th('Capital Gain'), th('Dividends'), th('Yield'),th('Total Gain'),th('Years Held'),th('Avg Gain/Yr'),th('From'),th('To')))
-    else:
-        stockTable.appendChild(tr(th('Stock'),th('Type'),th('Name'),th('Fees'),th('Cash inv'), th('Capital Gain'), th('Dividends'), th('Yield'),th('Total Gain'),th('Years Held'),th('Avg Gain/Yr'),th('From'),th('To')))
-    for details in historicStocks:
-        stockRow = tr()
-        if (allAccounts):
-            detailLocation = f"./{details.account}/{details.symbol}.txt"
-        else:
-            detailLocation = f"./{accountSummary.name}/{details.symbol}.txt"
-        stockRow.appendChild(td(a(f"{details.symbol}", _href=detailLocation)))
-        if (allAccounts):
-            accountLocation = f"./{details.account}-Summary.html#Stock%20Summary"
-            stockRow.appendChild(td(a(f"{details.account}", _href=accountLocation)))
-        stockRow.appendChild(td(f"{details.fundOverview.fundType.name if details.fundOverview else 'None'}"))
-        stockRow.appendChild(td(f"{details.name}"))
-        if (details.fundOverview):
-            stockRow.appendChild(td(f"{details.fundOverview.fees:0.02f}%"))
-        else:
-            stockRow.appendChild(td("N/A"))
-        stockRow.appendChild(td(f"£{details.cashInvested:,.0f}"))
-        stockRow.appendChild(td(f"£{details.realisedCapitalGain():,.0f}"))
-        stockRow.appendChild(td(f"£{details.totalDividends():,.0f}"))
-        stockRow.appendChild(td(f"{details.averageYearlyDiviYield():0.02f}%"))
-        stockRow.appendChild(td(f"£{details.totalGain():,.0f} ({details.totalGainPerc():0.02f}%)"))
-        stockRow.appendChild(td(f"{details.yearsHeld():0.01f}"))
-        stockRow.appendChild(td(f"{details.avgGainPerYearPerc():0.02f}%"))
-        stockRow.appendChild(td(f"{details.startDate.date()}"))
-        stockRow.appendChild(td(f"{details.endDate.date()}"))
-        stockTable.appendChild(stockRow)
-    dom.append(stockTable)
+    getSecurityStrs(accountSummary, allAccounts, dom, retStrs)
 
     dom.appendChild(h2(f"Payments by Tax Year"))
     for yr in [lastTaxYear, currentTaxYear]:
@@ -537,7 +466,159 @@ def getAccountSummaryHtml(accountSummary: AccountSummary):
 
     ht = html(meta(_charset='UTF-8'))
     ht.append(dom)
-    return f"{ht}"
+    retStrs[f"{accountSummary.name}-Summary.html"] = f"{ht}"
+    return retStrs
+
+def getSecurityStrs(accountSummary: AccountSummary, allAccounts: bool, dom: body, fileStrs: dict[str, str]):
+    historicStocks: list[SecurityDetails] = list()
+    dom.append(h2('Security Summary'))
+    stockTable = table()
+    headings = ['Security']
+    if (allAccounts):
+        headings.append('Account')
+    headings.extend(['Type','Name','Fees','Cash inv','Market Value',
+                    'Yield','Return','Years Held','Annualised Ret',
+                    '3yr-Ret','5yr-Ret','Alpha','Beta','Sharpe'])
+    headrow = tr()
+    for head in headings:
+        headrow.appendChild(th(head))
+    stockTable.appendChild(headrow)
+    if len(accountSummary.stocks) > 0:
+        secIO = io.StringIO()
+        csvOut = csv.DictWriter(secIO, headings)
+        csvOut.writeheader()
+    else:
+        csvOut = None
+    for details in accountSummary.stocks:
+        csvRow = {title: '' for title in headings}
+        historicStocks.extend(details.historicHoldings)
+        if (details.totalInvested != 0):
+            stockRow = tr()
+            if (allAccounts):
+                detailLocation = f"./{details.account}/{details.symbol}.txt"
+            else:
+                detailLocation = f"./{accountSummary.name}/{details.symbol}.txt"
+            stockRow.appendChild(td(a(f"{details.symbol}", _href=detailLocation)))
+            csvRow['Security'] = details.symbol
+            if (allAccounts):
+                accountLocation = f"./{details.account}-Summary.html#Stock%20Summary"
+                stockRow.appendChild(td(a(f"{details.account}", _href=accountLocation)))
+                csvRow['Account'] = details.account
+            ft = details.fundOverview.fundType.name if details.fundOverview else 'None'
+            stockRow.appendChild(td(f"{ft}"))
+            csvRow['Type'] = ft
+            stockRow.appendChild(td(f"{details.name}"))
+            csvRow['Name'] = details.name
+            if (details.fundOverview):
+                fees = f"{details.fundOverview.fees:0.02f}%"
+            else:
+                fees = "N/A"
+            stockRow.appendChild(td(fees))
+            csvRow['Fees'] = fees
+            stockRow.appendChild(td(f"£{details.cashInvested:,.0f}"))
+            csvRow['Cash inv'] = details.cashInvested
+            stockRow.appendChild(td(f"£{details.marketValue():,.0f}"))
+            csvRow['Market Value'] = details.marketValue()
+            stockRow.appendChild(td(f"{details.averageYearlyDiviYield():,.0f}%"))
+            csvRow['Yield'] = details.averageYearlyDiviYield()
+            stockRow.appendChild(td(f"£{details.totalGain():,.0f} ({details.totalGainPerc():0.02f}%)"))
+            csvRow['Return'] = details.totalGain()
+            stockRow.appendChild(td(f"{details.yearsHeld():0.01f}"))
+            csvRow['Years Held'] = details.yearsHeld()
+            stockRow.appendChild(td(f"{details.avgGainPerYearPerc():0.02f}%"))
+            csvRow['Annualised Ret'] = details.avgGainPerYearPerc()
+            fund = details.fundOverview
+            if (fund):
+                stockRow.appendChild(td(f"{fund.return3Yr:0.02f}%"))
+                csvRow['3yr-Ret'] = fund.return3Yr
+                stockRow.appendChild(td(f"{fund.return5Yr:0.02f}%"))
+                csvRow['5yr-Ret'] = fund.return5Yr
+                stockRow.appendChild(td(f"{fund.alpha3Yr:0.02f}"))
+                csvRow['Alpha'] = fund.alpha3Yr
+                stockRow.appendChild(td(f"{fund.beta3Yr:0.02f}"))
+                csvRow['Beta'] = fund.beta3Yr
+                stockRow.appendChild(td(f"{fund.sharpe3Yr:0.02f}"))
+                csvRow['Sharpe'] = fund.sharpe3Yr
+
+            stockTable.appendChild(stockRow)
+            if (csvOut):
+                csvOut.writerow(csvRow)
+    dom.append(stockTable)
+    if csvOut:
+        fileStrs[f'csvFiles/{accountSummary.name}-securities.csv'] = secIO.getvalue()
+        secIO.close()
+
+    historicStocks = sorted(historicStocks, key = lambda stock: stock.avgGainPerYearPerc(), reverse = True)
+    dom.append(h2('Previous Security Holdings'))
+    stockTable = table()
+    headings = ['Security']
+    if (allAccounts):
+        headings.append('Account')
+    headings.extend(['Type','Name','Fees','Cash inv','Market Value',
+                    'Capital Gain','Dividends','Yield','Total Gain',
+                    'Years Held','Avg Gain/Yr','From','To'])
+    headrow = tr()
+    for head in headings:
+        headrow.appendChild(th(head))
+    stockTable.appendChild(headrow)
+    if len(historicStocks) > 0:
+        secIO = io.StringIO()
+        csvOut = csv.DictWriter(secIO, headings)
+        csvOut.writeheader()
+    else:
+        csvOut = None
+    for details in historicStocks:
+        stockRow = tr()
+        csvRow = {title: '' for title in headings}
+        if (allAccounts):
+            detailLocation = f"./{details.account}/{details.symbol}.txt"
+        else:
+            detailLocation = f"./{accountSummary.name}/{details.symbol}.txt"
+        detailLocation = f"./{details.account}/{details.symbol}.txt"
+        stockRow.appendChild(td(a(f"{details.symbol}", _href=detailLocation)))
+        csvRow['Security'] = details.symbol
+        if (allAccounts):
+            accountLocation = f"./{details.account}-Summary.html#Stock%20Summary"
+            stockRow.appendChild(td(a(f"{details.account}", _href=accountLocation)))
+            csvRow['Account'] = details.account
+        ft = details.fundOverview.fundType.name if details.fundOverview else 'None'
+        stockRow.appendChild(td(f"{ft}"))
+        csvRow['Type'] = ft
+        stockRow.appendChild(td(f"{details.name}"))
+        csvRow['Name'] = details.name
+        if (details.fundOverview):
+            fees = f"{details.fundOverview.fees:0.02f}%"
+        else:
+            fees = "N/A"
+        stockRow.appendChild(td(fees))
+        csvRow['Fees'] = fees
+        stockRow.appendChild(td(f"£{details.cashInvested:,.0f}"))
+        csvRow['Cash inv'] = details.cashInvested
+        stockRow.appendChild(td(f"£{details.marketValue():,.0f}"))
+        csvRow['Market Value'] = details.marketValue()
+        stockRow.appendChild(td(f"£{details.realisedCapitalGain():,.0f}"))
+        csvRow['Capital Gain'] = details.realisedCapitalGain()
+        stockRow.appendChild(td(f"£{details.totalDividends():,.0f}"))
+        csvRow['Dividends'] = details.totalDividends()
+        stockRow.appendChild(td(f"{details.averageYearlyDiviYield():0.02f}%"))
+        csvRow['Yield'] = details.averageYearlyDiviYield()
+        stockRow.appendChild(td(f"£{details.totalGain():,.0f} ({details.totalGainPerc():0.02f}%)"))
+        csvRow['Total Gain'] = details.totalGain()
+        stockRow.appendChild(td(f"{details.yearsHeld():0.01f}"))
+        csvRow['Years Held'] = details.yearsHeld()
+        stockRow.appendChild(td(f"{details.avgGainPerYearPerc():0.02f}%"))
+        csvRow['Avg Gain/Yr'] = details.avgGainPerYearPerc()
+        stockRow.appendChild(td(f"{details.startDate.date()}"))
+        csvRow['From'] = details.startDate.date()
+        stockRow.appendChild(td(f"{details.endDate.date()}"))
+        csvRow['To'] = details.endDate.date()
+        stockTable.appendChild(stockRow)
+        if csvOut:
+            csvOut.writerow(csvRow)
+    dom.append(stockTable)
+    if csvOut:
+        fileStrs[f'csvFiles/{accountSummary.name}-historic-securities.csv'] = secIO.getvalue()
+        secIO.close()
 
 def getStockSummaryStr(details: SecurityDetails):
     retStr = f"{details.symbol} {details.name} "
