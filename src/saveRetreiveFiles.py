@@ -146,18 +146,20 @@ def deleteStockFile(storeConfig, stock, name):
 def getStockInfoSaved(config, stock):
     return getStock(config, stock, 'info')
 
-def getStockTxnSaved(config, account, stock):
-    return getStock(config, stock, f'transactions/{account}')
+def getStockTxnSaved(config, owner, account, stock):
+    return getStock(config, stock, f"{owner}/transactions/{account}")
 
 def getAllStockTxnSaved(config):
-    accounts = listFiles(config, 'transactions')
+    owner = config['owner']['accountowner']
+    storeConfig = config['store']
+    accounts = listFiles(storeConfig, f"{owner}/transactions")
     txnByStockByAcc = dict()
     for acc in accounts:
         txnByStockByAcc[acc] = dict()
-        stockFiles = listFiles(config, f'transactions/{acc}')
+        stockFiles = listFiles(storeConfig, f"{owner}/transactions/{acc}")
         for stockFile in stockFiles:
             (stock,sep,suffix) = stockFile.partition('.')
-            txnByStockByAcc[acc][stock] = getStockTxnSaved(config, acc, stock)
+            txnByStockByAcc[acc][stock] = getStockTxnSaved(storeConfig, owner, acc, stock)
     return txnByStockByAcc
 
 def getStockPricesSaved(storeConfig, stock):
@@ -177,8 +179,8 @@ def getStockMetricsSaved(storeConfig, stock):
 def saveStockInfo(config, stock, info):
     saveStock(config, stock, 'info', info)
 
-def saveStockTransactions(config, accountName, stock, txns):
-    saveStock(config, stock, f'transactions/{accountName}', txns)
+def saveStockTransactions(config, owner, accountName, stock, txns):
+    saveStock(config, stock, f"{owner}/transactions/{accountName}", txns)
 
 def saveStockMetrics(config, stock, metrics):
     saveStock(config, stock, 'metrics', metrics)

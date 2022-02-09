@@ -8,14 +8,14 @@ from getStockLedgerStr import getStockLedgerStr, getAccountSummaryStr, getAccoun
 def saveStockLedger(config, accountSummary: AccountSummary):
     for details in accountSummary.stocks:
         detailsStr = getStockLedgerStr(details)
-        saveStringToDropbox(config, f"/performance/{accountSummary.name}/{details.symbol}.txt", detailsStr)
+        saveStringToDropbox(config, f"/{accountSummary.owner}-performance/{accountSummary.name}/{details.symbol}.txt", detailsStr)
 
 def saveAccountSummary(config, accountSummary: AccountSummary):
     # accSummaryTxt = getAccountSummaryStr(accountSummary)
     # saveStringToDropbox(config, f"/performance/{accountSummary.name}-Summary.txt", accSummaryTxt)
     filesAndStrs: dict[str, str] = getAccountSummaryStrs(accountSummary)
     for fileName, outStr in filesAndStrs.items():
-        saveStringToDropbox(config, f"/performance/{fileName}", outStr)
+        saveStringToDropbox(config, f"/{accountSummary.owner}-performance/{fileName}", outStr)
 
 def summarisePerformance(accountSummary: AccountSummary, funds: dict[str, FundOverview]):
     totalShareInvested = Decimal(0.0)
@@ -233,8 +233,8 @@ def summarisePerformance(accountSummary: AccountSummary, funds: dict[str, FundOv
 
 def getPortfolioOverviews(config):
     #List portfolio directory for account portfolio files
-    overviewDir = config['files']['portfoliosLocation']
-    dirEntries = os.scandir(overviewDir)
+    portfolioDir = f"{config['owner']['accountowner']}/{config['files']['portfoliosLocation']}"
+    dirEntries = os.scandir(portfolioDir)
     portfolioFiles = list()
     for dirEntry in dirEntries:
         if (dirEntry.is_file() and not dirEntry.name.startswith('.') and '.csv' in dirEntry.name):
@@ -248,7 +248,7 @@ def getPortfolioOverviews(config):
         accountName = portfolioFile.split('_')[0]
         securitiesBySymbol = dict()
         securitiesByAccount[accountName] = securitiesBySymbol
-        with open('portfolio/' + portfolioFile) as csvFile:
+        with open(f"{portfolioDir}/{portfolioFile}") as csvFile:
             csv_reader = csv.DictReader(csvFile)
             for row in csv_reader:
                 if (row['\ufeff"Symbol"'].strip() != ''):
@@ -265,10 +265,10 @@ def getPortfolioOverviews(config):
                     securitiesBySymbol[security.symbol] = security
     return securitiesByAccount
 
-def getStoredTransactions(configStore):
+def getStoredTransactions(config):
 
     #Dict of stocks by accountname, stocks are a dict of stock txns keyed by symbol
-    stockListByAcc = getAllStockTxnSaved(configStore)
+    stockListByAcc = getAllStockTxnSaved(config)
     #Need to convert transactions from json to dataclass 
     for acc in stockListByAcc.keys():
         for stock in stockListByAcc[acc].keys():
@@ -280,7 +280,8 @@ def processLatestTxnFiles(config, stockListByAcc):
 
     isinMapping = config['isinmappings']
     configStore = config['store']
-    transDir = config['files']['transactionsLocation']
+    owner = config['owner']['accountowner']
+    transDir = f"{owner}/{config['files']['transactionsLocation']}"
     changedStockTxnsByAcc = dict() #Dict keyed by account with Set of stocks whose transactions have been appended to and so need to be saved back to HDFS
     #List transactions directory for account history files
     allTxnsByAcc: dict[str,list[Transaction]] = dict()
@@ -300,7 +301,7 @@ def processLatestTxnFiles(config, stockListByAcc):
             stockList = dict()
             stockListByAcc[accountName] = stockList
 
-        with open('transactions/' + txnFile) as csvFile:
+        with open(f"{transDir}/{txnFile}") as csvFile:
             csv_reader = csv.DictReader(csvFile)
             for row in csv_reader:
                 dt = row['Date'].strip()
@@ -440,7 +441,7 @@ def processLatestTxnFiles(config, stockListByAcc):
                 jsonTxns = dict()
                 for key, txn in txns.items():
                     jsonTxns[key] = txn.to_json() 
-                saveStockTransactions(configStore, account, stock, jsonTxns)
+                saveStockTransactions(configStore, owner, account, stock, jsonTxns)
             elif noTxns > 0:
                 print(f"WARNING: {noTxns} Transactions have no stock name set")
             else:
@@ -499,9 +500,10 @@ def getFundOverviews(config):
 
 def processTransactions(config):
     configStore = config['store']
+    owner = config['owner']['accountowner']
 
     #Get previously stored transactions
-    stockListByAcc = getStoredTransactions(configStore)
+    stockListByAcc = getStoredTransactions(config)
     #Process any new transactions
     allTxns: dict[str,list[Transaction]] = processLatestTxnFiles(config, stockListByAcc)
     #Get Latest Account Portfolio positions
@@ -510,18 +512,16 @@ def processTransactions(config):
     fundOverviews: dict[str, FundOverview] = getFundOverviews(config) 
 
     #For each account process each stock transactions to work out cash flow and share ledger
-    totalCosts = 0
-    allStocks = list()
     allAccounts = list()
     taxAllowances = dict()
     for allowance, val in config['tax_thresholds'].items():
         taxAllowances[allowance] = val
+    rates = taxAllowances.copy()
     for account, stocks in stockListByAcc.items():
         stockLedger = dict()
-        rates = taxAllowances.copy()
         for rate, val in config[account+'_tax_rates'].items():
             rates[rate] = val
-        accountSummary = AccountSummary(name = account, portfolioPerc = config['portfolio_ratios'], taxRates=rates)
+        accountSummary = AccountSummary(owner = owner, name = account, portfolioPerc = config[f"{owner}_portfolio_ratios"], taxRates=rates)
         sortedStocks = dict()
         for stock in stocks:
             #Sort all transactions by date first
@@ -537,7 +537,7 @@ def processTransactions(config):
         #Summarise account performance
         summarisePerformance(accountSummary, fundOverviews)
         allAccounts.append(accountSummary)
-    totalSummary = AccountSummary(name = 'Total', portfolioPerc = config['portfolio_ratios'])
+    totalSummary = AccountSummary(owner = owner, name = 'Total', portfolioPerc = config[f"{owner}_portfolio_ratios"])
     currentTaxableIncome = Decimal(0.0)
     lastTaxableIncome = Decimal(0.0)
     currentTaxYear = getTaxYear(datetime.now())
@@ -547,7 +547,7 @@ def processTransactions(config):
         lastTaxableIncome += summary.taxableIncome(lastTaxYear)
         totalSummary.mergeInAccountSummary(summary)
 
-    otherIncome = config['other_income']
+    otherIncome = config[f"{owner}_other_income"]
     currentTaxableIncome += Decimal(otherIncome['salary_current']) + Decimal(otherIncome['pension_current'])
     lastTaxableIncome += Decimal(otherIncome['salary_last']) + Decimal(otherIncome['pension_last'])
     #Based on total income, calculate the taxband
@@ -559,8 +559,8 @@ def processTransactions(config):
 
     #Add in other account totals that are outside of the scope of these calcs
     #NOTE: If these have a (significant) impact on taxable earnings, they need to be brought into scope and account created for them
-    otherAccs = config['other_accs']
-    otherAccounts = AccountSummary(name ='Other Accs', portfolioPerc = config['portfolio_ratios'], taxRates=rates)
+    otherAccs = config[f"{owner}_other_accs"]
+    otherAccounts = AccountSummary(owner = owner, name ='Other Accs', portfolioPerc = config[f"{owner}_portfolio_ratios"], taxRates=rates)
     total = Decimal(0)
     totalInvested = Decimal(0)
     for ft in otherAccs.keys():
