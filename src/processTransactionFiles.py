@@ -516,9 +516,9 @@ def processTransactions(config):
     taxAllowances = dict()
     for allowance, val in config['tax_thresholds'].items():
         taxAllowances[allowance] = val
-    rates = taxAllowances.copy()
     for account, stocks in stockListByAcc.items():
         stockLedger = dict()
+        rates = taxAllowances.copy()
         for rate, val in config[account+'_tax_rates'].items():
             rates[rate] = val
         accountSummary = AccountSummary(owner = owner, name = account, portfolioPerc = config[f"{owner}_portfolio_ratios"], taxRates=rates)

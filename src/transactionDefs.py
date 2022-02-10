@@ -513,7 +513,7 @@ class AccountSummary:
     def totalRealisedGain(self):
         return sum(self.realisedGainForTaxByYear.values()) if len(self.realisedGainForTaxByYear) > 0 else Decimal(0.0)
     def totalGainFromInvestments(self):
-        return self.totalMarketValue - self.totalInvested()
+        return self.totalMarketValue - self.totalCashInvested
     def totalGainFromInvPerc(self):
         if self.totalInvestedInSecurities > 0:
             return 100 * float(self.totalGainFromInvestments()) / float(self.totalInvestedInSecurities)

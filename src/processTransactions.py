@@ -120,6 +120,7 @@ def processStockTxns(account: AccountSummary, securities, funds: dict[str, FundO
             credit = convertToSterling(stocks.get(txn.creditCurrency, None), txn, txn.credit)
             priceIncCosts = credit / txn.qty
             gain = (priceIncCosts - details.avgSharePrice) * txn.qty #CGT uses average purchase price at time of selling
+            details.cashInvested -= (details.avgSharePrice * txn.qty) #Reduce amount of cash invested by amount of shares sold at avg buy price
             details.realisedCapitalGainByYear[taxYear] = details.realisedCapitalGainByYear.get(taxYear, Decimal(0.0)) + gain
             details.qtyHeld -= txn.qty
             if (txn.price != 0):
@@ -131,6 +132,9 @@ def processStockTxns(account: AccountSummary, securities, funds: dict[str, FundO
                 #This is a stock close out txn
                 #Start a new set of security details, with the old one stored in history
                 details.endDate = txn.date
+                details.qtyHeld = Decimal(0)
+                details.cashInvested = Decimal(0)
+                details.totalInvested = Decimal(0)
                 newDetails = SecurityDetails()
                 if len(details.historicHoldings) > 0:
                     #Promote previous holdings to the new parent

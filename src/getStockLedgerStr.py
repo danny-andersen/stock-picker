@@ -83,7 +83,7 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
     dom.appendChild(h2(f"Account Owner: {accountSummary.owner}\n"))
     summary = table()
     summary.appendChild(tr(td("Date account opened"),td(f"{accountSummary.dateOpened.date()}")))
-    summary.appendChild(tr(td("Total cash invested in account"),td(f"£{accountSummary.totalInvested():,.0f}")))
+    summary.appendChild(tr(td("Total cash invested in account"),td(f"£{accountSummary.totalCashInvested:,.0f}")))
     summary.appendChild(tr(td("Total Dividends re-invested in account"),td(f"£{accountSummary.totalDiviReInvested:,.0f}")))
     summary.appendChild(tr(td("Total invested in securities"), td(f"£{accountSummary.totalInvestedInSecurities:,.0f}")))
     summary.appendChild(tr(td("Total current market value"), td(f"£{accountSummary.totalMarketValue:,.0f}")))
