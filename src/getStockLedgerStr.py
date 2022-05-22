@@ -72,6 +72,7 @@ def getAccountSummaryStr(accountSummary: AccountSummary):
 def getAccountSummaryStrs(accountSummary: AccountSummary):
     retStrs = dict()
     dom =  body()
+    nowDate: datetime = datetime.now()
     if (accountSummary.name == "Total"):
         allAccounts = True
     else:
@@ -82,6 +83,7 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
         dom.appendChild(h1(f"Summary for Account: {accountSummary.name}\n"))
     dom.appendChild(h2(f"Account Owner: {accountSummary.owner}\n"))
     summary = table()
+    summary.appendChild(tr(td("Date report generated"),td(f"{nowDate.date()}")))
     summary.appendChild(tr(td("Date account opened"),td(f"{accountSummary.dateOpened.date()}")))
     summary.appendChild(tr(td("Total cash invested in account"),td(f"£{accountSummary.totalCashInvested:,.0f}")))
     summary.appendChild(tr(td("Total Dividends re-invested in account"),td(f"£{accountSummary.totalDiviReInvested:,.0f}")))
