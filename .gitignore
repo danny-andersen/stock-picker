@@ -15,6 +15,7 @@ downloads/
 eggs/
 .eggs/
 lib/
+libs/
 lib64/
 parts/
 sdist/
@@ -136,5 +137,7 @@ stocklist-full.txt
 transactions/
 portfolio/
 fundsOverview/
+danny/
+sandra/
 
 
