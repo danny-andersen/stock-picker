@@ -431,7 +431,7 @@ class AccountSummary:
             self.dividendTxnsByYear[yr].update(summary.dividendTxnsByYear.get(yr, set()))
         for yr in summary.dividendTxnsByYear.keys():
             if (yr not in self.dividendTxnsByYear):
-                self.dividendTxnsByYear[yr] = summary.dividendTxnsByYear[yr]
+                self.dividendTxnsByYear[yr] = set(summary.dividendTxnsByYear[yr])
 
         for yr in self.incomeByYear.keys():
             self.incomeByYear[yr] += summary.incomeByYear.get(yr, Decimal(0.0))
@@ -450,7 +450,7 @@ class AccountSummary:
             # self.incomeTxnsByYear[yr] = sorted(self.incomeTxnsByYear[yr], key= lambda txn: txn.date)
         for yr in summary.incomeTxnsByYear.keys():
             if (yr not in self.incomeTxnsByYear):
-                self.incomeTxnsByYear[yr] = summary.incomeTxnsByYear[yr]
+                self.incomeTxnsByYear[yr] = set(summary.incomeTxnsByYear[yr])
 
         for yr in self.interestByYear.keys():
             self.interestByYear[yr] += summary.interestByYear.get(yr, Decimal(0.0))
@@ -459,11 +459,11 @@ class AccountSummary:
                 self.interestByYear[yr] = summary.interestByYear[yr]
 
         for yr in self.interestTxnsByYear.keys():
-            self.interestTxnsByYear[yr].update(summary.interestTxnsByYear.get(yr, list()))
+            self.interestTxnsByYear[yr].update(summary.interestTxnsByYear.get(yr, set()))
             # self.interestTxnsByYear[yr] = sorted(self.interestTxnsByYear[yr], key= lambda txn: txn.date)
         for yr in summary.interestTxnsByYear.keys():
             if (yr not in self.interestTxnsByYear):
-                self.interestTxnsByYear[yr] = summary.interestTxnsByYear[yr]
+                self.interestTxnsByYear[yr] = set(summary.interestTxnsByYear[yr])
 
         for yr in self.dividendYieldByYear.keys():
             self.dividendYieldByYear[yr] += summary.dividendYieldByYear.get(yr, Decimal(0.0))
@@ -545,7 +545,7 @@ class AccountSummary:
                 inc += self.cashOutByYear.get(year, Decimal(0))
             return inc
     def totalInterest(self):
-        return sum(self.incomeByYear.values()) if len(self.incomeByYear) > 0 else Decimal(0.0)
+        return sum(self.interestByYear.values()) if len(self.interestByYear) > 0 else Decimal(0.0)
     def avgDividends(self):
         return mean(self.dividendYieldByYear.values()) if len(self.dividendYieldByYear) > 0 else Decimal(0.0)
     def avgIncomeYield(self):

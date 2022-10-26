@@ -132,6 +132,7 @@ dmypy.json
 heldstocklist.txt
 stocklist.txt
 stocklist-full.txt
+stopCluster.sh
 
 #Private transaction files
 transactions/

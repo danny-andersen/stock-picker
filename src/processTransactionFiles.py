@@ -147,7 +147,6 @@ def summarisePerformance(accountSummary: AccountSummary, funds: dict[str, FundOv
         fundTotals[fundType].actualReturn += 100 * float(accountSummary.cashBalance - accountSummary.totalInvested()) #This is a %
         #If its a cash account, update invested totals 
         totalShareInvested += accountSummary.totalInvested()
-        totalGain += accountSummary.totalInterest()
     else:
         #Add any cash balance of account to Cash fund
         fundType = FundType.CASH
@@ -155,6 +154,7 @@ def summarisePerformance(accountSummary: AccountSummary, funds: dict[str, FundOv
         fundTotals[fundType].uk += 100 * float(accountSummary.cashBalance)  #Assume UK based
         fundTotals[fundType].totGeoVal += accountSummary.cashBalance
 
+    totalGain += accountSummary.totalInterest()
     for typ, fund in fundTotals.items():
         value = float(fund.totalValue)
         if value == 0:
@@ -213,7 +213,10 @@ def summarisePerformance(accountSummary: AccountSummary, funds: dict[str, FundOv
             feesPerYear[taxYear] = feesPerYear.get(taxYear, Decimal(0.0)) + Decimal(9.99)
             feesDirectDebitDate += increment 
 
-    accountSummary.totalCashInvested = totalCashInvested
+    if (totalCashInvested == 0): #This will be 0 if a cash account and so use the total invested figure
+        accountSummary.totalCashInvested = accountSummary.totalInvested()
+    else:
+        accountSummary.totalCashInvested = totalCashInvested
     accountSummary.totalDiviReInvested = totalDiviReInvested
     accountSummary.totalMarketValue = totalMarketValue
     accountSummary.totalInvestedInSecurities = totalShareInvested
@@ -541,6 +544,9 @@ def processTransactions(config):
     currentTaxableIncome = Decimal(0.0)
     lastTaxableIncome = Decimal(0.0)
     currentTaxYear = getTaxYear(datetime.now())
+    totalSummary.interestTxnsByYear = dict()
+    totalSummary.dividendTxnsByYear = dict()
+    totalSummary.incomeTxnsByYear = dict()
     lastTaxYear = getTaxYear(datetime.now() - timedelta(weeks=52))
     for summary in allAccounts:
         currentTaxableIncome += summary.taxableIncome(currentTaxYear)

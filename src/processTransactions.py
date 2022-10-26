@@ -11,6 +11,7 @@ def processAccountTxns(account: AccountSummary, txns: list[Transaction], stocks:
     cashOutByYear = dict()
     feesByYear = dict()
     account.taxfreeCashOutByYear = dict()
+    account.interestTxnsByYear = dict()
     # dateOpened = datetime.now().replace(tzinfo=None)
     dateOpened = datetime.now(timezone.utc)
     for txn in txns:
@@ -64,7 +65,7 @@ def processAccountTxns(account: AccountSummary, txns: list[Transaction], stocks:
     account.cashInByYear = cashInByYear
     account.cashOutByYear = cashOutByYear
     account.feesByYear = feesByYear
-    account.transactions = txns
+    account.transactions = list(txns)
     return account
 
 def processStockTxns(account: AccountSummary, securities, funds: dict[str, FundOverview], stocks: dict[str, list[Transaction]], stock):
