@@ -239,8 +239,9 @@ class Security:
     currentPrice: Decimal = Decimal(0.0)
     currency: str = '£'
     avgBuyPrice: Decimal = Decimal(0.0)
-    bookCost: Decimal = Decimal(0.0)
     gain: Decimal = Decimal(0.0)
+    marketValue: Decimal = Decimal(0.0)
+    bookCost: Decimal = Decimal(0.0)
 
 @dataclass
 class CapitalGain:
@@ -366,6 +367,7 @@ class AccountSummary:
     taxRates: dict = field(default_factory=dict)
     taxBandByYear: dict[str, str] = field(default_factory=dict)
     mergedAccounts: list = field(default_factory=list)
+    historicValue: dict[datetime, (Decimal(0.0), Decimal(0.0))] = field(default_factory=dict)  # (market value, book cost)
 
     def mergeInAccountSummary(self, summary):
         self.mergedAccounts.append(summary)
@@ -496,6 +498,12 @@ class AccountSummary:
             else:
                 #Copy
                 self.fundTotals[ft] = deepcopy(fund)
+
+        for dt in self.historicValue.keys():
+            self.historicValue[dt] = [sum(tup) for tup in zip(self.historicValue[dt],summary.historicValue.get(dt, (Decimal(0.0), Decimal(0.0))))]
+        for dt in summary.historicValue.keys():
+            if (dt not in self.historicValue):
+                self.historicValue[dt] = summary.historicValue[dt]
 
     def totalInvested(self): 
         return sum(self.cashInByYear.values()) - sum(self.cashOutByYear.values())

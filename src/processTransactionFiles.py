@@ -234,9 +234,8 @@ def summarisePerformance(accountSummary: AccountSummary, funds: dict[str, FundOv
     accountSummary.fundTotals = fundTotals
     accountSummary.totalByInstitution = totalByInstitution
 
-def getPortfolioOverviews(config):
+def getPortfolioOverviews(portfolioDir):
     #List portfolio directory for account portfolio files
-    portfolioDir = f"{config['owner']['accountowner']}/{config['files']['portfoliosLocation']}"
     dirEntries = os.scandir(portfolioDir)
     portfolioFiles = list()
     for dirEntry in dirEntries:
@@ -244,13 +243,21 @@ def getPortfolioOverviews(config):
             portfolioFiles.append((dirEntry.name, datetime.fromtimestamp(dirEntry.stat().st_mtime)))
 
     #Process each portfolio file
-    securitiesByAccount = dict()
+    securitiesByAccountByDate: dict[datetime, dict[str, dict[str, Security]]] = dict()
     for (portfolioFile, mtime) in portfolioFiles:
         print(f"Processing portfolio file {portfolioFile}")
-        # Extract account name
         accountName = portfolioFile.split('_')[0]
-        securitiesBySymbol = dict()
-        securitiesByAccount[accountName] = securitiesBySymbol
+        dtStr = portfolioFile.split('_')[6]
+        portDate = datetime.strptime(dtStr, '%Y%m%d.csv')
+        securitiesByAccount = securitiesByAccountByDate.get(portDate, None)
+        if not securitiesByAccount:
+            securitiesByAccount: dict[str, dict[str, Security]] = dict()
+            securitiesByAccountByDate[portDate] = securitiesByAccount
+        # Extract account name
+        securitiesBySymbol = securitiesByAccount.get(accountName, None)
+        if not securitiesBySymbol:
+            securitiesBySymbol: dict[str, Security] = dict()
+            securitiesByAccount[accountName] = securitiesBySymbol
         with open(f"{portfolioDir}/{portfolioFile}") as csvFile:
             csv_reader = csv.DictReader(csvFile)
             for row in csv_reader:
@@ -260,13 +267,14 @@ def getPortfolioOverviews(config):
                         symbol = row['\ufeff"Symbol"'].strip().replace('..','.'),
                         qty = 0 if row['Qty'] == '' else float(row['Qty']),
                         desc = row['Description'],
-                        avgBuyPrice = row['Average Price'],
-                        bookCost = row['Book Cost'],
                         gain = row['Gain']
                     )
                     (security.currency, security.currentPrice) = priceStrToDec(row['Price'])
+                    (security.currency, security.bookCost) = priceStrToDec(row['Book Cost'])
+                    (security.currency, security.marketValue) = priceStrToDec(row['Market Value'])
+                    (security.currency, security.avgBuyPrice) = priceStrToDec(row['Average Price'])
                     securitiesBySymbol[security.symbol] = security
-    return securitiesByAccount
+    return securitiesByAccountByDate
 
 def getStoredTransactions(config):
 
@@ -510,7 +518,13 @@ def processTransactions(config):
     #Process any new transactions
     allTxns: dict[str,list[Transaction]] = processLatestTxnFiles(config, stockListByAcc)
     #Get Latest Account Portfolio positions
-    securitiesByAccount = getPortfolioOverviews(config)
+    portfolioDir = f"{config['owner']['accountowner']}/{config['files']['portfoliosLocation']}"
+    #Top directory should only have one set of portfolio files, all with the same date
+    portfolioByAccountByDate: dict[datetime, dict[str, dict[str, Security]]]  = getPortfolioOverviews(portfolioDir)
+    portfolioByAccount = portfolioByAccountByDate[list(portfolioByAccountByDate)[0]]
+    #Get historic Account portolio positions
+    portfolioDir = f"{config['owner']['accountowner']}/{config['files']['portfoliosLocation']}/Archive"
+    historicPortfolioByAccountByDate = getPortfolioOverviews(portfolioDir)
     #Get Fund overview stats
     fundOverviews: dict[str, FundOverview] = getFundOverviews(config) 
 
@@ -532,14 +546,15 @@ def processTransactions(config):
         for stock in stocks:
             if (stock != NO_STOCK and stock != USD and stock != EUR):
                 #Dont process currency conversion txns or ones that are not related to a security
-                stockLedger[stock] = processStockTxns(accountSummary, securitiesByAccount.get(account, None), fundOverviews, sortedStocks, stock) 
-        processAccountTxns(accountSummary, allTxns[account], sortedStocks)
+                stockLedger[stock] = processStockTxns(accountSummary, portfolioByAccount.get(account, None), fundOverviews, sortedStocks, stock) 
+        processAccountTxns(accountSummary, allTxns[account], sortedStocks, historicPortfolioByAccountByDate)
         accountSummary.stocks = sorted(list(stockLedger.values()), key = lambda stock: stock.avgGainPerYearPerc(), reverse = True)
         #Save to Dropbox file
         saveStockLedger(configStore, accountSummary)
         #Summarise account performance
         summarisePerformance(accountSummary, fundOverviews)
         allAccounts.append(accountSummary)
+    
     totalSummary = AccountSummary(owner = owner, name = 'Total', portfolioPerc = config[f"{owner}_portfolio_ratios"])
     currentTaxableIncome = Decimal(0.0)
     lastTaxableIncome = Decimal(0.0)

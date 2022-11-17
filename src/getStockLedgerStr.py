@@ -168,6 +168,16 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
                         ))
         dom.appendChild(tx)
 
+    dom.appendChild(h2("Historic value and return"))
+    fs = table()
+    fs.appendChild(tr(th('Date'),th('Total Market Value'),th('Total Book Cost'),th('Gain')))
+    dt: datetime
+    marketValue: Decimal
+    bookCost: Decimal
+    for dt, (marketValue, bookCost) in accountSummary.historicValue.items():
+        fs.appendChild(tr(td(f"{dt.date()}"),td(f"£{marketValue:,.0f}"), td(f"£{bookCost:,.0f}"),td(f"{100*(marketValue - bookCost)/bookCost if bookCost > 0 else 0:0.2f}%")))
+
+    dom.appendChild(fs)
     dom.appendChild(h2("Statistics By Investment Type"))
     dom.appendChild(h3("Fund values and returns (including other acccounts)"))
     fs = table()
