@@ -243,21 +243,21 @@ def getPortfolioOverviews(portfolioDir):
             portfolioFiles.append((dirEntry.name, datetime.fromtimestamp(dirEntry.stat().st_mtime)))
 
     #Process each portfolio file
-    securitiesByAccountByDate: dict[datetime, dict[str, dict[str, Security]]] = dict()
+    securitiesByDateByAccount: dict[datetime, dict[str, dict[str, Security]]] = dict()
     for (portfolioFile, mtime) in portfolioFiles:
-        print(f"Processing portfolio file {portfolioFile}")
+        # print(f"Processing portfolio file {portfolioFile}")
         accountName = portfolioFile.split('_')[0]
         dtStr = portfolioFile.split('_')[6]
         portDate = datetime.strptime(dtStr, '%Y%m%d.csv')
-        securitiesByAccount = securitiesByAccountByDate.get(portDate, None)
-        if not securitiesByAccount:
-            securitiesByAccount: dict[str, dict[str, Security]] = dict()
-            securitiesByAccountByDate[portDate] = securitiesByAccount
+        securitiesByDate = securitiesByDateByAccount.get(accountName, None)
+        if not securitiesByDate:
+            securitiesByDate: dict[datetime, dict[str, Security]] = dict()
+            securitiesByDateByAccount[accountName] = securitiesByDate
         # Extract account name
-        securitiesBySymbol = securitiesByAccount.get(accountName, None)
+        securitiesBySymbol = securitiesByDate.get(portDate, None)
         if not securitiesBySymbol:
             securitiesBySymbol: dict[str, Security] = dict()
-            securitiesByAccount[accountName] = securitiesBySymbol
+            securitiesByDate[portDate] = securitiesBySymbol
         with open(f"{portfolioDir}/{portfolioFile}") as csvFile:
             csv_reader = csv.DictReader(csvFile)
             for row in csv_reader:
@@ -274,7 +274,7 @@ def getPortfolioOverviews(portfolioDir):
                     (security.currency, security.marketValue) = priceStrToDec(row['Market Value'])
                     (security.currency, security.avgBuyPrice) = priceStrToDec(row['Average Price'])
                     securitiesBySymbol[security.symbol] = security
-    return securitiesByAccountByDate
+    return securitiesByDateByAccount
 
 def getStoredTransactions(config):
 
@@ -516,15 +516,22 @@ def processTransactions(config):
     #Get previously stored transactions
     stockListByAcc = getStoredTransactions(config)
     #Process any new transactions
+    
+    print(f"{datetime.now()}: Processing latest transaction files", flush=True)
     allTxns: dict[str,list[Transaction]] = processLatestTxnFiles(config, stockListByAcc)
     #Get Latest Account Portfolio positions
     portfolioDir = f"{config['owner']['accountowner']}/{config['files']['portfoliosLocation']}"
+    print(f"{datetime.now()}: Processing latest portfolio files", flush=True)
     #Top directory should only have one set of portfolio files, all with the same date
-    portfolioByAccountByDate: dict[datetime, dict[str, dict[str, Security]]]  = getPortfolioOverviews(portfolioDir)
-    portfolioByAccount = portfolioByAccountByDate[list(portfolioByAccountByDate)[0]]
+    currentPortfolioByDateByAccount: dict[str, dict[datetime, dict[str, Security]]]  = getPortfolioOverviews(portfolioDir)
     #Get historic Account portolio positions
+    print(f"{datetime.now()}: Processing historic portfolio files", flush=True)
     portfolioDir = f"{config['owner']['accountowner']}/{config['files']['portfoliosLocation']}/Archive"
-    historicPortfolioByAccountByDate = getPortfolioOverviews(portfolioDir)
+    historicPortfolioByDateByAccount = getPortfolioOverviews(portfolioDir)
+    #Add in current portfolio values
+    for acc, portfolioByDate in currentPortfolioByDateByAccount.items():
+        for dt, portfolio in portfolioByDate.items():
+            historicPortfolioByDateByAccount[acc][dt] = portfolio
     #Get Fund overview stats
     fundOverviews: dict[str, FundOverview] = getFundOverviews(config) 
 
@@ -534,27 +541,37 @@ def processTransactions(config):
     for allowance, val in config['tax_thresholds'].items():
         taxAllowances[allowance] = val
     for account, stocks in stockListByAcc.items():
+        print(f"{datetime.now()}: Processing account: {account}")
         stockLedger = dict()
         rates = taxAllowances.copy()
         for rate, val in config[account+'_tax_rates'].items():
             rates[rate] = val
         accountSummary = AccountSummary(owner = owner, name = account, portfolioPerc = config[f"{owner}_portfolio_ratios"], taxRates=rates)
+        currentByDate = currentPortfolioByDateByAccount.get(account, None)
+        if (currentByDate):
+            currentPortfolio = currentByDate[list(currentByDate)[0]]
+        else:
+            currentPortfolio = None
         sortedStocks = dict()
         for stock in stocks:
             #Sort all transactions by date first
             sortedStocks[stock] = sorted(list(stocks[stock].values()), key= lambda txn: txn.date)
+        print(f"{datetime.now()}:\tProcessing stock txns for {len(stocks)} stocks", flush=True)
         for stock in stocks:
             if (stock != NO_STOCK and stock != USD and stock != EUR):
                 #Dont process currency conversion txns or ones that are not related to a security
-                stockLedger[stock] = processStockTxns(accountSummary, portfolioByAccount.get(account, None), fundOverviews, sortedStocks, stock) 
-        processAccountTxns(accountSummary, allTxns[account], sortedStocks, historicPortfolioByAccountByDate)
+                stockLedger[stock] = processStockTxns(accountSummary, currentPortfolio, fundOverviews, sortedStocks, stock) 
+        print(f"{datetime.now()}:\tProcessing all account txns: {len(allTxns[account])} stocks", flush=True)
+        processAccountTxns(accountSummary, allTxns[account], sortedStocks, historicPortfolioByDateByAccount)
         accountSummary.stocks = sorted(list(stockLedger.values()), key = lambda stock: stock.avgGainPerYearPerc(), reverse = True)
         #Save to Dropbox file
+        print(f"{datetime.now()}:\tSaving account summary", flush=True)
         saveStockLedger(configStore, accountSummary)
         #Summarise account performance
+        print(f"{datetime.now()}:\tSummarising account performance", flush=True)
         summarisePerformance(accountSummary, fundOverviews)
         allAccounts.append(accountSummary)
-    
+    print(f"{datetime.now()}: Summarising all accounts", flush=True)
     totalSummary = AccountSummary(owner = owner, name = 'Total', portfolioPerc = config[f"{owner}_portfolio_ratios"])
     currentTaxableIncome = Decimal(0.0)
     lastTaxableIncome = Decimal(0.0)
@@ -596,7 +613,7 @@ def processTransactions(config):
     otherAccounts.totalMarketValue = total
     otherAccounts.totalByInstitution['Other'] = total
     totalSummary.mergeInAccountSummary(otherAccounts)
-    
+    print(f"{datetime.now()}:Saving and generating summary", flush=True)
     saveAccountSummary(configStore, totalSummary)    #Create overall summary
     
     
