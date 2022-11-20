@@ -1,4 +1,4 @@
-ssh pi4desktop sudo -u hdfs -i hdfs dfsadmin -report
+ssh pi4desktop sudo -u hdfs -i hdfs dfsadmin -report |  grep '^Live\|^DFS Used%\|^Name'
 if [ $? != 0 ]
 then
 	echo "HDFS not running - starting up cluster"

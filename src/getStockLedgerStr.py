@@ -168,10 +168,14 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
                         ))
         dom.appendChild(tx)
 
+    fundTypes = [FundType.FUND,FundType.SHARE,FundType.CORP_BOND, FundType.LONG_GILT]
     if (len(accountSummary.historicValue) > 0):
         dom.appendChild(h2("Historic value and return"))
         fs = table()
-        fs.appendChild(tr(th('Date'),th('Total Market Value'),th('Total Book Cost'),th('Gain')))
+        fs.appendChild(tr(th('Date'),th('Total Market Value'),th('Total Book Cost'),th('Gain'),
+            ''.join([f'{th(ftyp.name+"   ")}' for ftyp in fundTypes]),
+            ''.join([f'{th(ftyp.name+"   ")}' for ftyp in fundTypes]) ))
+        fs.appendChild(tr(th(''),th(''),th(''),th(''),th('Acc%'),th('Acc%'),th('Acc%'),th('Acc%'),th('Gain%'),th('Gain%'),th('Gain%'),th('Gain%')))
         dt: datetime
         marketValue: Decimal
         bookCost: Decimal
@@ -179,11 +183,14 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
         dateList.sort()
         for dt in dateList:
             (marketValue, bookCost) = accountSummary.historicValue[dt]
-            fs.appendChild(tr(td(f"{dt.date()}"),td(f"£{marketValue:,.0f}"), td(f"£{bookCost:,.0f}"),td(f"{100*(marketValue - bookCost)/bookCost if bookCost > 0 else 0:0.2f}%")))
+            ftv = accountSummary.historicValueByType[dt]
+            fs.appendChild(tr(td(f"{dt.date()}"),td(f"£{marketValue:,.0f}"), td(f"£{bookCost:,.0f}"),td(f"{100*(marketValue - bookCost)/bookCost if bookCost > 0 else 0:0.2f}%"),
+                ''.join([f'{td(100*ftv.get(ftyp,(0,0))[0]/marketValue):0.1f}' for ftyp in fundTypes]),
+                ''.join([f'{td(100*(ftv.get(ftyp,(0,0))[0]-ftv.get(ftyp,(0,0))[1])/ftv.get(ftyp,(1,1))[1]):0.1f}' for ftyp in fundTypes])))
         dom.appendChild(fs)
 
     dom.appendChild(h2("Statistics By Investment Type"))
-    dom.appendChild(h3("Fund values and returns (including other acccounts)"))
+    dom.appendChild(h3("Fund values and returns (including other accounts)"))
     fs = table()
     funds = accountSummary.fundTotals
     isTotalAcc = len(accountSummary.mergedAccounts) > 0

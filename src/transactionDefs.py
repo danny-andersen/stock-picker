@@ -62,6 +62,7 @@ class FundType(Enum):
 @dataclass
 class FundOverview:
     isin: str
+    symbol: str
     name: str
     fundType: FundType
     institution: str = None
@@ -235,6 +236,8 @@ class Security:
     date: datetime
     symbol: str
     desc: str
+    isin: str = None
+    type: FundType = None
     qty: int = 0
     currentPrice: Decimal = Decimal(0.0)
     currency: str = '£'
@@ -368,6 +371,7 @@ class AccountSummary:
     taxBandByYear: dict[str, str] = field(default_factory=dict)
     mergedAccounts: list = field(default_factory=list)
     historicValue: dict[datetime, (Decimal(0.0), Decimal(0.0))] = field(default_factory=dict)  # (market value, book cost)
+    historicValueByType: dict[datetime, dict[str, (float, float)]] = field(default_factory=dict)  # (market value, book cost)
 
     def mergeInAccountSummary(self, summary):
         self.mergedAccounts.append(summary)
@@ -502,8 +506,23 @@ class AccountSummary:
         for dt in self.historicValue.keys():
             self.historicValue[dt] = [sum(tup) for tup in zip(self.historicValue[dt],summary.historicValue.get(dt, (Decimal(0.0), Decimal(0.0))))]
         for dt in summary.historicValue.keys():
-            if (dt not in self.historicValue):
+            if (dt not in self.historicValue.keys()):
                 self.historicValue[dt] = summary.historicValue[dt]
+
+        for dt in self.historicValueByType.keys():
+            hvdt = self.historicValueByType[dt]
+            summaryhvdt = summary.historicValueByType.get(dt, dict())
+            for ft in hvdt.keys():
+                hvdt[ft] = [sum(tup) for tup in zip(hvdt[ft],summaryhvdt.get(ft, (Decimal(0.0), Decimal(0.0))))]
+        for dt in summary.historicValueByType.keys():
+            if (dt not in self.historicValueByType.keys()):
+                self.historicValueByType[dt] = deepcopy(summary.historicValueByType[dt])
+            else:
+                summaryhvdt = summary.historicValueByType[dt]
+                hvdt = self.historicValueByType[dt]
+                for ft in summaryhvdt.keys():
+                    if (ft not in hvdt.keys()):
+                        hvdt[ft] = summaryhvdt[ft]
 
     def totalInvested(self): 
         return sum(self.cashInByYear.values()) - sum(self.cashOutByYear.values())

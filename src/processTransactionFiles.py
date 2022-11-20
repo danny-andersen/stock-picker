@@ -30,7 +30,7 @@ def summarisePerformance(accountSummary: AccountSummary, funds: dict[str, FundOv
     totalInterest = accountSummary.interestByYear
     fundTotals: dict[FundType, FundOverview] = dict()
     for typ in FundType:
-        fundTotals[typ] = FundOverview("None", "None", typ)
+        fundTotals[typ] = FundOverview(isin="None", symbol="None", name="None", fundType=typ)
     aggInvestedByYear = dict()
     totalDiviYieldByYear = dict()
     totalIncomeYieldByYear = dict()
@@ -234,7 +234,7 @@ def summarisePerformance(accountSummary: AccountSummary, funds: dict[str, FundOv
     accountSummary.fundTotals = fundTotals
     accountSummary.totalByInstitution = totalByInstitution
 
-def getPortfolioOverviews(portfolioDir):
+def getPortfolioOverviews(portfolioDir, isinBySymbol, fundOverviews: dict[str, FundOverview]):
     #List portfolio directory for account portfolio files
     dirEntries = os.scandir(portfolioDir)
     portfolioFiles = list()
@@ -269,6 +269,9 @@ def getPortfolioOverviews(portfolioDir):
                         desc = row['Description'],
                         gain = row['Gain']
                     )
+                    security.isin = isinBySymbol.get(security.symbol, None)
+                    if security.isin:
+                        security.type = fundOverviews[security.isin].fundType
                     (security.currency, security.currentPrice) = priceStrToDec(row['Price'])
                     (security.currency, security.bookCost) = priceStrToDec(row['Book Cost'])
                     (security.currency, security.marketValue) = priceStrToDec(row['Market Value'])
@@ -467,6 +470,7 @@ def getFundOverviews(config):
     fundsFile = config['files']['fundsOverview']
 
     fundOverviews: dict[str, FundOverview] = dict()
+    isinBySymbol: dict[str, str] = dict()
     #List portfolio directory for account portfolio files
     with open(fundsFile) as csvFile:
         csv_reader = csv.DictReader(csvFile)
@@ -475,11 +479,13 @@ def getFundOverviews(config):
             if (isin != ''):
                 fund = FundOverview (
                     isin = isin,
+                    symbol = row['Symbol'],
                     name = row['Name'],
                     fundType = FundType[row['Type'].strip().upper()],
                     institution= row['Institution'].strip()
                 )
                 fundOverviews[isin] = fund
+                isinBySymbol[fund.symbol] = isin
                 if (row['Income'].strip().lower() == 'inc'):
                     fund.income = True
                 else:
@@ -507,7 +513,7 @@ def getFundOverviews(config):
                 fund.return3Yr = float(row['3yr-Ret']) if row['3yr-Ret'].strip() != '' else float(0.0)
                 fund.return5Yr = float(row['5yr-Ret']) if row['3yr-Ret'].strip() != '' else float(0.0)
 
-    return fundOverviews
+    return (fundOverviews, isinBySymbol)
 
 def processTransactions(config):
     configStore = config['store']
@@ -516,24 +522,24 @@ def processTransactions(config):
     #Get previously stored transactions
     stockListByAcc = getStoredTransactions(config)
     #Process any new transactions
-    
     print(f"{datetime.now()}: Processing latest transaction files", flush=True)
     allTxns: dict[str,list[Transaction]] = processLatestTxnFiles(config, stockListByAcc)
+    #Get Fund overview stats
+    fundOverviews: dict[str, FundOverview]
+    (fundOverviews, isinBySymbol) = getFundOverviews(config) 
     #Get Latest Account Portfolio positions
     portfolioDir = f"{config['owner']['accountowner']}/{config['files']['portfoliosLocation']}"
     print(f"{datetime.now()}: Processing latest portfolio files", flush=True)
     #Top directory should only have one set of portfolio files, all with the same date
-    currentPortfolioByDateByAccount: dict[str, dict[datetime, dict[str, Security]]]  = getPortfolioOverviews(portfolioDir)
+    currentPortfolioByDateByAccount: dict[str, dict[datetime, dict[str, Security]]]  = getPortfolioOverviews(portfolioDir, isinBySymbol, fundOverviews)
     #Get historic Account portolio positions
     print(f"{datetime.now()}: Processing historic portfolio files", flush=True)
     portfolioDir = f"{config['owner']['accountowner']}/{config['files']['portfoliosLocation']}/Archive"
-    historicPortfolioByDateByAccount = getPortfolioOverviews(portfolioDir)
-    #Add in current portfolio values
+    historicPortfolioByDateByAccount = getPortfolioOverviews(portfolioDir, isinBySymbol, fundOverviews)
+    #Add in current portfolio values to historic ones
     for acc, portfolioByDate in currentPortfolioByDateByAccount.items():
         for dt, portfolio in portfolioByDate.items():
             historicPortfolioByDateByAccount[acc][dt] = portfolio
-    #Get Fund overview stats
-    fundOverviews: dict[str, FundOverview] = getFundOverviews(config) 
 
     #For each account process each stock transactions to work out cash flow and share ledger
     allAccounts = list()
@@ -606,7 +612,7 @@ def processTransactions(config):
         fundt = FundType[ft.upper()]
         if (fundt != FundType.CASH):
             totalInvested += val
-        otherAccounts.fundTotals[fundt] = FundOverview(isin='None',name='Other savings', fundType=fundt, totalValue = val)
+        otherAccounts.fundTotals[fundt] = FundOverview(isin='None',name='Other savings', symbol='None', fundType=fundt, totalValue = val)
         total += val
     otherAccounts.totalCashInvested = total
     otherAccounts.totalInvestedInSecurities = totalInvested

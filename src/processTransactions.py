@@ -6,7 +6,8 @@ from getLatestPrices import getAndSaveStockPrices
 from processStock import calcPriceData
 from transactionDefs import *
 
-def processAccountTxns(account: AccountSummary, txns: list[Transaction], stocks: dict[str, list[Transaction]], historicValues: dict[str, dict[datetime, dict[str, Security]]]):
+def processAccountTxns(account: AccountSummary, txns: list[Transaction], stocks: dict[str, list[Transaction]], 
+            historicValues: dict[str, dict[datetime, dict[str, Security]]]):
     cashInByYear = dict()
     cashOutByYear = dict()
     feesByYear = dict()
@@ -71,10 +72,13 @@ def processAccountTxns(account: AccountSummary, txns: list[Transaction], stocks:
         for portDate, securityBySymbol in securityByDate.items():
             totalValue:Decimal = Decimal(0.0)
             totalCost:Decimal = Decimal(0.0)
+            byFundType:dict[str, (Decimal(0.0), Decimal(0,0))] = dict()
             for security in securityBySymbol.values():
                 totalValue += security.marketValue
                 totalCost += security.bookCost
+                byFundType[security.type] = [sum(x) for x in zip(byFundType.get(security.type, (Decimal(0.0), Decimal(0.0))),(security.marketValue, security.bookCost))]
             account.historicValue[portDate] = (totalValue, totalCost)
+            account.historicValueByType[portDate] = byFundType
     return account
 
 def processStockTxns(account: AccountSummary, securities, funds: dict[str, FundOverview], stocks: dict[str, list[Transaction]], stock):
