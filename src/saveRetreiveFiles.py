@@ -264,5 +264,13 @@ def mergeAndSaveScores(storeConfig, scores, heldStocks):
 
 def saveStringToDropbox(config, path, dataStr):
     dropboxAccessToken = config['dropboxAccessToken']
-    dbx = dropbox.Dropbox(dropboxAccessToken)
-    dbx.files_upload(dataStr.encode("utf-8"), path, mode=dropbox.files.WriteMode.overwrite, mute=True)
+    dropBoxRemote = config.getboolean('localStore')
+    if dropBoxRemote:
+        dbx = dropbox.Dropbox(dropboxAccessToken)
+        dbx.files_upload(dataStr.encode("utf-8"), path, mode=dropbox.files.WriteMode.overwrite, mute=True)
+    else:
+        #Dropbox is synced locally so can write to a local dir to upload to DB
+        dir = config['dropBoxLocalDir']
+        fp = open(dir+path, 'w+t')
+        fp.write(dataStr)
+

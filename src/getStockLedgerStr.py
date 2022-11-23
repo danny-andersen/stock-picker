@@ -1,11 +1,11 @@
-
+import io
+import csv
+import plotly.express as px
+from pandas import DataFrame
 from tabulate import tabulate
 from datetime import timedelta, datetime, date, timezone
 from statistics import mean
 from dataclasses import asdict
-import io
-import csv
-
 from domonic.html import *
 
 from transactionDefs import *
@@ -168,9 +168,13 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
                         ))
         dom.appendChild(tx)
 
-    fundTypes = [FundType.FUND,FundType.SHARE,FundType.CORP_BOND, FundType.LONG_GILT]
     if (len(accountSummary.historicValue) > 0):
         dom.appendChild(h2("Historic value and return"))
+        fundTypes = [FundType.FUND,FundType.SHARE,FundType.CORP_BOND, FundType.LONG_GILT]
+        gainDict: dict[str, list] = {'Date': list()}
+        gainDict['Total'] = list()
+        for ft in fundTypes:
+            gainDict[ft.name] = list()
         fs = table()
         fs.appendChild(tr(th('Date'),th('Total Market Value'),th('Total Book Cost'),th('Gain'),
             ''.join([f'{th(ftyp.name+"   ")}' for ftyp in fundTypes]),
@@ -183,11 +187,26 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
         dateList.sort()
         for dt in dateList:
             (marketValue, bookCost) = accountSummary.historicValue[dt]
+            accgain = 100*float((marketValue - bookCost)/bookCost) if bookCost > 0 else 0
+            gainDict['Date'].append(dt)
+            gainDict['Total'].append(accgain)
+            lastElem = len(gainDict['Date'])-1
             ftv = accountSummary.historicValueByType[dt]
-            fs.appendChild(tr(td(f"{dt.date()}"),td(f"£{marketValue:,.0f}"), td(f"£{bookCost:,.0f}"),td(f"{100*(marketValue - bookCost)/bookCost if bookCost > 0 else 0:0.2f}%"),
-                ''.join([f'{td(100*ftv.get(ftyp,(0,0))[0]/marketValue):0.1f}' for ftyp in fundTypes]),
-                ''.join([f'{td(100*(ftv.get(ftyp,(0,0))[0]-ftv.get(ftyp,(0,0))[1])/ftv.get(ftyp,(1,1))[1]):0.1f}' for ftyp in fundTypes])))
+            for ftyp in fundTypes:
+                gainDict[ftyp.name].append(100.0*float((ftv.get(ftyp,(0,0))[0]-ftv.get(ftyp,(0,0))[1])/ftv.get(ftyp,(1,1))[1]))
+            fs.appendChild(tr(td(f"{dt.date()}"),td(f"£{marketValue:,.0f}"), td(f"£{bookCost:,.0f}"),td(f"{accgain:0.2f}%"),
+                ''.join([f'{td(100.0*float(ftv.get(ftyp,(0,0))[0]/marketValue)):0.1f}' for ftyp in fundTypes]),
+                ''.join([f'{td(gainDict[ftyp.name][lastElem]):0.1f}' for ftyp in fundTypes])))
         dom.appendChild(fs)
+        df = DataFrame(gainDict)
+        fig = px.line(df, x="Date", y=df.columns,
+                    hover_data={"Date": "|%B %d, %Y"},
+                    title='% gain by asset type')
+        fig.update_xaxes(
+            dtick="M1",
+            tickformat="%b\n%Y")
+        # fig.show()
+        dom.appendChild(fig.to_html())
 
     dom.appendChild(h2("Statistics By Investment Type"))
     dom.appendChild(h3("Fund values and returns (including other accounts)"))

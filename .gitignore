@@ -127,6 +127,8 @@ dmypy.json
 #Build files
 *.zip
 
+exampleHtml/
+
 #Any local config
 *.ini
 heldstocklist.txt
