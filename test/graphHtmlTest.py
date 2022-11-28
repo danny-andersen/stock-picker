@@ -11,7 +11,8 @@ df = DataFrame(gaindict)
 # df = px.data.stocks()
 fig = px.line(df, x="Date", y=df.columns,
               hover_data={"Date": "|%B %d, %Y"},
-              title='Account gain by asset type')
+              title='Account gain by asset type',
+              labels={'value': '% Gain'})
 fig.update_xaxes(
     dtick="M1",
     tickformat="%b\n%Y")

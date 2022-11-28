@@ -201,7 +201,8 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
         df = DataFrame(gainDict)
         fig = px.line(df, x="Date", y=df.columns,
                     hover_data={"Date": "|%B %d, %Y"},
-                    title='% gain by asset type')
+                    title='Gain % by asset type',
+                    labels={'value': '% Gain'})
         fig.update_xaxes(
             dtick="M1",
             tickformat="%b\n%Y")
