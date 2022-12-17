@@ -1,29 +1,32 @@
-from ast import DictComp
-from statistics import mean
-from dataclasses import dataclass, field
-from dataclasses_json import dataclass_json
+# from ast import DictComp
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from enum import Enum, IntEnum
 from copy import deepcopy
+from statistics import mean
+from dataclasses import dataclass, field
+from dataclasses_json import dataclass_json
 
-CASH_IN = 'Cash in'
-CASH_OUT = 'Cash out'
-SELL = 'Sell'
-BUY = 'Buy'
-DIVIDEND = 'Dividend'
-EQUALISATION = 'Equalisation' #This is a return of part of the initial principle, so should be taken off the investment amount
-FEES = 'Fees'
-REFUND ='Refund'
-NO_STOCK = 'No stock'
-INTEREST = 'Interest'
-STERLING = 'STERLING'
-USD = 'USDUSDUSDUS1'
-EUR = 'EUREUREUREU1'
+CASH_IN = "Cash in"
+CASH_OUT = "Cash out"
+SELL = "Sell"
+BUY = "Buy"
+DIVIDEND = "Dividend"
+# Equilisation is a return of part of the initial principle,
+# so should be taken off the investment amount
+EQUALISATION = "Equalisation"
+FEES = "Fees"
+REFUND = "Refund"
+NO_STOCK = "No stock"
+INTEREST = "Interest"
+STERLING = "STERLING"
+USD = "USDUSDUSDUS1"
+EUR = "EUREUREUREU1"
 
-SECONDS_IN_YEAR = 365.25*24*3600
+SECONDS_IN_YEAR = 365.25 * 24 * 3600
 
 TAX_YEAR_START = date(year=2021, month=4, day=6)
+
 
 class BondGrade(IntEnum):
     AAA = 1
@@ -39,14 +42,17 @@ class BondGrade(IntEnum):
     NONE = 11
 
     def isInvestmentGrade(self):
-        return (self <= 4)
+        return self <= 4
+
     def isJunkGrade(self):
         return not self.isInvestmentGrade()
+
 
 class Risk(IntEnum):
     LOW = 1
     MED = 2
     HIGH = 3
+
 
 class FundType(Enum):
     FUND = 1
@@ -58,6 +64,7 @@ class FundType(Enum):
     SHARE = 7
     CASH = 8
     GOLD = 9
+
 
 @dataclass
 class FundOverview:
@@ -98,7 +105,7 @@ class FundOverview:
     def getStr(self):
         retStr = "Fund overview:\n"
         retStr += f"Type: {self.fundType.name}\n"
-        retStr += f"Income fund? {'Yes' if self.income else 'No'}\n" 
+        retStr += f"Income fund? {'Yes' if self.income else 'No'}\n"
         retStr += f"Annual fees: {self.fees}%\n"
         retStr += f"Risk: {self.risk.name}\n"
         if self.isBondType():
@@ -114,18 +121,21 @@ class FundOverview:
         return retStr
 
     def isBondType(self):
-        return self.fundType == FundType.LONG_GILT or \
-                    self.fundType == FundType.BOND_ETF or \
-                    self.fundType == FundType.CORP_BOND
+        return (
+            self.fundType == FundType.LONG_GILT
+            or self.fundType == FundType.BOND_ETF
+            or self.fundType == FundType.CORP_BOND
+        )
 
     def isStockType(self):
-        return self.fundType == FundType.FUND or \
-                    self.fundType == FundType.SHARE or \
-                    self.fundType == FundType.STOCK_ETF 
+        return (
+            self.fundType == FundType.FUND
+            or self.fundType == FundType.SHARE
+            or self.fundType == FundType.STOCK_ETF
+        )
 
     def isCashType(self):
-        return self.fundType == FundType.SHORT_GILT or \
-                    self.fundType == FundType.CASH
+        return self.fundType == FundType.SHORT_GILT or self.fundType == FundType.CASH
 
     def isGoldType(self):
         return self.fundType == FundType.GOLD
@@ -137,35 +147,65 @@ class FundOverview:
         val = float(fund.totalValue)
         self.totalInvested += fund.totalInvested
 
-        if (totValue > 0):
-            self.actualReturn = (self.actualReturn * currVal + fund.actualReturn * val) / totValue
+        if totValue > 0:
+            self.actualReturn = (
+                self.actualReturn * currVal + fund.actualReturn * val
+            ) / totValue
             self.fees = (self.fees * currVal + fund.fees * val) / totValue
-            self.return3Yr = (self.return3Yr * currVal + fund.return3Yr * val) / totValue
-            self.return5Yr = (self.return5Yr * currVal + fund.return5Yr * val) / totValue
+            self.return3Yr = (
+                self.return3Yr * currVal + fund.return3Yr * val
+            ) / totValue
+            self.return5Yr = (
+                self.return5Yr * currVal + fund.return5Yr * val
+            ) / totValue
 
-            if (self.maturity == 0 and fund.maturity != 0):
+            if self.maturity == 0 and fund.maturity != 0:
                 self.maturity = fund.maturity
-            elif (self.maturity != 0 and self.maturity != 0):
-                self.maturity = (self.maturity * currVal + fund.maturity * val) / totValue
+            elif self.maturity != 0 and self.maturity != 0:
+                self.maturity = (
+                    self.maturity * currVal + fund.maturity * val
+                ) / totValue
 
             ownTotRisk = self.alpha3Yr + self.beta3Yr + self.sharpe3Yr + self.stdDev3Yr
             newTotRisk = fund.alpha3Yr + fund.beta3Yr + fund.sharpe3Yr + fund.stdDev3Yr
-            if (ownTotRisk == 0 and newTotRisk != 0):
-                #Copy
+            if ownTotRisk == 0 and newTotRisk != 0:
+                # Copy
                 self.alpha3Yr = fund.alpha3Yr
                 self.beta3Yr = fund.beta3Yr
                 self.sharpe3Yr = fund.sharpe3Yr
                 self.stdDev3Yr = fund.stdDev3Yr
-            elif (ownTotRisk != 0 and newTotRisk != 0):
-                #Merge
-                self.alpha3Yr = (self.alpha3Yr * currVal + fund.alpha3Yr * val) / totValue
+            elif ownTotRisk != 0 and newTotRisk != 0:
+                # Merge
+                self.alpha3Yr = (
+                    self.alpha3Yr * currVal + fund.alpha3Yr * val
+                ) / totValue
                 self.beta3Yr = (self.beta3Yr * currVal + fund.beta3Yr * val) / totValue
-                self.sharpe3Yr = (self.sharpe3Yr * currVal + fund.sharpe3Yr * val) / totValue
-                self.stdDev3Yr = (self.stdDev3Yr * currVal + fund.stdDev3Yr * val) / totValue
+                self.sharpe3Yr = (
+                    self.sharpe3Yr * currVal + fund.sharpe3Yr * val
+                ) / totValue
+                self.stdDev3Yr = (
+                    self.stdDev3Yr * currVal + fund.stdDev3Yr * val
+                ) / totValue
 
-            ownTotGeo = self.americas + self.americasEmerging + self.asia + self.asiaEmerging + self.europe + self.europeEmerging + self.uk
-            newTotGeo = fund.americas + fund.americasEmerging + fund.asia + fund.asiaEmerging + fund.europe + fund.europeEmerging + fund.uk
-            if (ownTotGeo == 0 and newTotGeo != 0):
+            ownTotGeo = (
+                self.americas
+                + self.americasEmerging
+                + self.asia
+                + self.asiaEmerging
+                + self.europe
+                + self.europeEmerging
+                + self.uk
+            )
+            newTotGeo = (
+                fund.americas
+                + fund.americasEmerging
+                + fund.asia
+                + fund.asiaEmerging
+                + fund.europe
+                + fund.europeEmerging
+                + fund.uk
+            )
+            if ownTotGeo == 0 and newTotGeo != 0:
                 self.americas = fund.americas
                 self.americasEmerging = fund.americasEmerging
                 self.asia = fund.asia
@@ -173,32 +213,45 @@ class FundOverview:
                 self.uk = fund.uk
                 self.europe = fund.europe
                 self.europeEmerging = fund.europeEmerging
-            elif (ownTotGeo != 0 and newTotGeo != 0):
-                self.americas = (self.americas * currVal + fund.americas * val) / totValue
-                self.americasEmerging = (self.americasEmerging * currVal + fund.americasEmerging * val) / totValue
+            elif ownTotGeo != 0 and newTotGeo != 0:
+                self.americas = (
+                    self.americas * currVal + fund.americas * val
+                ) / totValue
+                self.americasEmerging = (
+                    self.americasEmerging * currVal + fund.americasEmerging * val
+                ) / totValue
                 self.asia = (self.asia * currVal + fund.asia * val) / totValue
-                self.asiaEmerging = (self.asiaEmerging * currVal + fund.asiaEmerging * val) / totValue
+                self.asiaEmerging = (
+                    self.asiaEmerging * currVal + fund.asiaEmerging * val
+                ) / totValue
                 self.europe = (self.europe * currVal + fund.europe * val) / totValue
-                self.europeEmerging = (self.europeEmerging * currVal + fund.europeEmerging * val) / totValue
+                self.europeEmerging = (
+                    self.europeEmerging * currVal + fund.europeEmerging * val
+                ) / totValue
                 self.uk = (self.uk * currVal + fund.uk * val) / totValue
-
 
             ownTotDiv = self.cyclical + self.defensive + self.sensitive
             newTotDiv = fund.cyclical + fund.defensive + fund.sensitive
-            if (ownTotDiv == 0 and newTotDiv != 0):
+            if ownTotDiv == 0 and newTotDiv != 0:
                 self.cyclical = fund.cyclical
                 self.defensive = fund.defensive
                 self.sensitive = fund.sensitive
-            elif (ownTotDiv != 0 and ownTotDiv != 0):
-                self.cyclical = (self.cyclical * currVal + fund.cyclical * val) / totValue
-                self.defensive = (self.defensive * currVal + fund.defensive * val) / totValue
-                self.sensitive = (self.sensitive * currVal + fund.sensitive * val) / totValue
+            elif ownTotDiv != 0 and ownTotDiv != 0:
+                self.cyclical = (
+                    self.cyclical * currVal + fund.cyclical * val
+                ) / totValue
+                self.defensive = (
+                    self.defensive * currVal + fund.defensive * val
+                ) / totValue
+                self.sensitive = (
+                    self.sensitive * currVal + fund.sensitive * val
+                ) / totValue
 
 
 @dataclass_json
 @dataclass
 class Transaction:
-    #An investment transaction of some sort
+    # An investment transaction of some sort
     date: datetime
     ref: str
     symbol: str
@@ -208,31 +261,45 @@ class Transaction:
     accountName: str
     qty: float = 0.0
     price: Decimal = Decimal(0.0)
-    priceCurrency: str = '£'
+    priceCurrency: str = "£"
     debit: Decimal = Decimal(0.0)
-    debitCurrency: str = '£'
+    debitCurrency: str = "£"
     credit: Decimal = Decimal(0.0)
-    creditCurrency: str = '£'
-    type: str = 'Unknown'
+    creditCurrency: str = "£"
+    type: str = "Unknown"
     accountBalance: Decimal = Decimal(0.0)
 
     def __eq__(self, other):
         if not isinstance(other, Transaction):
             return False
-        return self.date == other.date and \
-                self.ref == other.ref and \
-                self.sedol == other.sedol and \
-                self.isin == other.isin and \
-                self.desc == other.desc and \
-                self.credit == other.credit and \
-                self.debit == other.debit
+        return (
+            self.date == other.date
+            and self.ref == other.ref
+            and self.sedol == other.sedol
+            and self.isin == other.isin
+            and self.desc == other.desc
+            and self.credit == other.credit
+            and self.debit == other.debit
+        )
+
     def __hash__(self):
-        return hash((self.date, self.ref, self.sedol, self.isin, self.desc, self.credit, self.debit))
+        return hash(
+            (
+                self.date,
+                self.ref,
+                self.sedol,
+                self.isin,
+                self.desc,
+                self.credit,
+                self.debit,
+            )
+        )
+
 
 @dataclass_json
 @dataclass
 class Security:
-    #An investment security held in an Account
+    # An investment security held in an Account
     date: datetime
     symbol: str
     desc: str
@@ -240,19 +307,21 @@ class Security:
     type: FundType = None
     qty: int = 0
     currentPrice: Decimal = Decimal(0.0)
-    currency: str = '£'
+    currency: str = "£"
     avgBuyPrice: Decimal = Decimal(0.0)
     gain: Decimal = Decimal(0.0)
     marketValue: Decimal = Decimal(0.0)
     bookCost: Decimal = Decimal(0.0)
 
+
 @dataclass
 class CapitalGain:
-    #Buy and sell history of stock
+    # Buy and sell history of stock
     date: datetime
     qty: int
     price: Decimal
     transaction: str
+
 
 @dataclass
 class SecurityDetails:
@@ -281,56 +350,94 @@ class SecurityDetails:
     fundOverview: FundOverview = None
 
     def yearsHeld(self):
-        if (self.startDate):
-            if (self.endDate):
-                return float((self.endDate.timestamp() - self.startDate.timestamp())/SECONDS_IN_YEAR)
+        if self.startDate:
+            if self.endDate:
+                return float(
+                    (self.endDate.timestamp() - self.startDate.timestamp())
+                    / SECONDS_IN_YEAR
+                )
             else:
-                return float((datetime.now(timezone.utc) - self.startDate).total_seconds())/SECONDS_IN_YEAR
+                return (
+                    float((datetime.now(timezone.utc) - self.startDate).total_seconds())
+                    / SECONDS_IN_YEAR
+                )
         else:
             return 0.0
+
     def totalGain(self):
-        return self.paperCGT() \
-                + self.totalDividends() \
-                + self.realisedCapitalGain()
+        return self.paperCGT() + self.totalDividends() + self.realisedCapitalGain()
+
     def avgGainPerYear(self):
         if self.yearsHeld() > 0:
-            return float(self.totalGain())/self.yearsHeld()
+            return float(self.totalGain()) / self.yearsHeld()
         else:
             return 0.0
+
     def totalGainPerc(self):
         if self.cashInvested > 0:
-            return 100.0 * float(self.totalGain()/self.cashInvested)
+            return 100.0 * float(self.totalGain() / self.cashInvested)
         else:
             return 0.0
+
     def avgGainPerYearPerc(self):
         if self.yearsHeld() > 0:
-            return float(self.totalGainPerc())/self.yearsHeld()
+            return float(self.totalGainPerc()) / self.yearsHeld()
         else:
             return 0.0
+
     def totalCosts(self):
-        return sum(self.costsByYear.values()) if len(self.costsByYear) > 0 else Decimal(0.0)
+        return (
+            sum(self.costsByYear.values())
+            if len(self.costsByYear) > 0
+            else Decimal(0.0)
+        )
+
     def totalDividends(self):
-        return sum(self.dividendsByYear.values()) if len(self.dividendsByYear) > 0 else Decimal(0.0)
+        return (
+            sum(self.dividendsByYear.values())
+            if len(self.dividendsByYear) > 0
+            else Decimal(0.0)
+        )
+
     def averageYearlyDivi(self):
-        return mean(self.dividendsByYear.values()) if len(self.dividendsByYear) > 0 else Decimal(0.0)
+        return (
+            mean(self.dividendsByYear.values())
+            if len(self.dividendsByYear) > 0
+            else Decimal(0.0)
+        )
+
     def averageYearlyDiviYield(self):
-        return mean(self.dividendYieldByYear.values()) if len(self.dividendYieldByYear) > 0 else Decimal(0.0)
+        return (
+            mean(self.dividendYieldByYear.values())
+            if len(self.dividendYieldByYear) > 0
+            else Decimal(0.0)
+        )
+
     def realisedCapitalGain(self):
-        return (sum(self.realisedCapitalGainByYear.values()) if len(self.realisedCapitalGainByYear) > 0 else Decimal(0.0))
+        return (
+            sum(self.realisedCapitalGainByYear.values())
+            if len(self.realisedCapitalGainByYear) > 0
+            else Decimal(0.0)
+        )
+
     def marketValue(self):
         return self.currentSharePrice * self.qtyHeld
+
     def capitalGain(self):
         return self.realisedCapitalGain() + self.paperCGT()
+
     def paperCGT(self):
-        if (self.currentSharePrice):
+        if self.currentSharePrice:
             return self.marketValue() - self.totalInvested
         else:
             return Decimal(0.0)
+
     def paperCGTPerc(self):
         if self.totalInvested:
             return 100.0 * float(self.paperCGT() / self.totalInvested)
         else:
             return Decimal(0.0)
+
 
 @dataclass
 class AccountSummary:
@@ -346,7 +453,7 @@ class AccountSummary:
     totalPaperGainForTax: Decimal = Decimal(0.0)
     totalGain: Decimal = Decimal(0.0)
 
-    portfolioPerc: dict[str, str] = field(default_factory=dict) 
+    portfolioPerc: dict[str, str] = field(default_factory=dict)
     cashInByYear: dict[str, Decimal(0.0)] = field(default_factory=dict)
     cashOutByYear: dict[str, Decimal(0.0)] = field(default_factory=dict)
     taxfreeCashOutByYear: dict[str, Decimal(0.0)] = field(default_factory=dict)
@@ -370,12 +477,16 @@ class AccountSummary:
     taxRates: dict = field(default_factory=dict)
     taxBandByYear: dict[str, str] = field(default_factory=dict)
     mergedAccounts: list = field(default_factory=list)
-    historicValue: dict[datetime, (Decimal(0.0), Decimal(0.0))] = field(default_factory=dict)  # (market value, book cost)
-    historicValueByType: dict[datetime, dict[str, (float, float)]] = field(default_factory=dict)  # (market value, book cost)
+    historicValue: dict[datetime, (Decimal(0.0), Decimal(0.0))] = field(
+        default_factory=dict
+    )  # (market value, book cost)
+    historicValueByType: dict[datetime, dict[str, (float, float)]] = field(
+        default_factory=dict
+    )  # (market value, book cost)
 
     def mergeInAccountSummary(self, summary):
         self.mergedAccounts.append(summary)
-        if (summary.dateOpened < self.dateOpened):
+        if summary.dateOpened < self.dateOpened:
             self.dateOpened = summary.dateOpened
         self.totalCashInvested += summary.totalCashInvested
         self.totalDiviReInvested += summary.totalDiviReInvested
@@ -385,114 +496,132 @@ class AccountSummary:
         self.totalPaperGainForTax += summary.totalPaperGainForTax
         self.totalGain += summary.totalGain
         self.transactions.extend(summary.transactions)
-        #Sort all transactions by date
-        self.transactions = sorted(self.transactions, key= lambda txn: txn.date)
+        # Sort all transactions by date
+        self.transactions = sorted(self.transactions, key=lambda txn: txn.date)
         self.stocks.extend(summary.stocks)
-        #Sort all stocks by highest yearly gain
-        self.stocks = sorted(self.stocks, key = lambda stock: stock.avgGainPerYearPerc(), reverse = True)
+        # Sort all stocks by highest yearly gain
+        self.stocks = sorted(
+            self.stocks, key=lambda stock: stock.avgGainPerYearPerc(), reverse=True
+        )
 
-        for yr in self.cashInByYear.keys():
+        for yr in self.cashInByYear:
             self.cashInByYear[yr] += summary.cashInByYear.get(yr, Decimal(0.0))
-        for yr in summary.cashInByYear.keys():
-            if (yr not in self.cashInByYear):
+        for yr in summary.cashInByYear:
+            if yr not in self.cashInByYear:
                 self.cashInByYear[yr] = summary.cashInByYear[yr]
 
-        for yr in self.cashOutByYear.keys():
+        for yr in self.cashOutByYear:
             self.cashOutByYear[yr] += summary.cashOutByYear.get(yr, Decimal(0.0))
-        for yr in summary.cashOutByYear.keys():
-            if (yr not in self.cashOutByYear):
+        for yr in summary.cashOutByYear:
+            if yr not in self.cashOutByYear:
                 self.cashOutByYear[yr] = summary.cashOutByYear[yr]
 
-        for yr in self.feesByYear.keys():
+        for yr in self.feesByYear:
             self.feesByYear[yr] += summary.feesByYear.get(yr, Decimal(0.0))
-        for yr in summary.feesByYear.keys():
-            if (yr not in self.feesByYear):
+        for yr in summary.feesByYear:
+            if yr not in self.feesByYear:
                 self.feesByYear[yr] = summary.feesByYear[yr]
 
-        for yr in self.aggInvestedByYear.keys():
-            self.aggInvestedByYear[yr] += summary.aggInvestedByYear.get(yr, Decimal(0.0))
-        for yr in summary.aggInvestedByYear.keys():
-            if (yr not in self.aggInvestedByYear):
+        for yr in self.aggInvestedByYear:
+            self.aggInvestedByYear[yr] += summary.aggInvestedByYear.get(
+                yr, Decimal(0.0)
+            )
+        for yr in summary.aggInvestedByYear:
+            if yr not in self.aggInvestedByYear:
                 self.aggInvestedByYear[yr] = summary.aggInvestedByYear[yr]
 
-        for yr in self.realisedGainForTaxByYear.keys():
-            self.realisedGainForTaxByYear[yr] += summary.realisedGainForTaxByYear.get(yr, Decimal(0.0))
-        for yr in summary.realisedGainForTaxByYear.keys():
-            if (yr not in self.realisedGainForTaxByYear):
+        for yr in self.realisedGainForTaxByYear:
+            self.realisedGainForTaxByYear[yr] += summary.realisedGainForTaxByYear.get(
+                yr, Decimal(0.0)
+            )
+        for yr in summary.realisedGainForTaxByYear:
+            if yr not in self.realisedGainForTaxByYear:
                 self.realisedGainForTaxByYear[yr] = summary.realisedGainForTaxByYear[yr]
 
-        for yr in self.dealingCostsByYear.keys():
-            self.dealingCostsByYear[yr] += summary.dealingCostsByYear.get(yr, Decimal(0.0))
-        for yr in summary.dealingCostsByYear.keys():
-            if (yr not in self.dealingCostsByYear):
+        for yr in self.dealingCostsByYear:
+            self.dealingCostsByYear[yr] += summary.dealingCostsByYear.get(
+                yr, Decimal(0.0)
+            )
+        for yr in summary.dealingCostsByYear:
+            if yr not in self.dealingCostsByYear:
                 self.dealingCostsByYear[yr] = summary.dealingCostsByYear[yr]
 
-        for yr in self.dividendsByYear.keys():
+        for yr in self.dividendsByYear:
             self.dividendsByYear[yr] += summary.dividendsByYear.get(yr, Decimal(0.0))
-        for yr in summary.dividendsByYear.keys():
-            if (yr not in self.dividendsByYear):
+        for yr in summary.dividendsByYear:
+            if yr not in self.dividendsByYear:
                 self.dividendsByYear[yr] = summary.dividendsByYear[yr]
 
-        for yr in self.dividendTxnsByYear.keys():
-            self.dividendTxnsByYear[yr].update(summary.dividendTxnsByYear.get(yr, set()))
-        for yr in summary.dividendTxnsByYear.keys():
-            if (yr not in self.dividendTxnsByYear):
-                self.dividendTxnsByYear[yr] = set(summary.dividendTxnsByYear[yr])
+        for yr, txns in self.dividendTxnsByYear.items():
+            txns.update(summary.dividendTxnsByYear.get(yr, set()))
+        for yr, txns in summary.dividendTxnsByYear.items():
+            if yr not in self.dividendTxnsByYear:
+                self.dividendTxnsByYear[yr] = set(txns)
 
-        for yr in self.incomeByYear.keys():
+        for yr in self.incomeByYear:
             self.incomeByYear[yr] += summary.incomeByYear.get(yr, Decimal(0.0))
-        for yr in summary.incomeByYear.keys():
-            if (yr not in self.incomeByYear):
+        for yr in summary.incomeByYear:
+            if yr not in self.incomeByYear:
                 self.incomeByYear[yr] = summary.incomeByYear[yr]
 
-        for yr in self.taxfreeCashOutByYear.keys():
-            self.taxfreeCashOutByYear[yr] += summary.taxfreeCashOutByYear.get(yr, Decimal(0.0))
-        for yr in summary.taxfreeCashOutByYear.keys():
-            if (yr not in self.taxfreeCashOutByYear):
-                self.taxfreeCashOutByYear[yr] = summary.taxfreeCashOutByYear[yr]
+        for yr in self.taxfreeCashOutByYear:
+            self.taxfreeCashOutByYear[yr] += summary.taxfreeCashOutByYear.get(
+                yr, Decimal(0.0)
+            )
+        for yr, cash in summary.taxfreeCashOutByYear.items():
+            if yr not in self.taxfreeCashOutByYear:
+                self.taxfreeCashOutByYear[yr] = cash
 
-        for yr in self.incomeTxnsByYear.keys():
-            self.incomeTxnsByYear[yr].update(summary.incomeTxnsByYear.get(yr, set()))
+        for yr, income in self.incomeTxnsByYear.items():
+            income.update(summary.incomeTxnsByYear.get(yr, set()))
             # self.incomeTxnsByYear[yr] = sorted(self.incomeTxnsByYear[yr], key= lambda txn: txn.date)
-        for yr in summary.incomeTxnsByYear.keys():
-            if (yr not in self.incomeTxnsByYear):
-                self.incomeTxnsByYear[yr] = set(summary.incomeTxnsByYear[yr])
+        for yr, inc in summary.incomeTxnsByYear.items():
+            if yr not in self.incomeTxnsByYear:
+                self.incomeTxnsByYear[yr] = set(inc)
 
-        for yr in self.interestByYear.keys():
+        for yr in self.interestByYear:
             self.interestByYear[yr] += summary.interestByYear.get(yr, Decimal(0.0))
-        for yr in summary.interestByYear.keys():
-            if (yr not in self.interestByYear):
+        for yr in summary.interestByYear:
+            if yr not in self.interestByYear:
                 self.interestByYear[yr] = summary.interestByYear[yr]
 
-        for yr in self.interestTxnsByYear.keys():
-            self.interestTxnsByYear[yr].update(summary.interestTxnsByYear.get(yr, set()))
+        for yr in self.interestTxnsByYear:
+            self.interestTxnsByYear[yr].update(
+                summary.interestTxnsByYear.get(yr, set())
+            )
             # self.interestTxnsByYear[yr] = sorted(self.interestTxnsByYear[yr], key= lambda txn: txn.date)
-        for yr in summary.interestTxnsByYear.keys():
-            if (yr not in self.interestTxnsByYear):
+        for yr in summary.interestTxnsByYear:
+            if yr not in self.interestTxnsByYear:
                 self.interestTxnsByYear[yr] = set(summary.interestTxnsByYear[yr])
 
-        for yr in self.dividendYieldByYear.keys():
-            self.dividendYieldByYear[yr] += summary.dividendYieldByYear.get(yr, Decimal(0.0))
-        for yr in summary.dividendYieldByYear.keys():
-            if (yr not in self.dividendYieldByYear):
+        for yr in self.dividendYieldByYear:
+            self.dividendYieldByYear[yr] += summary.dividendYieldByYear.get(
+                yr, Decimal(0.0)
+            )
+        for yr in summary.dividendYieldByYear:
+            if yr not in self.dividendYieldByYear:
                 self.dividendYieldByYear[yr] = summary.dividendYieldByYear[yr]
 
-        for yr in self.totalYieldByYear.keys():
+        for yr in self.totalYieldByYear:
             self.totalYieldByYear[yr] += summary.totalYieldByYear.get(yr, Decimal(0.0))
-        for yr in summary.totalYieldByYear.keys():
-            if (yr not in self.totalYieldByYear):
+        for yr in summary.totalYieldByYear:
+            if yr not in self.totalYieldByYear:
                 self.totalYieldByYear[yr] = summary.totalYieldByYear[yr]
 
-        for yr in self.incomeYieldByYear.keys():
-            self.incomeYieldByYear[yr] += summary.incomeYieldByYear.get(yr, Decimal(0.0))
-        for yr in summary.incomeYieldByYear.keys():
-            if (yr not in self.incomeYieldByYear):
+        for yr in self.incomeYieldByYear:
+            self.incomeYieldByYear[yr] += summary.incomeYieldByYear.get(
+                yr, Decimal(0.0)
+            )
+        for yr in summary.incomeYieldByYear:
+            if yr not in self.incomeYieldByYear:
                 self.incomeYieldByYear[yr] = summary.incomeYieldByYear[yr]
 
-        for inst in self.totalByInstitution.keys():
-            self.totalByInstitution[inst] += summary.totalByInstitution.get(inst, Decimal(0.0))
-        for inst in summary.totalByInstitution.keys():
-            if (inst not in self.totalByInstitution):
+        for inst in self.totalByInstitution:
+            self.totalByInstitution[inst] += summary.totalByInstitution.get(
+                inst, Decimal(0.0)
+            )
+        for inst in summary.totalByInstitution:
+            if inst not in self.totalByInstitution:
                 self.totalByInstitution[inst] = summary.totalByInstitution[inst]
 
         for ft, fund in summary.fundTotals.items():
@@ -500,87 +629,170 @@ class AccountSummary:
             if current:
                 current.merge(fund)
             else:
-                #Copy
+                # Copy
                 self.fundTotals[ft] = deepcopy(fund)
 
-        for dt in self.historicValue.keys():
-            self.historicValue[dt] = [sum(tup) for tup in zip(self.historicValue[dt],summary.historicValue.get(dt, (Decimal(0.0), Decimal(0.0))))]
-        for dt in summary.historicValue.keys():
-            if (dt not in self.historicValue.keys()):
+        for dt in self.historicValue:
+            self.historicValue[dt] = [
+                sum(tup)
+                for tup in zip(
+                    self.historicValue[dt],
+                    summary.historicValue.get(dt, (Decimal(0.0), Decimal(0.0))),
+                )
+            ]
+        for dt in summary.historicValue:
+            if dt not in self.historicValue:
                 self.historicValue[dt] = summary.historicValue[dt]
 
-        for dt in self.historicValueByType.keys():
-            hvdt = self.historicValueByType[dt]
+        for dt, hvdt in self.historicValueByType.items():
             summaryhvdt = summary.historicValueByType.get(dt, dict())
-            for ft in hvdt.keys():
-                hvdt[ft] = [sum(tup) for tup in zip(hvdt[ft],summaryhvdt.get(ft, (Decimal(0.0), Decimal(0.0))))]
-        for dt in summary.historicValueByType.keys():
-            if (dt not in self.historicValueByType.keys()):
+            for ft in hvdt:
+                hvdt[ft] = [
+                    sum(tup)
+                    for tup in zip(
+                        hvdt[ft], summaryhvdt.get(ft, (Decimal(0.0), Decimal(0.0)))
+                    )
+                ]
+        for dt in summary.historicValueByType:
+            if dt not in self.historicValueByType:
                 self.historicValueByType[dt] = deepcopy(summary.historicValueByType[dt])
             else:
                 summaryhvdt = summary.historicValueByType[dt]
                 hvdt = self.historicValueByType[dt]
-                for ft in summaryhvdt.keys():
-                    if (ft not in hvdt.keys()):
+                for ft in summaryhvdt:
+                    if ft not in hvdt:
                         hvdt[ft] = summaryhvdt[ft]
 
-    def totalInvested(self): 
+    def totalInvested(self):
         return sum(self.cashInByYear.values()) - sum(self.cashOutByYear.values())
+
     def totalFees(self):
-        return sum(self.feesByYear.values()) if len(self.feesByYear) > 0 else Decimal(0.0)
+        return (
+            sum(self.feesByYear.values()) if len(self.feesByYear) > 0 else Decimal(0.0)
+        )
+
     def totalDealingCosts(self):
-        return sum(self.dealingCostsByYear.values()) if len(self.dealingCostsByYear) > 0 else Decimal(0.0)
+        return (
+            sum(self.dealingCostsByYear.values())
+            if len(self.dealingCostsByYear) > 0
+            else Decimal(0.0)
+        )
+
     def totalValue(self):
         return self.totalMarketValue + self.totalOtherAccounts
+
     def totalPaperGainForTaxPerc(self):
         if self.totalInvestedInSecurities > 0:
-            return 100.0 * float(self.totalPaperGainForTax) / float(self.totalInvestedInSecurities)
+            return (
+                100.0
+                * float(self.totalPaperGainForTax)
+                / float(self.totalInvestedInSecurities)
+            )
         else:
             return 0
+
     def totalRealisedGain(self):
-        return sum(self.realisedGainForTaxByYear.values()) if len(self.realisedGainForTaxByYear) > 0 else Decimal(0.0)
+        return (
+            sum(self.realisedGainForTaxByYear.values())
+            if len(self.realisedGainForTaxByYear) > 0
+            else Decimal(0.0)
+        )
+
     def totalGainFromInvestments(self):
         return self.totalMarketValue - self.totalCashInvested
+
     def totalGainFromInvPerc(self):
         if self.totalInvestedInSecurities > 0:
-            return 100 * float(self.totalGainFromInvestments()) / float(self.totalInvestedInSecurities)
+            return (
+                100
+                * float(self.totalGainFromInvestments())
+                / float(self.totalInvestedInSecurities)
+            )
         else:
             return 0
+
     def totalGainLessFees(self):
-        return self.totalGain - self.totalFees()  #Dealing costs are wrapped up in stock price received
+        return (
+            self.totalGain - self.totalFees()
+        )  # Dealing costs are wrapped up in stock price received
+
     def totalGainPerc(self):
         if self.totalInvestedInSecurities > 0:
-            return 100 * float(self.totalGainLessFees()) / float(self.totalInvestedInSecurities)
+            return (
+                100
+                * float(self.totalGainLessFees())
+                / float(self.totalInvestedInSecurities)
+            )
         else:
             return 0
+
     def totalDividends(self):
-        return sum(self.dividendsByYear.values()) if len(self.dividendsByYear) > 0 else Decimal(0.0)
+        return (
+            sum(self.dividendsByYear.values())
+            if len(self.dividendsByYear) > 0
+            else Decimal(0.0)
+        )
+
     def totalIncome(self):
-            inc = sum(self.incomeByYear.values()) if len(self.incomeByYear) > 0 else Decimal(0.0)
-            inc += sum(self.interestByYear.values()) if len(self.interestByYear) > 0 else Decimal(0.0)
-            cashOutTax = float(self.taxRates.get('withdrawllowertax', 0))
-            if cashOutTax != 0:
-                #Cash out or withdrawl of funds is treated as income (e.g. a SIPP)
-                inc += sum(self.cashOutByYear.values()) if len(self.cashOutByYear) > 0 else Decimal(0.0)
-            return inc
+        inc = (
+            sum(self.incomeByYear.values())
+            if len(self.incomeByYear) > 0
+            else Decimal(0.0)
+        )
+        inc += (
+            sum(self.interestByYear.values())
+            if len(self.interestByYear) > 0
+            else Decimal(0.0)
+        )
+        cashOutTax = float(self.taxRates.get("withdrawllowertax", 0))
+        if cashOutTax != 0:
+            # Cash out or withdrawl of funds is treated as income (e.g. a SIPP)
+            inc += (
+                sum(self.cashOutByYear.values())
+                if len(self.cashOutByYear) > 0
+                else Decimal(0.0)
+            )
+        return inc
+
     def totalIncomeByYear(self, year):
-            inc = self.incomeByYear.get(year, Decimal(0))
-            inc += self.interestByYear.get(year, Decimal(0))
-            cashOutTax = float(self.taxRates.get('withdrawllowertax', 0))
-            if cashOutTax != 0:
-                #Cash out or withdrawl of funds is treated as income (e.g. a SIPP)
-                inc += self.cashOutByYear.get(year, Decimal(0))
-            return inc
+        inc = self.incomeByYear.get(year, Decimal(0))
+        inc += self.interestByYear.get(year, Decimal(0))
+        cashOutTax = float(self.taxRates.get("withdrawllowertax", 0))
+        if cashOutTax != 0:
+            # Cash out or withdrawl of funds is treated as income (e.g. a SIPP)
+            inc += self.cashOutByYear.get(year, Decimal(0))
+        return inc
+
     def totalInterest(self):
-        return sum(self.interestByYear.values()) if len(self.interestByYear) > 0 else Decimal(0.0)
+        return (
+            sum(self.interestByYear.values())
+            if len(self.interestByYear) > 0
+            else Decimal(0.0)
+        )
+
     def avgDividends(self):
-        return mean(self.dividendYieldByYear.values()) if len(self.dividendYieldByYear) > 0 else Decimal(0.0)
+        return (
+            mean(self.dividendYieldByYear.values())
+            if len(self.dividendYieldByYear) > 0
+            else Decimal(0.0)
+        )
+
     def avgIncomeYield(self):
-        incYield = mean(self.incomeYieldByYear.values()) if len(self.incomeYieldByYear) > 0 else 0
+        incYield = (
+            mean(self.incomeYieldByYear.values())
+            if len(self.incomeYieldByYear) > 0
+            else 0
+        )
         return incYield
+
     def avgTotalYield(self):
-        yld = mean(self.totalYieldByYear.values()) if len(self.totalYieldByYear) > 0 else 0
+        yld = (
+            mean(self.totalYieldByYear.values())
+            if len(self.totalYieldByYear) > 0
+            else 0
+        )
         return yld
+
     def avgReturnPerYear(self):
         startYear = self.dateOpened
         # endYear = datetime.now(timezone.utc) + timedelta(days=365) # Make sure we have this tax year
@@ -592,7 +804,7 @@ class AccountSummary:
             return 0
 
     def getRemainingCGTAllowance(self, cg):
-        cgtAllowance = Decimal(self.taxRates['capitalgaintaxallowance'])
+        cgtAllowance = Decimal(self.taxRates["capitalgaintaxallowance"])
         if cg > cgtAllowance:
             rem = Decimal(0)
         else:
@@ -600,121 +812,154 @@ class AccountSummary:
         return rem
 
     def taxableCG(self, taxYear):
-        if (Decimal(self.taxRates['capitalgainlowertax']) == 0):
+        if Decimal(self.taxRates["capitalgainlowertax"]) == 0:
             cg = Decimal(0)
         else:
-            cg = self.realisedGainForTaxByYear.get(taxYear, Decimal(0.0)) if len(self.realisedGainForTaxByYear) > 0 else Decimal(0.0)
+            cg = (
+                self.realisedGainForTaxByYear.get(taxYear, Decimal(0.0))
+                if len(self.realisedGainForTaxByYear) > 0
+                else Decimal(0.0)
+            )
         return cg
 
     def calcCGT(self, taxBand, taxYear):
-        rate = Decimal(self.taxRates['capitalgain' + taxBand + 'tax'])
+        rate = Decimal(self.taxRates["capitalgain" + taxBand + "tax"])
         if rate == 0:
             cgt = Decimal(0.0)
         else:
             cg = self.taxableCG(taxYear)
-            cgtAllowance = Decimal(self.taxRates['capitalgaintaxallowance'])
+            cgtAllowance = Decimal(self.taxRates["capitalgaintaxallowance"])
             if cgtAllowance > cg:
                 cgt = Decimal(0)
             else:
-                cgt = (cg - cgtAllowance) * rate / 100        
+                cgt = (cg - cgtAllowance) * rate / 100
         return cgt
 
     def calcIncomeTax(self, taxBand, taxYear):
         income = self.incomeByYear.get(taxYear, Decimal(0.0))
         interest = self.interestByYear.get(taxYear, Decimal(0.0))
-        if (interest > 0):
+        if interest > 0:
             allowance = self.getInterestAllowance(taxBand)
             if allowance < interest:
-                income += (interest - allowance)
-        rate = Decimal(self.taxRates['income' + taxBand + 'tax'])
-        tax = income * rate / 100        
-        #For a pension (SIPP) cash out is treated as income
-        cashOutTax = Decimal(self.taxRates['withdrawl' + taxBand + 'tax'])
+                income += interest - allowance
+        rate = Decimal(self.taxRates["income" + taxBand + "tax"])
+        tax = income * rate / 100
+        # For a pension (SIPP) cash out is treated as income
+        cashOutTax = Decimal(self.taxRates["withdrawl" + taxBand + "tax"])
         if cashOutTax != 0:
-            income = self.cashOutByYear.get(taxYear, Decimal(0.0)) - self.taxfreeCashOutByYear.get(taxYear, Decimal(0.0))
+            income = self.cashOutByYear.get(
+                taxYear, Decimal(0.0)
+            ) - self.taxfreeCashOutByYear.get(taxYear, Decimal(0.0))
             tax += cashOutTax * income / 100
         return tax
 
     def getInterestAllowance(self, taxBand):
-        if not taxBand or taxBand == 'lower':
-            allowance = Decimal(self.taxRates['interestlowerallowance'])
+        if not taxBand or taxBand == "lower":
+            allowance = Decimal(self.taxRates["interestlowerallowance"])
         else:
-            allowance = Decimal(self.taxRates['interestupperallowance'])
+            allowance = Decimal(self.taxRates["interestupperallowance"])
         return allowance
 
     def taxableDivi(self, taxYear):
-        rate = Decimal(self.taxRates['dividendlowertax'])
+        rate = Decimal(self.taxRates["dividendlowertax"])
         if rate == 0:
             divi = Decimal(0)
         else:
-            divi = self.dividendsByYear.get(taxYear, Decimal(0.0)) if len(self.dividendsByYear) > 0 else Decimal(0.0)
+            divi = (
+                self.dividendsByYear.get(taxYear, Decimal(0.0))
+                if len(self.dividendsByYear) > 0
+                else Decimal(0.0)
+            )
         return divi
 
     def calcDividendTax(self, taxBand, taxYear):
         divi = self.taxableDivi(taxYear)
-        rate = Decimal(self.taxRates['dividend' + taxBand + 'tax'])
+        rate = Decimal(self.taxRates["dividend" + taxBand + "tax"])
         if rate == 0:
             tax = Decimal(0.0)
         elif divi != 0:
-            allowance = Decimal(self.taxRates['dividendtaxallowance'])
+            allowance = Decimal(self.taxRates["dividendtaxallowance"])
             taxable = divi - allowance if divi > allowance else Decimal(0.0)
-            tax =  taxable * rate / 100        
+            tax = taxable * rate / 100
         else:
             tax = Decimal(0)
         return tax
-    
+
     def getRemainingDiviAllowance(self, divi):
-        allowance = Decimal(self.taxRates['dividendtaxallowance'])
+        allowance = Decimal(self.taxRates["dividendtaxallowance"])
         return allowance - divi if allowance > divi else Decimal(0.0)
 
     def getTotalTax(self, taxBand, taxYear):
-        return self.calcCGT(taxBand, taxYear) + self.calcDividendTax(taxBand, taxYear) + self.calcIncomeTax(taxBand, taxYear)
+        return (
+            self.calcCGT(taxBand, taxYear)
+            + self.calcDividendTax(taxBand, taxYear)
+            + self.calcIncomeTax(taxBand, taxYear)
+        )
 
     def taxableIncome(self, taxYear):
         income = Decimal(0.0)
-        if self.taxRates['withdrawllowertax'] != 0:
-            #Add in any withdrawals liable to tax for the tax year
-            income += self.cashOutByYear.get(taxYear, Decimal(0.0)) if len(self.cashOutByYear) > 0 else Decimal(0.0)
-            #Remove any tax free cash
-            income -= self.taxfreeCashOutByYear.get(taxYear, Decimal(0.0)) if len(self.taxfreeCashOutByYear) > 0 else Decimal(0.0)
-        if self.taxRates['incomelowertax'] != 0:
-            #Add in any bond income for the tax year
-            income += self.incomeByYear.get(taxYear, Decimal(0.0)) if len(self.incomeByYear) > 0 else Decimal(0.0)
-            #Add in any interest income for the tax year
-            income += self.interestByYear.get(taxYear, Decimal(0.0)) if len(self.interestByYear) > 0 else Decimal(0.0)
-        
+        if self.taxRates["withdrawllowertax"] != 0:
+            # Add in any withdrawals liable to tax for the tax year
+            income += (
+                self.cashOutByYear.get(taxYear, Decimal(0.0))
+                if len(self.cashOutByYear) > 0
+                else Decimal(0.0)
+            )
+            # Remove any tax free cash
+            income -= (
+                self.taxfreeCashOutByYear.get(taxYear, Decimal(0.0))
+                if len(self.taxfreeCashOutByYear) > 0
+                else Decimal(0.0)
+            )
+        if self.taxRates["incomelowertax"] != 0:
+            # Add in any bond income for the tax year
+            income += (
+                self.incomeByYear.get(taxYear, Decimal(0.0))
+                if len(self.incomeByYear) > 0
+                else Decimal(0.0)
+            )
+            # Add in any interest income for the tax year
+            income += (
+                self.interestByYear.get(taxYear, Decimal(0.0))
+                if len(self.interestByYear) > 0
+                else Decimal(0.0)
+            )
+
         return income
+
 
 def getTaxYear(inDate):
     d = date(year=2021, month=inDate.month, day=inDate.day)
-    if (d < TAX_YEAR_START):
+    if d < TAX_YEAR_START:
         year = f"{inDate.year - 1}-{inDate.year}"
     else:
         year = f"{inDate.year}-{inDate.year+1}"
     return year
 
+
 def convertToSterling(currencyTxns, txn, amount):
-    if (currencyTxns):
-        #Find the currency conversion transaction reference
-        #Go forward in time to the next currency conversion event
+    if currencyTxns:
+        # Find the currency conversion transaction reference
+        # Go forward in time to the next currency conversion event
         timeDiff = timedelta(weeks=1000)
-        zeroDelta = timedelta(seconds = 0)
+        zeroDelta = timedelta(seconds=0)
+        convTxn = None
         for ctxn in currencyTxns:
             if ctxn.credit != 0:
-                txnDelta = ctxn.date - txn.date    
-                if (txnDelta > zeroDelta and txnDelta < timeDiff):
+                txnDelta = ctxn.date - txn.date
+                if txnDelta > zeroDelta and txnDelta < timeDiff:
                     convTxn = ctxn
-        if not ctxn:
-            #didnt fine one later - choose the nearest one 
+        if not convTxn:
+            # didnt fine one later - choose the nearest one
             for ctxn in currencyTxns:
                 if ctxn.credit != 0:
-                    txnDelta = abs(ctxn.date - txn.date)    
-                    if (txnDelta < timeDiff):
+                    txnDelta = abs(ctxn.date - txn.date)
+                    if txnDelta < timeDiff:
                         convTxn = ctxn
-        #Find the associated currency to sterling conversion rate
-        if ctxn:
-            convRate = ctxn.credit / ctxn.qty
-            #Multiply amount by conversion rate
+        # Find the associated currency to sterling conversion rate
+        if convTxn:
+            convRate = convTxn.credit / convTxn.qty
+            # Multiply amount by conversion rate
             ret = amount * convRate
         else:
             print(f"Failed to find a conversion transaction for currency for txn {txn}")
@@ -724,49 +969,50 @@ def convertToSterling(currencyTxns, txn, amount):
 
     return ret
 
+
 def priceStrToDec(strValue):
-    if (not strValue or strValue.strip == ''):
+    if not strValue or strValue.strip == "":
         val = Decimal(0.0)
         currency = STERLING
     else:
-        if strValue.startswith ('£'):
-            valStr = strValue.replace('£', '')
+        if strValue.startswith("£"):
+            valStr = strValue.replace("£", "")
             currency = STERLING
-        elif strValue.endswith('p'):
+        elif strValue.endswith("p"):
             currency = STERLING
             valStr = strValue
-        elif strValue.startswith ('$'):
-            valStr = strValue.replace('$', '')
+        elif strValue.startswith("$"):
+            valStr = strValue.replace("$", "")
             currency = USD
-        elif strValue.startswith ('€'):
-            valStr = strValue.replace('€', '')
+        elif strValue.startswith("€"):
+            valStr = strValue.replace("€", "")
             currency = EUR
         else:
             valStr = strValue
             currency = STERLING
             print(f"Warning: Unrecognised currency, assuming sterling {strValue}")
 
-        valStr = valStr.replace(',', '')
-        if (currency == STERLING and 'p' in valStr):
-            valStr = valStr.replace('p', '')
+        valStr = valStr.replace(",", "")
+        if currency == STERLING and "p" in valStr:
+            valStr = valStr.replace("p", "")
             val = Decimal(valStr) / 100
         else:
             val = Decimal(valStr)
     return (currency, val)
 
+
 def calcTaxBand(thresholds, income):
-    incomeTaxAllowance = Decimal(thresholds['incometaxallowance'])
-    incomeUpperThreshold = Decimal(thresholds['incomeupperthreshold'])
-    incomeAdditionalThreshold = Decimal(thresholds['incomeadditionalthreshold'])
+    incomeTaxAllowance = Decimal(thresholds["incometaxallowance"])
+    incomeUpperThreshold = Decimal(thresholds["incomeupperthreshold"])
+    incomeAdditionalThreshold = Decimal(thresholds["incomeadditionalthreshold"])
 
     if income > incomeTaxAllowance and income <= incomeUpperThreshold:
-        taxBand = 'lower'
+        taxBand = "lower"
     elif income > incomeUpperThreshold and income <= incomeAdditionalThreshold:
-        taxBand = 'upper'
+        taxBand = "upper"
     elif income > incomeAdditionalThreshold:
-        taxBand = 'additional'
+        taxBand = "additional"
     else:
         taxBand = None
 
     return taxBand
-

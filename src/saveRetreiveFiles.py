@@ -36,7 +36,7 @@ def datetime_parser(value):
 def retreiveLocal(fileName):
     jsonContent = None
     if (os.path.exists(fileName)):
-        fp = open(fileName, 'r')
+        fp = open(fileName, 'rt')
         try:
             jsonContent = json.load(fp, object_hook=datetime_parser)
         except json.JSONDecodeError:
@@ -46,7 +46,7 @@ def retreiveLocal(fileName):
 
 
 def saveLocal(fileName, content):
-    fp = open(fileName, 'w+')
+    fp = open(fileName, 'w+t')
     infoJson = json.dumps(content, default=myconverter)
     fp.write(infoJson)
     fp.close()
@@ -55,12 +55,14 @@ def saveLocal(fileName, content):
 def deleteLocal(fileName):
     ret = True
     if (os.path.exists(fileName)):
-        ret = os.remove(fileName)
+        os.remove(fileName)
+    else:
+        ret = False
     return ret
 
 def retreiveHdfs(client, fileName):
     jsonContent = None
-    if (client.status(fileName, strict=False) != None):
+    if (client.status(fileName, strict=False) is not None):
         with client.read(fileName, encoding='utf-8') as reader:
             try:
                 jsonContent = json.load(reader, object_hook=datetime_parser)
@@ -267,10 +269,11 @@ def saveStringToDropbox(config, path, dataStr):
     dropBoxRemote = config.getboolean('localStore')
     if dropBoxRemote:
         dbx = dropbox.Dropbox(dropboxAccessToken)
-        dbx.files_upload(dataStr.encode("utf-8"), path, mode=dropbox.files.WriteMode.overwrite, mute=True)
+        dbx.files_upload(dataStr.encode("utf-8"), path, 
+                         mode=dropbox.files.WriteMode.overwrite, mute=True)
     else:
         #Dropbox is synced locally so can write to a local dir to upload to DB
-        dir = config['dropBoxLocalDir']
-        fp = open(dir+path, 'w+t')
+        dbDir = config['dropBoxLocalDir']
+        fp = open(dbDir+path, 'w+t')
         fp.write(dataStr)
 
