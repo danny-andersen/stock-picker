@@ -375,15 +375,24 @@ def getPortfolioOverviews(
             securitiesByDate[portDate] = securitiesBySymbol
         with open(f"{portfolioDir}/{portfolioFile}", encoding="utf-8") as csvFile:
             csv_reader = csv.DictReader(csvFile, dialect="excel")
+            # print(csv_reader.fieldnames)
+            symbolField = None
+            for fieldname in csv_reader.fieldnames:
+                if "Symbol" in fieldname:
+                    symbolField = fieldname
             for row in csv_reader:
-                if row['\ufeff"Symbol"'].strip() != "":
+                if row[symbolField].strip() != "":
                     security = Security(
                         date=mtime,
-                        symbol=row['\ufeff"Symbol"'].strip().replace("..", "."),
+                        symbol=row[symbolField].strip().replace("..", "."),
                         qty=0 if row["Qty"] == "" else float(row["Qty"]),
-                        desc=row["Description"],
+                        desc=row.get("Description", ""),
                         gain=row["Gain"],
                     )
+                    if security.symbol.endswith("."):
+                        security.symbol = security.symbol + "L"
+                    if len(security.symbol) < 6:
+                        security.symbol = security.symbol + ".L"
                     security.isin = isinBySymbol.get(security.symbol, None)
                     if security.isin:
                         security.type = fundOverviews[security.isin].fundType
@@ -415,7 +424,7 @@ def getStoredTransactions(config):
     return stockListByAcc
 
 
-def processLatestTxnFiles(config, stockListByAcc):
+def processLatestTxnFiles(config, stockListByAcc, isinBySymbol):
     """_summary_
 
     Args:
@@ -457,8 +466,15 @@ def processLatestTxnFiles(config, stockListByAcc):
 
         with open(f"{transDir}/{txnFile}", encoding="utf-8") as csvFile:
             csv_reader = csv.DictReader(csvFile)
+            dateField = None
+            for fieldname in csv_reader.fieldnames:
+                if fieldname.strip().endswith("Date"):
+                    dateField = fieldname
+            if not dateField:
+                dateField = "Settlement Date"
             for row in csv_reader:
-                dt = row["Date"].strip()
+                # print(", ".join(row))
+                dt = row[dateField].strip()
                 fmt = None
                 if "/" in dt:
                     if len(dt) == 8:
@@ -471,28 +487,42 @@ def processLatestTxnFiles(config, stockListByAcc):
                     print(f"Unsupported date format: {dt}. Exiting!! \n")
                     exit()
                 txn = Transaction(
-                    date=datetime.strptime(row["Date"], fmt).replace(
+                    date=datetime.strptime(row[dateField], fmt).replace(
                         tzinfo=timezone.utc
                     ),
                     ref=row["Reference"],
                     symbol=row["Symbol"].strip(),
                     sedol=row["Sedol"].strip(),
-                    isin=row["ISIN"].strip(),
-                    qty=0 if row["Quantity"] == "" else int(row["Quantity"]),
+                    isin=row.get("ISIN", "x").strip(),
+                    qty=int(row.get("Quantity", 0)),
                     desc=row["Description"],
                     accountName=accountName,
                 )
-                (txn.priceCurrency, txn.price) = priceStrToDec(row["Price"])
-                (txn.debitCurrency, txn.debit) = priceStrToDec(row["Debit"])
-                (txn.creditCurrency, txn.credit) = priceStrToDec(row["Credit"])
+                (txn.priceCurrency, txn.price) = priceStrToDec(row.get("Price", ""))
+                (txn.debitCurrency, txn.debit) = priceStrToDec(row.get("Debit", ""))
+                (txn.creditCurrency, txn.credit) = priceStrToDec(row.get("Credit", ""))
                 desc = txn.desc.lower()
+                if txn.isin == "x":
+                    # ISIN was not in CSV file - use mapping file
+                    if (
+                        txn.symbol != "n/a"
+                        and not txn.symbol.startswith(NO_STOCK)
+                        and txn.symbol != ""
+                    ):
+                        # This will blow up if missing stock from overview file
+                        txn.isin = isinBySymbol[txn.symbol]
+                    else:
+                        txn.isin = ""
                 if txn.isin != "":
                     # Map any old isin to new isin
                     txn.isin = isinMapping.get(txn.isin, txn.isin)
-                if txn.isin.startswith(NO_STOCK) or (
-                    txn.isin == "" and txn.symbol == ""
+                if (
+                    txn.isin.startswith(NO_STOCK)
+                    or (txn.isin == "" and txn.symbol == "")
+                    or txn.symbol == "n/a"
                 ):
                     txn.isin = NO_STOCK
+                    txn.symbol = NO_STOCK
                 if (
                     desc.startswith("div")
                     or desc.endswith("distribution")
@@ -731,16 +761,16 @@ def processTransactions(config):
     configStore = config["store"]
     owner = config["owner"]["accountowner"]
 
+    # Get Fund overview stats
+    fundOverviews: dict[str, FundOverview]
+    (fundOverviews, isinBySymbol) = getFundOverviews(config)
     # Get previously stored transactions
     stockListByAcc = getStoredTransactions(config)
     # Process any new transactions
     print(f"{datetime.now()}: Processing latest transaction files", flush=True)
     allTxns: dict[str, list[Transaction]] = processLatestTxnFiles(
-        config, stockListByAcc
+        config, stockListByAcc, isinBySymbol
     )
-    # Get Fund overview stats
-    fundOverviews: dict[str, FundOverview]
-    (fundOverviews, isinBySymbol) = getFundOverviews(config)
     # Get Latest Account Portfolio positions
     portfolioDir = (
         f"{config['owner']['accountowner']}/{config['files']['portfoliosLocation']}"

@@ -970,8 +970,8 @@ def convertToSterling(currencyTxns, txn, amount):
     return ret
 
 
-def priceStrToDec(strValue):
-    if not strValue or strValue.strip == "":
+def priceStrToDec(strValue: str):
+    if not strValue or strValue.strip() == "" or strValue.strip().lower() == "n/a":
         val = Decimal(0.0)
         currency = STERLING
     else:
@@ -990,7 +990,7 @@ def priceStrToDec(strValue):
         else:
             valStr = strValue
             currency = STERLING
-            print(f"Warning: Unrecognised currency, assuming sterling {strValue}")
+            print(f"Warning: Unrecognised currency, assuming sterling: {strValue}")
 
         valStr = valStr.replace(",", "")
         if currency == STERLING and "p" in valStr:
