@@ -11,6 +11,7 @@ from getStockLedgerStr import (
     getStockLedgerStr,
     getAccountSummaryStrs,
 )
+from decimal import Decimal
 
 
 def saveStockLedger(config, accountSummary: AccountSummary):
@@ -391,7 +392,7 @@ def getPortfolioOverviews(
                     )
                     if security.symbol.endswith("."):
                         security.symbol = security.symbol + "L"
-                    if len(security.symbol) < 6:
+                    elif len(security.symbol) < 6:
                         security.symbol = security.symbol + ".L"
                     security.isin = isinBySymbol.get(security.symbol, None)
                     if security.isin:
@@ -494,7 +495,7 @@ def processLatestTxnFiles(config, stockListByAcc, isinBySymbol):
                     symbol=row["Symbol"].strip(),
                     sedol=row["Sedol"].strip(),
                     isin=row.get("ISIN", "x").strip(),
-                    qty=int(row.get("Quantity", 0)),
+                    qty=int(row.get("Quantity", -1)),
                     desc=row["Description"],
                     accountName=accountName,
                 )
@@ -502,6 +503,22 @@ def processLatestTxnFiles(config, stockListByAcc, isinBySymbol):
                 (txn.debitCurrency, txn.debit) = priceStrToDec(row.get("Debit", ""))
                 (txn.creditCurrency, txn.credit) = priceStrToDec(row.get("Credit", ""))
                 desc = txn.desc.lower()
+                if txn.qty == -1 and "S Date" in desc:
+                    # Missing quantity column and its a buy /sell txn - derive from desc
+                    descParts = desc.split()
+                    vals = []
+                    for p in descParts:
+                        try:
+                            vals.append(int(p))
+                        except:
+                            try:
+                                vals.append(Decimal(p))
+                            except:
+                                pass
+                    if vals.len >= 2:
+                        txn.qty = vals[0]
+                        txn.price = vals[1]
+
                 if txn.isin == "x":
                     # ISIN was not in CSV file - use mapping file
                     if (
@@ -509,6 +526,10 @@ def processLatestTxnFiles(config, stockListByAcc, isinBySymbol):
                         and not txn.symbol.startswith(NO_STOCK)
                         and txn.symbol != ""
                     ):
+                        if txn.symbol.endswith("."):
+                            txn.symbol = txn.symbol + "L"
+                        elif len(txn.symbol) < 6:
+                            txn.symbol = txn.symbol + ".L"
                         # This will blow up if missing stock from overview file
                         txn.isin = isinBySymbol[txn.symbol]
                     else:
@@ -534,7 +555,7 @@ def processLatestTxnFiles(config, stockListByAcc, isinBySymbol):
                 elif txn.qty != 0:
                     if txn.credit != 0:
                         txn.type = SELL
-                    else:
+                    elif txn.debit != 0:
                         txn.type = BUY
                 elif (
                     desc.startswith("debit card")
