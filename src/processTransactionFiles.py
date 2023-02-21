@@ -382,10 +382,11 @@ def getPortfolioOverviews(
                 if "Symbol" in fieldname:
                     symbolField = fieldname
             for row in csv_reader:
-                if row[symbolField].strip() != "":
+                symbolTxt = row[symbolField].strip()
+                if symbolTxt != "" and not "Total" in symbolTxt:
                     security = Security(
                         date=mtime,
-                        symbol=row[symbolField].strip().replace("..", "."),
+                        symbol=symbolTxt.replace("..", "."),
                         qty=0 if row["Qty"] == "" else float(row["Qty"]),
                         desc=row.get("Description", ""),
                         gain=row["Gain"],
