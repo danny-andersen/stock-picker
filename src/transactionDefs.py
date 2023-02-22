@@ -321,6 +321,7 @@ class CapitalGain:
     qty: int
     price: Decimal
     transaction: str
+    avgBuyPrice: Decimal
 
 
 @dataclass
@@ -364,8 +365,26 @@ class SecurityDetails:
         else:
             return 0.0
 
+    def historicCashInvested(self):
+        cashInv = 0
+        for inv in self.investmentHistory:
+            if inv.transaction == BUY:
+                cashInv += inv.avgBuyPrice * inv.qty
+        return cashInv
+
+    def historicCashDivested(self):
+        cashDiv = 0
+        for inv in self.investmentHistory:
+            if inv.transaction == SELL:
+                cashDiv += inv.price * inv.qty
+        return cashDiv
+
     def totalGain(self):
-        return self.paperCGT() + self.totalDividends() + self.realisedCapitalGain()
+        gain = self.totalDividends() + self.realisedCapitalGain()
+        if self.cashInvested > 0:
+            # Live investment add in paperGain
+            gain += self.paperCGT()
+        return gain
 
     def avgGainPerYear(self):
         if self.yearsHeld() > 0:
@@ -375,7 +394,12 @@ class SecurityDetails:
 
     def totalGainPerc(self):
         if self.cashInvested > 0:
-            return 100.0 * float(self.totalGain() / self.cashInvested)
+            cashInvested = float(self.historicCashInvested())
+        else:
+            # Historic stock - use historic investment
+            cashInvested = float(self.historicCashInvested())
+        if cashInvested > 0:
+            return 100.0 * float(self.totalGain()) / cashInvested
         else:
             return 0.0
 
@@ -427,10 +451,7 @@ class SecurityDetails:
         return self.realisedCapitalGain() + self.paperCGT()
 
     def paperCGT(self):
-        if self.currentSharePrice:
-            return self.marketValue() - self.totalInvested
-        else:
-            return Decimal(0.0)
+        return self.marketValue() - self.totalInvested
 
     def paperCGTPerc(self):
         if self.totalInvested:

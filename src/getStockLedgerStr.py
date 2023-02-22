@@ -882,7 +882,7 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
 
     dom.appendChild(h2("Payments by Tax Year"))
     for yr in [lastTaxYear, currentTaxYear]:
-        dom.appendChild(h3("Tax Year {yr}"))
+        dom.appendChild(h3(f"Tax Year {yr}"))
         dom.appendChild(h3("Dividend Payments"))
         txnTable = table()
         if allAccounts:
@@ -899,6 +899,7 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
             if yr in accountSummary.dividendTxnsByYear
             else list(),
             key=lambda txn: txn.date,
+            reverse=True,
         )
         for txn in txns:
             row = tr()
@@ -938,7 +939,7 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
             if yr in accountSummary.interestTxnsByYear
             else list()
         )
-        txns = sorted(txns, key=lambda txn: txn.date)
+        txns = sorted(txns, key=lambda txn: txn.date, reverse=True)
         for txn in txns:
             row = tr()
             if allAccounts:
@@ -980,7 +981,8 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
                 th("Balance"),
             )
         )
-    for txn in accountSummary.transactions:
+    txns = sorted(accountSummary.transactions, key=lambda txn: txn.date, reverse=True)
+    for txn in txns:
         row = tr()
         row.appendChild(td(f"{txn.date}"))
         if allAccounts:
@@ -1126,7 +1128,7 @@ def getSecurityStrs(
             "Name",
             "Fees",
             "Cash inv",
-            "Market Value",
+            "Cash div",
             "Capital Gain",
             "Dividends",
             "Yield",
@@ -1178,10 +1180,12 @@ def getSecurityStrs(
             fees = "N/A"
         stockRow.appendChild(td(fees))
         csvRow["Fees"] = fees
-        stockRow.appendChild(td(f"£{stockDetails.cashInvested:,.0f}"))
-        csvRow["Cash inv"] = stockDetails.cashInvested
-        stockRow.appendChild(td(f"£{stockDetails.marketValue():,.0f}"))
-        csvRow["Market Value"] = stockDetails.marketValue()
+        cashInvested = stockDetails.historicCashInvested()
+        stockRow.appendChild(td(f"£{cashInvested:,.0f}"))
+        csvRow["Cash inv"] = cashInvested
+        cashed = stockDetails.historicCashDivested()
+        stockRow.appendChild(td(f"£{cashed:,.0f}"))
+        csvRow["Cash div"] = cashed
         stockRow.appendChild(td(f"£{stockDetails.realisedCapitalGain():,.0f}"))
         csvRow["Capital Gain"] = stockDetails.realisedCapitalGain()
         stockRow.appendChild(td(f"£{stockDetails.totalDividends():,.0f}"))

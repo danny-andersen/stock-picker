@@ -170,7 +170,11 @@ def processStockTxns(
             )  # Stamp duty and charges
             details.investmentHistory.append(
                 CapitalGain(
-                    date=txn.date, qty=txn.qty, price=priceIncCosts, transaction=BUY
+                    date=txn.date,
+                    qty=txn.qty,
+                    price=priceIncCosts,
+                    transaction=BUY,
+                    avgBuyPrice=priceIncCosts,
                 )
             )
         elif txn_type == SELL:
@@ -202,7 +206,11 @@ def processStockTxns(
             details.totalInvested = details.avgSharePrice * details.qtyHeld
             details.investmentHistory.append(
                 CapitalGain(
-                    date=txn.date, qty=txn.qty, price=priceIncCosts, transaction=SELL
+                    date=txn.date,
+                    qty=txn.qty,
+                    price=priceIncCosts,
+                    transaction=SELL,
+                    avgBuyPrice=details.avgSharePrice,
                 )
             )
             if details.qtyHeld <= 0:
