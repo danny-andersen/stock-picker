@@ -504,7 +504,7 @@ def processLatestTxnFiles(config, stockListByAcc, isinBySymbol):
                 (txn.debitCurrency, txn.debit) = priceStrToDec(row.get("Debit", ""))
                 (txn.creditCurrency, txn.credit) = priceStrToDec(row.get("Credit", ""))
                 desc = txn.desc.lower()
-                if txn.qty == -1 and "S Date" in desc:
+                if txn.qty == -1 and "s date" in desc:
                     # Missing quantity column and its a buy /sell txn - derive from desc
                     descParts = desc.split()
                     vals = []
@@ -516,7 +516,7 @@ def processLatestTxnFiles(config, stockListByAcc, isinBySymbol):
                                 vals.append(Decimal(p))
                             except:
                                 pass
-                    if vals.len >= 2:
+                    if len(vals) >= 2:
                         txn.qty = vals[0]
                         txn.price = vals[1]
 
@@ -533,6 +533,10 @@ def processLatestTxnFiles(config, stockListByAcc, isinBySymbol):
                             txn.symbol = txn.symbol + ".L"
                         # This will blow up if missing stock from overview file
                         txn.isin = isinBySymbol[txn.symbol]
+                    elif txn.sedol != "n/a":
+                        # Map by Sedol
+                        # This will blow up if missing stock from overview file
+                        txn.isin = isinBySymbol[txn.sedol]
                     else:
                         txn.isin = ""
                 if txn.isin != "":
