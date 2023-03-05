@@ -204,15 +204,18 @@ def processStockTxns(
                     details.costsByYear.get(taxYear, Decimal(0.0)) + costs
                 )  # Stamp duty and charges
             details.totalInvested = details.avgSharePrice * details.qtyHeld
-            details.investmentHistory.append(
-                CapitalGain(
-                    date=txn.date,
-                    qty=txn.qty,
-                    price=priceIncCosts,
-                    transaction=SELL,
-                    avgBuyPrice=details.avgSharePrice,
-                )
+            cg = CapitalGain(
+                date=txn.date,
+                qty=txn.qty,
+                price=priceIncCosts,
+                transaction=SELL,
+                avgBuyPrice=details.avgSharePrice,
             )
+            if taxYear in details.cgtransactionsByYear:
+                details.cgtransactionsByYear[taxYear].append(cg)
+            else:
+                details.cgtransactionsByYear[taxYear] = [cg]
+            details.investmentHistory.append(cg)
             if details.qtyHeld <= 0:
                 # This is a stock close out txn
                 # Start a new set of security details, with the old one stored in history

@@ -9,7 +9,13 @@ import plotly.express as px
 from pandas import DataFrame
 from domonic.html import td, tr, th, a, body, table, h1, h2, h3, html, meta
 
-from transactionDefs import AccountSummary, getTaxYear, FundType, SecurityDetails
+from transactionDefs import (
+    AccountSummary,
+    getTaxYear,
+    FundType,
+    SecurityDetails,
+    CapitalGain,
+)
 
 
 def getAccountSummaryStr(accountSummary: AccountSummary):
@@ -302,6 +308,66 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
                 td(f"£{totalIncomeTax:,.0f}"),
             )
         )
+        dom.appendChild(tx)
+        dom.appendChild(h3("Taxable Capital Gain Transactions"))
+        tx = table()
+        tx.appendChild(
+            tr(
+                th(" Account "),
+                th(" Date "),
+                th(" Stock "),
+                th(" Qty "),
+                th(" Avg Buy Price "),
+                th(" Sell Price "),
+                th(" Capital Gain "),
+            )
+        )
+        totalTaxableCG = Decimal(0.0)
+        cgtxns: list[(account, SecurityDetails, CapitalGain)] = []
+        for account in accounts:
+            accountLocation = f"./{account.name}-Summary.html#Tax%20Liability"
+            cgRealised = account.realisedGainForTaxByYear.get(yr, 0)
+            if cgRealised > 0 and Decimal(account.taxRates["capitalgainlowertax"]) > 0:
+                # Have some CGT for this year for this account - go through each stock to get the CG transactions for that tax year - this will include all historic stocks
+                for stock in account.stocks:
+                    txns = stock.cgtransactionsByYear.get(yr, [])
+                    for details in stock.historicHoldings:
+                        txns.extend(details.cgtransactionsByYear.get(yr, []))
+                    for txn in txns:
+                        cgtxns.append((account, stock, txn))
+        cgtxns = sorted(cgtxns, key=lambda txn: txn[-1].date, reverse=False)
+        for cgtxn in cgtxns:
+            (account, stock, cg) = cgtxn
+            capGain = cg.qty * (cg.price - cg.avgBuyPrice)
+            totalTaxableCG += capGain
+            tx.appendChild(
+                tr(
+                    td(a(f"{account.name}", _href=accountLocation)),
+                    td(f"{cg.date.date()}"),
+                    td(
+                        a(
+                            f"{stock.symbol}",
+                            _href=f"./{account.name}/{stock.symbol}.txt",
+                        )
+                    ),
+                    td(f"{cg.qty:,.0f}"),
+                    td(f"£{cg.avgBuyPrice:,.2f}"),
+                    td(f"£{cg.price:,.2f}"),
+                    td(f"£{capGain:,.2f}"),
+                )
+            )
+        tx.appendChild(
+            tr(
+                td("Total"),
+                td("-"),
+                td("-"),
+                td("-"),
+                td("-"),
+                td("-"),
+                td(f"£{totalTaxableCG:,.0f}"),
+            )
+        )
+
         dom.appendChild(tx)
 
     if len(accountSummary.historicValue) > 0:
@@ -1115,7 +1181,7 @@ def getSecurityStrs(
         secIO.close()
 
     historicStocks = sorted(
-        historicStocks, key=lambda stock: stock.avgGainPerYearPerc(), reverse=True
+        historicStocks, key=lambda stock: stock.endDate, reverse=True
     )
     dom.append(h2("Previous Security Holdings"))
     stockTable = table()

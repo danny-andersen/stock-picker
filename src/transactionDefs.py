@@ -339,6 +339,7 @@ class SecurityDetails:
     totalInvested: Decimal = Decimal(0.0)
     avgSharePrice: Decimal = Decimal(0.0)
     realisedCapitalGainByYear: dict[str, Decimal(0.0)] = field(default_factory=dict)
+    cgtransactionsByYear: dict[str, list[CapitalGain]] = field(default_factory=dict)
     currentSharePrice: Decimal = Decimal(0.0)
     currentSharePriceDate: datetime = None
     costsByYear: dict[str, Decimal(0.0)] = field(default_factory=dict)

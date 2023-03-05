@@ -496,7 +496,9 @@ def processLatestTxnFiles(config, stockListByAcc, isinBySymbol):
                     symbol=row["Symbol"].strip(),
                     sedol=row["Sedol"].strip(),
                     isin=row.get("ISIN", "x").strip(),
-                    qty=int(row.get("Quantity", -1)),
+                    qty=-1
+                    if row.get("Quantity", "").strip() == ""
+                    else int(row.get("Quantity", "").strip()),
                     desc=row["Description"],
                     accountName=accountName,
                 )
