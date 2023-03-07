@@ -100,6 +100,12 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
     smry = table()
     smry.appendChild(tr(td("Date report generated"), td(f"{nowDate.date()}")))
     smry.appendChild(
+        tr(
+            td("Portfolio Valuation Date"),
+            td(f"{accountSummary.portfolioValueDate.date()}"),
+        )
+    )
+    smry.appendChild(
         tr(td("Date account opened"), td(f"{accountSummary.dateOpened.date()}"))
     )
     smry.appendChild(

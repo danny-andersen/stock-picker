@@ -466,6 +466,7 @@ class AccountSummary:
     name: str
     owner: str
     dateOpened: datetime = datetime.now(timezone.utc)
+    portfolioValueDate: datetime = datetime.now()
     totalCashInvested: Decimal = Decimal(0.0)
     totalDiviReInvested: Decimal = Decimal(0.0)
     cashBalance: Decimal = Decimal(0.0)
@@ -510,6 +511,8 @@ class AccountSummary:
         self.mergedAccounts.append(summary)
         if summary.dateOpened < self.dateOpened:
             self.dateOpened = summary.dateOpened
+        if summary.portfolioValueDate < self.portfolioValueDate:
+            self.portfolioValueDate = summary.portfolioValueDate
         self.totalCashInvested += summary.totalCashInvested
         self.totalDiviReInvested += summary.totalDiviReInvested
         self.totalMarketValue += summary.totalMarketValue

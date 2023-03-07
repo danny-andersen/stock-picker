@@ -839,6 +839,7 @@ def processTransactions(config):
         currentByDate = currentPortfolioByDateByAccount.get(account, None)
         if currentByDate:
             currentPortfolio = currentByDate[list(currentByDate)[0]]
+            accountSummary.portfolioValueDate = list(currentByDate.keys())[0]
         else:
             currentPortfolio = None
         sortedStocks = dict()

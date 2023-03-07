@@ -1,8 +1,6 @@
 from decimal import Decimal
-from datetime import datetime, timedelta, date, timezone
+from datetime import datetime, timedelta, timezone
 
-from getLatestPrices import getAndSaveStockPrices
-from processStock import calcPriceData
 from transactionDefs import *
 
 
@@ -130,21 +128,24 @@ def processStockTxns(
     for txn in txns:
         txn_type = txn.type
         taxYear = getTaxYear(txn.date)
-        if txn_type == BUY:
-            if not details.symbol and txn.symbol != "":
+        if not details.symbol:
+            if txn.symbol != "":
                 if txn.symbol.endswith("."):
                     details.symbol = txn.symbol + "L"
                 else:
                     details.symbol = txn.symbol + ".L"
-            if not details.name:
-                details.name = txn.desc
-            if not details.sedol:
-                details.sedol = txn.sedol
-            if not details.isin:
-                details.isin = txn.isin
-                details.fundOverview = funds.get(details.isin, None)
-            if not details.startDate:
-                details.startDate = txn.date
+            elif txn.sedol:
+                details.symbol = txn.sedol
+        if not details.name:
+            details.name = txn.desc
+        if not details.sedol:
+            details.sedol = txn.sedol
+        if not details.isin:
+            details.isin = txn.isin
+            details.fundOverview = funds.get(details.isin, None)
+        if not details.startDate:
+            details.startDate = txn.date
+        if txn_type == BUY:
             details.qtyHeld += txn.qty
             debit = convertToSterling(
                 stocks.get(txn.debitCurrency, None), txn, txn.debit
