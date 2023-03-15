@@ -18,70 +18,73 @@ from transactionDefs import (
 )
 
 
-def getAccountSummaryStr(accountSummary: AccountSummary):
-    retStr = f"Summary for Account: {accountSummary.name}\n"
-    retStr += f"Date account opened: {accountSummary.dateOpened.date()}\n"
-    retStr += (
-        f"Total cash invested in account: £{accountSummary.totalInvested():,.0f}\n"
-    )
-    retStr += f"Total Dividends re-invested in account: £{accountSummary.totalDiviReInvested:,.0f}\n"
-    retStr += f"Total invested in securities: £{accountSummary.totalInvestedInSecurities:,.0f}\n"
-    retStr += f"Total current market value: £{accountSummary.totalMarketValue:,.0f}\n"
-    retStr += f"Paper Capital Gain: £{accountSummary.totalPaperGainForTax:,.0f} ({accountSummary.totalPaperGainForTaxPerc():0.2f}%)\n"
-    retStr += f"Realised Capital gain: £{accountSummary.totalRealisedGain():,.0f}\n"
-    retStr += f"Total Capital gain: £{accountSummary.totalRealisedGain()+accountSummary.totalPaperGainForTax:,.0f}\n"
-    retStr += f"Total Dividends: £{accountSummary.totalDividends():,.0f}\n"
-    retStr += f"Avg Dividend Yield: {accountSummary.avgDividends():,.0f}%\n"
-    retStr += f"Total Fees paid: £{accountSummary.totalFees():,.0f}\n"
-    retStr += f"Total Dealing costs: £{accountSummary.totalDealingCosts():,.0f}\n"
-    retStr += f"Total Return (Paper gain, dividends paid, realised gain, less fees and costs): £{accountSummary.totalGain:,.0f} ({accountSummary.totalGainPerc():0.2f}%) \n"
-    retStr += f"Actual Return (Market value less Cash invested): £{accountSummary.totalGainFromInvestments():,.0f} ({accountSummary.totalGainFromInvPerc():0.2f}%) \n"
-    retStr += f"Average return per year £{accountSummary.avgReturnPerYear():,.0f}\n"
+# def getAccountSummaryStr(accountSummary: AccountSummary):
+#     retStr = f"Summary for Account: {accountSummary.name}\n"
+#     retStr += f"Date account opened: {accountSummary.dateOpened.date()}\n"
+#     retStr += (
+#         f"Total cash invested in account: £{accountSummary.totalCashInvested():,.0f}\n"
+#     )
+#     retStr += f"Total Dividends re-invested in account: £{accountSummary.totalDiviReInvested:,.0f}\n"
+#     retStr += f"Total invested in securities: £{accountSummary.totalInvestedInSecurities:,.0f}\n"
+#     retStr += f"Total current market value (of investments): £{accountSummary.totalMarketValue:,.0f}\n"
+#     retStr += f"Total Account Value: £{accountSummary.totalMarketValue+accountSummary.cashBalance:,.0f}\n"
+#     retStr += f"Paper Capital Gain: £{accountSummary.totalPaperGainForTax:,.0f} ({accountSummary.totalPaperGainForTaxPerc():0.2f}%)\n"
+#     retStr += f"Realised Capital gain: £{accountSummary.totalRealisedGain():,.0f}\n"
+#     retStr += f"Total Capital gain: £{accountSummary.totalRealisedGain()+accountSummary.totalPaperGainForTax:,.0f}\n"
+#     retStr += f"Total Dividends: £{accountSummary.totalDividends():,.0f}\n"
+#     retStr += f"Avg Dividend Yield: {accountSummary.avgDividends():,.0f}%\n"
+#     retStr += f"Total Fees paid: £{accountSummary.totalFees():,.0f}\n"
+#     retStr += f"Total Dealing costs: £{accountSummary.totalDealingCosts():,.0f}\n"
+#     retStr += f"Actual current return (Current market value less Cash invested): £{accountSummary.totalGainFromInvestments():,.0f} ({accountSummary.totalGainFromInvPerc():0.2f}%) \n"
+#     retStr += f"Total Account Return (Paper gain, dividends paid, realised gain, less fees and costs): £{accountSummary.totalGain:,.0f} ({accountSummary.totalGainPerc():0.2f}%) \n"
+#     retStr += (
+#         f"Average account return per year £{accountSummary.avgReturnPerYear():,.0f}\n"
+#     )
 
-    startYear = procYear = accountSummary.dateOpened
-    endYear = datetime.now(timezone.utc) + timedelta(
-        days=365
-    )  # Make sure we have this tax year
-    # endYear = datetime.now(timezone.utc)
-    retStr += "\nYearly breakdown: \n"
-    while procYear < endYear:
-        years = (procYear - startYear).days / 365
-        if years % 6 == 0:
-            if years != 0:
-                retStr += tabulate(byYear, headers="keys")
-                retStr += "\n\n"
-            byYear = dict()
-            labels = list()
-            labels.append("Cash In")
-            labels.append("Cash Out")
-            labels.append("Agg Invested")
-            labels.append("Gain Realised (Tax)")
-            labels.append("Dividends")
-            labels.append("Yield %")
-            labels.append("Dealing Costs")
-            labels.append("Fees")
-            byYear["0"] = labels
-        taxYear = getTaxYear(procYear)
-        values = list()
-        values.append(accountSummary.cashInByYear.get(taxYear, Decimal(0.0)))
-        values.append(accountSummary.cashOutByYear.get(taxYear, Decimal(0.0)))
-        values.append(accountSummary.aggInvestedByYear.get(taxYear, Decimal(0.0)))
-        values.append(
-            accountSummary.realisedGainForTaxByYear.get(taxYear, Decimal(0.0))
-        )
-        values.append(accountSummary.dividendsByYear.get(taxYear, Decimal(0.0)))
-        values.append(accountSummary.dividendYieldByYear.get(taxYear, Decimal(0.0)))
-        values.append(accountSummary.dealingCostsByYear.get(taxYear, Decimal(0.0)))
-        values.append(accountSummary.feesByYear.get(taxYear, Decimal(0.0)))
-        procYear += timedelta(days=365)
-        byYear[taxYear] = values
+#     startYear = procYear = accountSummary.dateOpened
+#     endYear = datetime.now(timezone.utc) + timedelta(
+#         days=365
+#     )  # Make sure we have this tax year
+#     # endYear = datetime.now(timezone.utc)
+#     retStr += "\nYearly breakdown: \n"
+#     while procYear < endYear:
+#         years = (procYear - startYear).days / 365
+#         if years % 6 == 0:
+#             if years != 0:
+#                 retStr += tabulate(byYear, headers="keys")
+#                 retStr += "\n\n"
+#             byYear = dict()
+#             labels = list()
+#             labels.append("Cash In")
+#             labels.append("Cash Out")
+#             labels.append("Agg Invested")
+#             labels.append("Gain Realised (Tax)")
+#             labels.append("Dividends")
+#             labels.append("Yield %")
+#             labels.append("Dealing Costs")
+#             labels.append("Fees")
+#             byYear["0"] = labels
+#         taxYear = getTaxYear(procYear)
+#         values = list()
+#         values.append(accountSummary.cashInByYear.get(taxYear, Decimal(0.0)))
+#         values.append(accountSummary.cashOutByYear.get(taxYear, Decimal(0.0)))
+#         values.append(accountSummary.aggInvestedByYear.get(taxYear, Decimal(0.0)))
+#         values.append(
+#             accountSummary.realisedGainForTaxByYear.get(taxYear, Decimal(0.0))
+#         )
+#         values.append(accountSummary.dividendsByYear.get(taxYear, Decimal(0.0)))
+#         values.append(accountSummary.dividendYieldByYear.get(taxYear, Decimal(0.0)))
+#         values.append(accountSummary.dealingCostsByYear.get(taxYear, Decimal(0.0)))
+#         values.append(accountSummary.feesByYear.get(taxYear, Decimal(0.0)))
+#         procYear += timedelta(days=365)
+#         byYear[taxYear] = values
 
-    retStr += tabulate(byYear, headers="keys")
-    retStr += "\n\n\nStock Summary:\n"
-    for det in accountSummary.stocks:
-        retStr += getStockSummaryStr(det)
-    retStr += "\n\n"
-    return retStr
+#     retStr += tabulate(byYear, headers="keys")
+#     retStr += "\n\n\nStock Summary:\n"
+#     for det in accountSummary.stocks:
+#         retStr += getStockSummaryStr(det)
+#     retStr += "\n\n"
+#     return retStr
 
 
 def getAccountSummaryStrs(accountSummary: AccountSummary):
@@ -110,59 +113,14 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
     )
     smry.appendChild(
         tr(
-            td("Total cash invested in account"),
-            td(f"£{accountSummary.totalCashInvested:,.0f}"),
+            td("Total cash invested in account (all cash in less cash out)"),
+            td(f"£{accountSummary.totalCashInvested():,.0f}"),
         )
     )
     smry.appendChild(
         tr(
             td("Total Dividends re-invested in account"),
             td(f"£{accountSummary.totalDiviReInvested:,.0f}"),
-        )
-    )
-    smry.appendChild(
-        tr(
-            td("Total invested in securities"),
-            td(f"£{accountSummary.totalInvestedInSecurities:,.0f}"),
-        )
-    )
-    smry.appendChild(
-        tr(
-            td("Total current market value"),
-            td(f"£{accountSummary.totalMarketValue:,.0f}"),
-        )
-    )
-    smry.appendChild(tr(td("Cash Balance"), td(f"£{accountSummary.cashBalance:,.0f}")))
-    if accountSummary.totalOtherAccounts > 0:
-        smry.appendChild(
-            tr(
-                td("Total held in other accounts"),
-                td(f"£{accountSummary.totalOtherAccounts:,.0f}"),
-            )
-        )
-    smry.appendChild(
-        tr(td("Total Account Value"), td(f"£{accountSummary.totalValue():,.0f}"))
-    )
-    smry.appendChild(
-        tr(
-            td("Paper Capital Gain"),
-            td(
-                f"£{accountSummary.totalPaperGainForTax:,.0f} ({accountSummary.totalPaperGainForTaxPerc():0.2f}%)"
-            ),
-        )
-    )
-    smry.appendChild(
-        tr(
-            td("Realised Capital gain"),
-            td(f"£{accountSummary.totalRealisedGain():,.0f}"),
-        )
-    )
-    smry.appendChild(
-        tr(
-            td("Total Capital gain"),
-            td(
-                f"£{accountSummary.totalRealisedGain()+accountSummary.totalPaperGainForTax:,.0f}"
-            ),
         )
     )
     smry.appendChild(
@@ -201,19 +159,59 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
     )
     smry.appendChild(
         tr(
+            td("Total Historic Realised Capital gain"),
+            td(f"£{accountSummary.totalRealisedGain():,.0f}"),
+        )
+    )
+    smry.appendChild(
+        tr(
+            td("Total currently invested in securities"),
+            td(f"£{accountSummary.totalInvestedInSecurities:,.0f}"),
+        )
+    )
+    smry.appendChild(
+        tr(
+            td("Total current market value (of investments)"),
+            td(f"£{accountSummary.totalMarketValue:,.0f}"),
+        )
+    )
+    smry.appendChild(
+        tr(
+            td("Total Paper Capital Gain of current holdings"),
             td(
-                "Total Return (Paper gain, divi / income / int paid, realised gain, less fees and costs)"
+                f"£{accountSummary.totalPaperGainForTax:,.0f} ({accountSummary.totalPaperGainForTaxPerc():0.2f}%)"
             ),
+        )
+    )
+    smry.appendChild(tr(td("Cash Balance"), td(f"£{accountSummary.cashBalance:,.0f}")))
+    if accountSummary.totalOtherAccounts > 0:
+        smry.appendChild(
+            tr(
+                td("Total held in other accounts"),
+                td(f"£{accountSummary.totalOtherAccounts:,.0f}"),
+            )
+        )
+    smry.appendChild(
+        tr(
+            td("Total Account Market Value and cash"),
+            td(f"£{accountSummary.totalValue():,.0f}"),
+        )
+    )
+    smry.appendChild(
+        tr(
+            td("Total Capital gain (realised + current on paper)"),
             td(
-                f"£{accountSummary.totalGainLessFees():,.0f} ({accountSummary.totalGainPerc():0.2f}%)"
+                f"£{accountSummary.totalGainFromInvestments():,.0f}"
             ),
         )
     )
     smry.appendChild(
         tr(
-            td("Current Return of investments (Market value less Cash invested)"),
             td(
-                f"£{accountSummary.totalGainFromInvestments():,.0f} ({accountSummary.totalGainFromInvPerc():0.2f}%)"
+                "Total Historic Return (Paper + realised gain. divi / income / interest paid, less fees and costs)"
+            ),
+            td(
+                f"£{accountSummary.totalGainLessFees():,.0f} ({accountSummary.totalGainPerc():0.2f}%)"
             ),
         )
     )

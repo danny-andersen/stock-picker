@@ -17,6 +17,7 @@ def processAccountTxns(
     account.interestTxnsByYear = dict()
     # dateOpened = datetime.now().replace(tzinfo=None)
     dateOpened = datetime.now(timezone.utc)
+    txns = sorted(txns, key=lambda txn: txn.date, reverse=False)
     for txn in txns:
         txn_type = txn.type
         taxYear = getTaxYear(txn.date)
@@ -117,7 +118,7 @@ def processStockTxns(
     stocks: dict[str, list[Transaction]],
     stock,
 ):
-    txns = stocks[stock]
+    txns = sorted(stocks[stock], key=lambda txn: txn.date, reverse=False)
     lastDiviDate = None
     lastDivi = Decimal(0.0)
     details = SecurityDetails()

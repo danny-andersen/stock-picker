@@ -38,7 +38,7 @@ def summarisePerformance(
     accountSummary: AccountSummary, funds: dict[str, FundOverview]
 ):
     totalShareInvested = Decimal(0.0)
-    totalCashInvested = Decimal(0.0)
+    # totalCashInvested = Decimal(0.0)
     totalDiviReInvested = Decimal(0.0)
     totalPaperGainForTax = Decimal(0.0)
     totalGain = Decimal(0.0)
@@ -56,7 +56,7 @@ def summarisePerformance(
     totalDiviYieldByYear = dict()
     totalIncomeYieldByYear = dict()
     totalYieldByYear = dict()
-    totalMarketValue = accountSummary.cashBalance
+    totalMarketValue = 0
     totalByInstitution: dict[str, Decimal] = dict()
     detailsToProcess: list[SecurityDetails] = list()
     detailsToProcess.extend(accountSummary.stocks)
@@ -123,7 +123,7 @@ def summarisePerformance(
             )
 
         totalMarketValue += details.marketValue()
-        totalCashInvested += details.cashInvested
+        # totalCashInvested += details.cashInvested
         totalDiviReInvested += details.diviInvested
         totalShareInvested += details.totalInvested
         totalPaperGainForTax += details.paperCGT()
@@ -196,16 +196,16 @@ def summarisePerformance(
         else:
             totalByInstitution[fund.institution] = Decimal(accountSummary.cashBalance)
         fundTotals[fundType].totalValue += accountSummary.cashBalance
-        fundTotals[fundType].totalInvested += accountSummary.totalInvested()
+        fundTotals[fundType].totalInvested += accountSummary.totalCashInvested()
         fundTotals[fundType].uk += 100 * float(
             accountSummary.cashBalance
         )  # Assume UK based
         fundTotals[fundType].totGeoVal += accountSummary.cashBalance
         fundTotals[fundType].actualReturn += 100 * float(
-            accountSummary.cashBalance - accountSummary.totalInvested()
+            accountSummary.cashBalance - accountSummary.totalCashInvested()
         )  # This is a %
         # If its a cash account, update invested totals
-        totalShareInvested += accountSummary.totalInvested()
+        # totalShareInvested += accountSummary.totalCashInvested()
     else:
         # Add any cash balance of account to Cash fund
         fundType = FundType.CASH
@@ -318,17 +318,17 @@ def summarisePerformance(
             )
             feesDirectDebitDate += increment
 
-    if (
-        totalCashInvested == 0
-    ):  # This will be 0 if a cash account and so use the total invested figure
-        accountSummary.totalCashInvested = accountSummary.totalInvested()
-    else:
-        accountSummary.totalCashInvested = totalCashInvested
+    # if (
+    #     totalCashInvested == 0
+    # ):  # This will be 0 if a cash account and so use the total invested figure
+    #     accountSummary.totalCashInvested = accountSummary.totalCashInvested()
+    # else:
+    #     accountSummary.totalCashInvested = totalCashInvested
     accountSummary.totalDiviReInvested = totalDiviReInvested
     accountSummary.totalMarketValue = totalMarketValue
     accountSummary.totalInvestedInSecurities = totalShareInvested
     accountSummary.totalPaperGainForTax = totalPaperGainForTax
-    accountSummary.totalGain = totalGain
+    # accountSummary.totalGain = totalGain
     accountSummary.aggInvestedByYear = aggInvestedByYear
     accountSummary.realisedGainForTaxByYear = totalRealisedForTaxGain
     accountSummary.dealingCostsByYear = totalDealingCostsByYear
@@ -470,7 +470,8 @@ def processLatestTxnFiles(config, stockListByAcc, isinBySymbol):
             csv_reader = csv.DictReader(csvFile)
             dateField = None
             for fieldname in csv_reader.fieldnames:
-                if fieldname.strip().endswith("Date"):
+                fdn: str = fieldname.strip()
+                if fdn.endswith("Date") and not "Settlement Date" in fdn:
                     dateField = fieldname
             if not dateField:
                 dateField = "Settlement Date"
@@ -498,7 +499,7 @@ def processLatestTxnFiles(config, stockListByAcc, isinBySymbol):
                     isin=row.get("ISIN", "x").strip(),
                     qty=-1
                     if row.get("Quantity", "").strip() == ""
-                    else int(row.get("Quantity", "").strip()),
+                    else int(row["Quantity"].strip()),
                     desc=row["Description"],
                     accountName=accountName,
                 )
@@ -506,22 +507,24 @@ def processLatestTxnFiles(config, stockListByAcc, isinBySymbol):
                 (txn.debitCurrency, txn.debit) = priceStrToDec(row.get("Debit", ""))
                 (txn.creditCurrency, txn.credit) = priceStrToDec(row.get("Credit", ""))
                 desc = txn.desc.lower()
-                if txn.qty == -1 and "s date" in desc:
-                    # Missing quantity column and its a buy /sell txn - derive from desc
-                    descParts = desc.split()
-                    vals = []
-                    for p in descParts:
-                        try:
-                            vals.append(int(p))
-                        except:
+                if txn.qty == -1:
+                    if "s date" in desc:
+                        # Missing quantity column and its a buy /sell txn - derive from desc
+                        descParts = desc.split()
+                        vals = []
+                        for p in descParts:
                             try:
-                                vals.append(Decimal(p))
+                                vals.append(int(p))
                             except:
-                                pass
-                    if len(vals) >= 2:
-                        txn.qty = vals[0]
-                        txn.price = vals[1]
-
+                                try:
+                                    vals.append(Decimal(p))
+                                except:
+                                    pass
+                        if len(vals) >= 2:
+                            txn.qty = vals[0]
+                            txn.price = vals[1]
+                    else:
+                        txn.qty = 0
                 if txn.isin == "x":
                     # ISIN was not in CSV file - use mapping file
                     if (
@@ -539,6 +542,7 @@ def processLatestTxnFiles(config, stockListByAcc, isinBySymbol):
                         # Map by Sedol
                         # This will blow up if missing stock from overview file
                         txn.isin = isinBySymbol[txn.sedol]
+                        txn.symbol = txn.sedol
                     else:
                         txn.isin = ""
                 if txn.isin != "":
@@ -938,7 +942,7 @@ def processTransactions(config):
             totalValue=val,
         )
         total += val
-    otherAccounts.totalCashInvested = total
+    otherAccounts.cashInByYear["total"] = total
     otherAccounts.totalInvestedInSecurities = totalInvested
     otherAccounts.totalMarketValue = total
     otherAccounts.totalByInstitution["Other"] = total

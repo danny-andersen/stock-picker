@@ -467,14 +467,14 @@ class AccountSummary:
     owner: str
     dateOpened: datetime = datetime.now(timezone.utc)
     portfolioValueDate: datetime = datetime.now()
-    totalCashInvested: Decimal = Decimal(0.0)
     totalDiviReInvested: Decimal = Decimal(0.0)
     cashBalance: Decimal = Decimal(0.0)
     totalOtherAccounts: Decimal = Decimal(0.0)
     totalMarketValue: Decimal = Decimal(0.0)
     totalInvestedInSecurities: Decimal = Decimal(0.0)
-    totalPaperGainForTax: Decimal = Decimal(0.0)
-    totalGain: Decimal = Decimal(0.0)
+    totalPaperGainForTax: Decimal = Decimal(
+        0.0
+    )  # All paper gain of currently held securities
 
     portfolioPerc: dict[str, str] = field(default_factory=dict)
     cashInByYear: dict[str, Decimal(0.0)] = field(default_factory=dict)
@@ -513,13 +513,11 @@ class AccountSummary:
             self.dateOpened = summary.dateOpened
         if summary.portfolioValueDate < self.portfolioValueDate:
             self.portfolioValueDate = summary.portfolioValueDate
-        self.totalCashInvested += summary.totalCashInvested
         self.totalDiviReInvested += summary.totalDiviReInvested
         self.totalMarketValue += summary.totalMarketValue
         self.cashBalance += summary.cashBalance
         self.totalInvestedInSecurities += summary.totalInvestedInSecurities
         self.totalPaperGainForTax += summary.totalPaperGainForTax
-        self.totalGain += summary.totalGain
         self.transactions.extend(summary.transactions)
         # Sort all transactions by date
         self.transactions = sorted(self.transactions, key=lambda txn: txn.date)
@@ -688,9 +686,11 @@ class AccountSummary:
                     if ft not in hvdt:
                         hvdt[ft] = summaryhvdt[ft]
 
-    def totalInvested(self):
+    # Total amount of cash currently invested in the account, i.e. the difference between deposits and withdrawls, ignoring interest, costs etc
+    def totalCashInvested(self):
         return sum(self.cashInByYear.values()) - sum(self.cashOutByYear.values())
 
+    # Total of all fees paid
     def totalFees(self):
         return (
             sum(self.feesByYear.values()) if len(self.feesByYear) > 0 else Decimal(0.0)
@@ -703,8 +703,9 @@ class AccountSummary:
             else Decimal(0.0)
         )
 
+    # Total market value of account, including cash in hand
     def totalValue(self):
-        return self.totalMarketValue + self.totalOtherAccounts
+        return self.totalMarketValue + self.totalOtherAccounts + self.cashBalance
 
     def totalPaperGainForTaxPerc(self):
         if self.totalInvestedInSecurities > 0:
@@ -716,6 +717,7 @@ class AccountSummary:
         else:
             return 0
 
+    # Sum of all realised gains
     def totalRealisedGain(self):
         return (
             sum(self.realisedGainForTaxByYear.values())
@@ -723,8 +725,9 @@ class AccountSummary:
             else Decimal(0.0)
         )
 
+    # Paper gain based on current market value less cash coming into the account
     def totalGainFromInvestments(self):
-        return self.totalMarketValue - self.totalCashInvested
+        return self.totalPaperGainForTax + self.totalRealisedGain()
 
     def totalGainFromInvPerc(self):
         if self.totalInvestedInSecurities > 0:
@@ -736,9 +739,18 @@ class AccountSummary:
         else:
             return 0
 
+    # All gains realised or on paper, including dividends and interest payments
+    def totalGain(self):
+        return (
+            self.totalRealisedGain()
+            + self.totalPaperGainForTax 
+            + self.totalDividends()
+            + self.totalIncome()
+        )
+
     def totalGainLessFees(self):
         return (
-            self.totalGain - self.totalFees()
+            self.totalGain() - self.totalFees()
         )  # Dealing costs are wrapped up in stock price received
 
     def totalGainPerc(self):
@@ -758,6 +770,7 @@ class AccountSummary:
             else Decimal(0.0)
         )
 
+    # All divi + interest payments
     def totalIncome(self):
         inc = (
             sum(self.incomeByYear.values())
@@ -769,23 +782,23 @@ class AccountSummary:
             if len(self.interestByYear) > 0
             else Decimal(0.0)
         )
-        cashOutTax = float(self.taxRates.get("withdrawllowertax", 0))
-        if cashOutTax != 0:
-            # Cash out or withdrawl of funds is treated as income (e.g. a SIPP)
-            inc += (
-                sum(self.cashOutByYear.values())
-                if len(self.cashOutByYear) > 0
-                else Decimal(0.0)
-            )
+        # cashOutTax = float(self.taxRates.get("withdrawllowertax", 0))
+        # if cashOutTax != 0:
+        #     # Cash out or withdrawl of funds is treated as income (e.g. a SIPP)
+        #     inc += (
+        #         sum(self.cashOutByYear.values())
+        #         if len(self.cashOutByYear) > 0
+        #         else Decimal(0.0)
+        #     )
         return inc
 
     def totalIncomeByYear(self, year):
         inc = self.incomeByYear.get(year, Decimal(0))
         inc += self.interestByYear.get(year, Decimal(0))
-        cashOutTax = float(self.taxRates.get("withdrawllowertax", 0))
-        if cashOutTax != 0:
-            # Cash out or withdrawl of funds is treated as income (e.g. a SIPP)
-            inc += self.cashOutByYear.get(year, Decimal(0))
+        # cashOutTax = float(self.taxRates.get("withdrawllowertax", 0))
+        # if cashOutTax != 0:
+        #     # Cash out or withdrawl of funds is treated as income (e.g. a SIPP)
+        #     inc += self.cashOutByYear.get(year, Decimal(0))
         return inc
 
     def totalInterest(self):
@@ -824,7 +837,7 @@ class AccountSummary:
         endYear = datetime.now(timezone.utc)
         timeHeld = endYear - startYear
         if timeHeld.days != 0:
-            return float(self.totalGainFromInvestments()) / (timeHeld.days / 365)
+            return float(self.totalGainLessFees()) / (timeHeld.days / 365)
         else:
             return 0
 
