@@ -200,9 +200,7 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
     smry.appendChild(
         tr(
             td("Total Capital gain (realised + current on paper)"),
-            td(
-                f"£{accountSummary.totalGainFromInvestments():,.0f}"
-            ),
+            td(f"£{accountSummary.totalGainFromInvestments():,.0f}"),
         )
     )
     smry.appendChild(
@@ -1118,12 +1116,18 @@ def getSecurityStrs(
         historicStocks.extend(stockDetails.historicHoldings)
         if stockDetails.totalInvested != 0:
             stockRow = tr()
+            symbol = stockDetails.symbol
+            if symbol != "":
+                if symbol.endswith("."):
+                    symbol = symbol + "L"
+                elif len(symbol) < 6 and not symbol.endswith(".L"):
+                    symbol = symbol + ".L"
             if allAccounts:
-                detailLocation = f"./{stockDetails.account}/{stockDetails.symbol}.txt"
+                detailLocation = f"./{stockDetails.account}/{symbol}.txt"
             else:
-                detailLocation = f"./{accountSummary.name}/{stockDetails.symbol}.txt"
-            stockRow.appendChild(td(a(f"{stockDetails.symbol}", _href=detailLocation)))
-            csvRow["Security"] = stockDetails.symbol
+                detailLocation = f"./{accountSummary.name}/{symbol}.txt"
+            stockRow.appendChild(td(a(f"{symbol}", _href=detailLocation)))
+            csvRow["Security"] = symbol
             if allAccounts:
                 accountLocation = (
                     f"./{stockDetails.account}-Summary.html#Stock%20Summary"

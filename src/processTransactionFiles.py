@@ -437,6 +437,8 @@ def processLatestTxnFiles(config, stockListByAcc, isinBySymbol):
         _type_: _description_
     """
 
+    # symbolByIsIn = dict(zip(isinBySymbol.values(), isinBySymbol.keys())
+
     isinMapping = config["isinmappings"]
     configStore = config["store"]
     owner = config["owner"]["accountowner"]
@@ -525,26 +527,31 @@ def processLatestTxnFiles(config, stockListByAcc, isinBySymbol):
                             txn.price = vals[1]
                     else:
                         txn.qty = 0
-                if txn.isin == "x":
-                    # ISIN was not in CSV file - use mapping file
-                    if (
-                        txn.symbol != "n/a"
-                        and not txn.symbol.startswith(NO_STOCK)
-                        and txn.symbol != ""
-                    ):
-                        if txn.symbol.endswith("."):
-                            txn.symbol = txn.symbol + "L"
-                        elif len(txn.symbol) < 6:
-                            txn.symbol = txn.symbol + ".L"
-                        # This will blow up if missing stock from overview file
-                        txn.isin = isinBySymbol[txn.symbol]
-                    elif txn.sedol != "n/a":
-                        # Map by Sedol
-                        # This will blow up if missing stock from overview file
-                        txn.isin = isinBySymbol[txn.sedol]
-                        txn.symbol = txn.sedol
-                    else:
-                        txn.isin = ""
+                if (
+                    txn.symbol != "n/a"
+                    and not txn.symbol.startswith(NO_STOCK)
+                    and txn.symbol != ""
+                ):
+                    if txn.symbol.endswith("."):
+                        txn.symbol = txn.symbol + "L"
+                    elif len(txn.symbol) < 6 and not txn.symbol.endswith(".L"):
+                        txn.symbol = txn.symbol + ".L"
+                    if txn.isin == "x":
+                        # ISIN was not in CSV file - use mapping file
+                        if (
+                            txn.symbol != "n/a"
+                            and not txn.symbol.startswith(NO_STOCK)
+                            and txn.symbol != ""
+                        ):
+                            # This will blow up if missing stock from overview file
+                            txn.isin = isinBySymbol[txn.symbol]
+                elif txn.sedol != "n/a" and txn.sedol != "":
+                    # Map by Sedol
+                    # This will blow up if missing stock from overview file
+                    txn.isin = isinBySymbol[txn.sedol]
+                    txn.symbol = txn.sedol
+                else:
+                    txn.isin = ""
                 if txn.isin != "":
                     # Map any old isin to new isin
                     txn.isin = isinMapping.get(txn.isin, txn.isin)

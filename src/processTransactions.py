@@ -132,9 +132,10 @@ def processStockTxns(
         if not details.symbol:
             if txn.symbol != "":
                 if txn.symbol.endswith("."):
-                    details.symbol = txn.symbol + "L"
-                else:
-                    details.symbol = txn.symbol + ".L"
+                    txn.symbol = txn.symbol + "L"
+                elif len(txn.symbol) < 6 and not txn.symbol.endswith(".L"):
+                    txn.symbol = txn.symbol + ".L"
+                details.symbol = txn.symbol
             elif txn.sedol:
                 details.symbol = txn.sedol
         if not details.name:
@@ -260,12 +261,14 @@ def processStockTxns(
                 details.dividendTxnsByYear[taxYear] = {txn}
         elif txn_type == EQUALISATION:
             # This is a return of part of the initial principle, so should be taken off the investment amount
-            eql = convertToSterling(
-                stocks.get(txn.creditCurrency, None), txn, txn.credit
-            )
-            details.totalInvested -= eql
-            details.avgSharePrice = details.totalInvested / details.qtyHeld
-            details.cashInvested -= eql
+            # But only if we still have stock - can get Equalisation payments post closing position
+            if details.qtyHeld > 0:
+                eql = convertToSterling(
+                    stocks.get(txn.creditCurrency, None), txn, txn.credit
+                )
+                details.totalInvested -= eql
+                details.avgSharePrice = details.totalInvested / details.qtyHeld
+                details.cashInvested -= eql
         else:
             print(
                 f"Got a transaction type {txn_type} that dont recognise for account {account.name} and stock {stock}: Detail: {txn}\n"
