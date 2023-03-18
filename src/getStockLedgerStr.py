@@ -7,7 +7,7 @@ from dataclasses import asdict
 from tabulate import tabulate
 import plotly.express as px
 from pandas import DataFrame
-from domonic.html import td, tr, th, a, body, table, h1, h2, h3, html, meta
+from domonic.html import td, tr, th, a, body, table, h1, h2, h3, html, meta, style, head
 
 from transactionDefs import (
     AccountSummary,
@@ -18,77 +18,19 @@ from transactionDefs import (
 )
 
 
-# def getAccountSummaryStr(accountSummary: AccountSummary):
-#     retStr = f"Summary for Account: {accountSummary.name}\n"
-#     retStr += f"Date account opened: {accountSummary.dateOpened.date()}\n"
-#     retStr += (
-#         f"Total cash invested in account: £{accountSummary.totalCashInvested():,.0f}\n"
-#     )
-#     retStr += f"Total Dividends re-invested in account: £{accountSummary.totalDiviReInvested:,.0f}\n"
-#     retStr += f"Total invested in securities: £{accountSummary.totalInvestedInSecurities:,.0f}\n"
-#     retStr += f"Total current market value (of investments): £{accountSummary.totalMarketValue:,.0f}\n"
-#     retStr += f"Total Account Value: £{accountSummary.totalMarketValue+accountSummary.cashBalance:,.0f}\n"
-#     retStr += f"Paper Capital Gain: £{accountSummary.totalPaperGainForTax:,.0f} ({accountSummary.totalPaperGainForTaxPerc():0.2f}%)\n"
-#     retStr += f"Realised Capital gain: £{accountSummary.totalRealisedGain():,.0f}\n"
-#     retStr += f"Total Capital gain: £{accountSummary.totalRealisedGain()+accountSummary.totalPaperGainForTax:,.0f}\n"
-#     retStr += f"Total Dividends: £{accountSummary.totalDividends():,.0f}\n"
-#     retStr += f"Avg Dividend Yield: {accountSummary.avgDividends():,.0f}%\n"
-#     retStr += f"Total Fees paid: £{accountSummary.totalFees():,.0f}\n"
-#     retStr += f"Total Dealing costs: £{accountSummary.totalDealingCosts():,.0f}\n"
-#     retStr += f"Actual current return (Current market value less Cash invested): £{accountSummary.totalGainFromInvestments():,.0f} ({accountSummary.totalGainFromInvPerc():0.2f}%) \n"
-#     retStr += f"Total Account Return (Paper gain, dividends paid, realised gain, less fees and costs): £{accountSummary.totalGain:,.0f} ({accountSummary.totalGainPerc():0.2f}%) \n"
-#     retStr += (
-#         f"Average account return per year £{accountSummary.avgReturnPerYear():,.0f}\n"
-#     )
-
-#     startYear = procYear = accountSummary.dateOpened
-#     endYear = datetime.now(timezone.utc) + timedelta(
-#         days=365
-#     )  # Make sure we have this tax year
-#     # endYear = datetime.now(timezone.utc)
-#     retStr += "\nYearly breakdown: \n"
-#     while procYear < endYear:
-#         years = (procYear - startYear).days / 365
-#         if years % 6 == 0:
-#             if years != 0:
-#                 retStr += tabulate(byYear, headers="keys")
-#                 retStr += "\n\n"
-#             byYear = dict()
-#             labels = list()
-#             labels.append("Cash In")
-#             labels.append("Cash Out")
-#             labels.append("Agg Invested")
-#             labels.append("Gain Realised (Tax)")
-#             labels.append("Dividends")
-#             labels.append("Yield %")
-#             labels.append("Dealing Costs")
-#             labels.append("Fees")
-#             byYear["0"] = labels
-#         taxYear = getTaxYear(procYear)
-#         values = list()
-#         values.append(accountSummary.cashInByYear.get(taxYear, Decimal(0.0)))
-#         values.append(accountSummary.cashOutByYear.get(taxYear, Decimal(0.0)))
-#         values.append(accountSummary.aggInvestedByYear.get(taxYear, Decimal(0.0)))
-#         values.append(
-#             accountSummary.realisedGainForTaxByYear.get(taxYear, Decimal(0.0))
-#         )
-#         values.append(accountSummary.dividendsByYear.get(taxYear, Decimal(0.0)))
-#         values.append(accountSummary.dividendYieldByYear.get(taxYear, Decimal(0.0)))
-#         values.append(accountSummary.dealingCostsByYear.get(taxYear, Decimal(0.0)))
-#         values.append(accountSummary.feesByYear.get(taxYear, Decimal(0.0)))
-#         procYear += timedelta(days=365)
-#         byYear[taxYear] = values
-
-#     retStr += tabulate(byYear, headers="keys")
-#     retStr += "\n\n\nStock Summary:\n"
-#     for det in accountSummary.stocks:
-#         retStr += getStockSummaryStr(det)
-#     retStr += "\n\n"
-#     return retStr
-
-
 def getAccountSummaryStrs(accountSummary: AccountSummary):
     retStrs = dict()
+    ht = html(meta(_charset="UTF-8"))
+    ht.appendChild(
+        head(
+            style(
+                """
+              .positive { color: green}
+              .negative { color: red}
+        """
+            )
+        )
+    )
     dom = body()
     nowDate: datetime = datetime.now()
     if accountSummary.name == "Total":
@@ -179,7 +121,10 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
         tr(
             td("Total Paper Capital Gain of current holdings"),
             td(
-                f"£{accountSummary.totalPaperGainForTax:,.0f} ({accountSummary.totalPaperGainForTaxPerc():0.2f}%)"
+                f"£{accountSummary.totalPaperGainForTax:,.0f} ({accountSummary.totalPaperGainForTaxPerc():0.2f}%)",
+                _class="positive"
+                if accountSummary.totalPaperGainForTax > 0
+                else "negative",
             ),
         )
     )
@@ -195,12 +140,19 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
         tr(
             td("Total Account Market Value and cash"),
             td(f"£{accountSummary.totalValue():,.0f}"),
+            _style="font-weight: bold;",
         )
     )
     smry.appendChild(
         tr(
             td("Total Capital gain (realised + current on paper)"),
-            td(f"£{accountSummary.totalGainFromInvestments():,.0f}"),
+            td(
+                f"£{accountSummary.totalGainFromInvestments():,.0f}",
+                _class="positive"
+                if accountSummary.totalGainFromInvestments() > 0
+                else "negative",
+            ),
+            _style="font-weight: bold;",
         )
     )
     smry.appendChild(
@@ -209,15 +161,25 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
                 "Total Historic Return (Paper + realised gain. divi / income / interest paid, less fees and costs)"
             ),
             td(
-                f"£{accountSummary.totalGainLessFees():,.0f} ({accountSummary.totalGainPerc():0.2f}%)"
+                f"£{accountSummary.totalGainLessFees():,.0f} ({accountSummary.totalGainPerc():0.2f}%)",
+                _class="positive"
+                if accountSummary.totalGainLessFees() > 0
+                else "negative",
             ),
+            _style="font-weight: bold;",
         )
     )
 
     smry.appendChild(
         tr(
             td("Average return per year"),
-            td(f"£{accountSummary.avgReturnPerYear():,.0f}"),
+            td(
+                f"£{accountSummary.avgReturnPerYear():,.0f}",
+                _class="positive"
+                if accountSummary.totalGainLessFees() > 0
+                else "negative",
+            ),
+            _style="font-weight: bold;",
         )
     )
     dom.appendChild(smry)
@@ -284,14 +246,23 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
                     td(a(f"{account.name}", _href=accountLocation)),
                     td(f"£{cg:,.0f}"),
                     td(f"£{taxablecg:,.0f}"),
-                    td(f"£{cgt:,.0f}"),
+                    td(
+                        f"£{cgt:,.0f}",
+                        _class="positive" if cgt == 0 else "negative",
+                    ),
                     td("-"),
                     td(f"£{divi:,.0f}"),
                     td(f"£{taxableDivi:,.0f}"),
-                    td(f"£{diviTax:,.0f}"),
+                    td(
+                        f"£{diviTax:,.0f}",
+                        _class="positive" if diviTax == 0 else "negative",
+                    ),
                     td("-"),
                     td(f"£{income:,.0f}"),
-                    td(f"£{incomeTax:,.0f}"),
+                    td(
+                        f"£{incomeTax:,.0f}",
+                        _class="positive" if incomeTax == 0 else "negative",
+                    ),
                 )
             )
         # Note: Use last account processed to get remaining allowance info
@@ -300,14 +271,24 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
                 td("Total"),
                 td(f"£{totalCG:,.0f}"),
                 td(f"£{totalTaxableCG:,.0f}"),
-                td(f"£{totalCGT:,.0f}"),
+                td(
+                    f"£{totalCGT:,.0f}",
+                    _class="positive" if totalCGT == 0 else "negative",
+                ),
                 td(f"£{account.getRemainingCGTAllowance(totalTaxableCG):,.0f}"),
                 td(f"£{totalDivi:,.0f}"),
                 td(f"£{totalTaxableDivi:,.0f}"),
-                td(f"£{totalDiviTax:,.0f}"),
+                td(
+                    f"£{totalDiviTax:,.0f}",
+                    _class="positive" if totalDiviTax == 0 else "negative",
+                ),
                 td(f"£{account.getRemainingDiviAllowance(totalTaxableDivi):,.0f}"),
                 td(f"£{totalIncome:,.0f}"),
-                td(f"£{totalIncomeTax:,.0f}"),
+                td(
+                    f"£{totalIncomeTax:,.0f}",
+                    _class="positive" if totalIncomeTax == 0 else "negative",
+                ),
+                _style="font-weight: bold;",
             )
         )
         dom.appendChild(tx)
@@ -367,6 +348,7 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
                 td("-"),
                 td("-"),
                 td(f"£{totalTaxableCG:,.0f}"),
+                _style="font-weight: bold;",
             )
         )
 
@@ -451,6 +433,7 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
                             for ftyp in fundTypes
                         ]
                     ),
+                    _class="positive" if accgain > 0 else "negative",
                 )
             )
         dom.appendChild(fs)
@@ -535,6 +518,7 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
                     td(f"{fund.actualReturn:0.2f}%"),
                     td(f"{fund.return3Yr:0.2f}%"),
                     td(f"{fund.return5Yr:0.2f}%"),
+                    _class="positive" if fund.actualReturn > 0 else "negative",
                 )
             )
         else:
@@ -548,6 +532,7 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
                     td(f"{fund.actualReturn:0.2f}%"),
                     td(f"{fund.return3Yr:0.2f}%"),
                     td(f"{fund.return5Yr:0.2f}%"),
+                    _class="positive" if fund.actualReturn > 0 else "negative",
                 )
             )
         totInvested += fund.totalInvested
@@ -580,6 +565,8 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
                 td(f"{totRet/tot:0.02f}%"),
                 td(f"{tot3yrRet/tot:0.02f}%"),
                 td(f"{tot5yrRet/tot:0.02f}%"),
+                _class="positive" if totRet > 0 else "negative",
+                _style="font-weight: bold;",
             )
         )
     else:
@@ -593,6 +580,8 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
                 td(f"{totRet/tot:0.02f}%"),
                 td(f"{tot3yrRet/tot:0.02f}%"),
                 td(f"{tot5yrRet/tot:0.02f}%"),
+                _class="positive" if totRet > 0 else "negative",
+                _style="font-weight: bold;",
             )
         )
     dom.appendChild(fs)
@@ -614,10 +603,15 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
     smax = int(portPerc["stocks_max"])
     ideal = int(portPerc["stocks_ideal"])
     buy = ""
+    cls = "positive"
     if stocksPerc <= smin:
         buy = f"£{(ideal-stocksPerc)*totalAccountValue/100:,.0f}"
+        cls = "negative"
     elif stocksPerc >= smax:
         buy = f"(£{(stocksPerc-ideal)*totalAccountValue/100:,.0f})"
+        cls = "negative"
+    # if stocksPerc <= ideal:
+    #     if smin smin(smin * 0.05)
     fs.appendChild(
         tr(
             td("Stocks"),
@@ -627,6 +621,7 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
             td(f"{ideal:0.01f}%"),
             td(f"{smax:0.01f}%"),
             td(buy),
+            _class=cls,
         )
     )
     bondsPerc = 100 * totBonds / totalAccountValue
@@ -1065,7 +1060,6 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
         txnTable.appendChild(row)
     dom.appendChild(txnTable)
 
-    ht = html(meta(_charset="UTF-8"))
     ht.append(dom)
     retStrs[f"{accountSummary.name}-Summary.html"] = f"{ht}"
     return retStrs
@@ -1115,7 +1109,9 @@ def getSecurityStrs(
         csvRow = {title: "" for title in headings}
         historicStocks.extend(stockDetails.historicHoldings)
         if stockDetails.totalInvested != 0:
-            stockRow = tr()
+            stockRow = tr(
+                _class="positive" if stockDetails.totalGain() > 0 else "negative",
+            )
             symbol = stockDetails.symbol
             if symbol != "":
                 if symbol.endswith("."):
@@ -1224,7 +1220,9 @@ def getSecurityStrs(
     else:
         csvOut = None
     for stockDetails in historicStocks:
-        stockRow = tr()
+        stockRow = tr(
+            _class="positive" if stockDetails.totalGain() > 0 else "negative",
+        )
         csvRow = {title: "" for title in headings}
         if allAccounts:
             detailLocation = f"./{stockDetails.account}/{stockDetails.symbol}.txt"
