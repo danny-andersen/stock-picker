@@ -581,6 +581,7 @@ def processLatestTxnFiles(config, stockListByAcc, isinBySymbol):
                     or desc.startswith("trf")
                     or "transfer" in desc
                     or "faster payment" in desc
+                    or "tax relief" in desc
                     or "cashback" in desc
                     or ("payment" in desc and "andersen" in desc)
                     or "lump sum" in desc
