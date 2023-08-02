@@ -1008,6 +1008,18 @@ def convertToSterling(currencyTxns, txn, amount):
     return ret
 
 
+def strToDec(p: str):
+    retVal = -1
+    try:
+        retVal = int(p)
+    except:
+        try:
+            retVal = Decimal(p)
+        except:
+            pass
+    return retVal
+    
+    
 def priceStrToDec(strValue: str):
     if not strValue or strValue.strip() == "" or strValue.strip().lower() == "n/a":
         val = Decimal(0.0)

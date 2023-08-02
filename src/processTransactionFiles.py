@@ -491,6 +491,8 @@ def processLatestTxnFiles(config, stockListByAcc, isinBySymbol):
                 if not fmt:
                     print(f"Unsupported date format: {dt}. Exiting!! \n")
                     exit()
+                rowQuant = row.get("Quantity", "").strip()
+                qty=-1 if rowQuant in ("",'n/a') else strToDec(rowQuant)
                 txn = Transaction(
                     date=datetime.strptime(row[dateField], fmt).replace(
                         tzinfo=timezone.utc
@@ -499,9 +501,7 @@ def processLatestTxnFiles(config, stockListByAcc, isinBySymbol):
                     symbol=row["Symbol"].strip(),
                     sedol=row["Sedol"].strip(),
                     isin=row.get("ISIN", "x").strip(),
-                    qty=-1
-                    if row.get("Quantity", "").strip() == ""
-                    else int(row["Quantity"].strip()),
+                    qty=qty,
                     desc=row["Description"],
                     accountName=accountName,
                 )
@@ -515,13 +515,7 @@ def processLatestTxnFiles(config, stockListByAcc, isinBySymbol):
                         descParts = desc.split()
                         vals = []
                         for p in descParts:
-                            try:
-                                vals.append(int(p))
-                            except:
-                                try:
-                                    vals.append(Decimal(p))
-                                except:
-                                    pass
+                            vals.append(strToDec(p))
                         if len(vals) >= 2:
                             txn.qty = vals[0]
                             txn.price = vals[1]
