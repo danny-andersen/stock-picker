@@ -46,6 +46,7 @@ def summarisePerformance(
     totalDealingCostsByYear = dict()
     totalDivi = accountSummary.dividendsByYear
     totalIncome = accountSummary.incomeByYear
+    allIncome = accountSummary.allIncomeByYearMonth
     totalInterest = accountSummary.interestByYear
     fundTotals: dict[FundType, FundOverview] = dict()
     for typ in FundType:
@@ -181,8 +182,16 @@ def summarisePerformance(
                     accountSummary.dividendTxnsByYear[
                         year
                     ] = details.dividendTxnsByYear[year].copy()
+        for year, txns in details.dividendTxnsByYear.items():
+            for txn in txns:
+                month = txn.date.month
+                calyr = getCalYear(year, month)
+                if calyr not in allIncome:
+                    allIncome[calyr] = dict()
+                allIncome[calyr][month] = allIncome[calyr].get(month, Decimal(0.0)) + txn.credit
 
     # If a cash account, add in to CASH type
+
     if accountSummary.name in funds.keys():
         fund = funds[accountSummary.name]
         fundType = fund.fundType
@@ -335,6 +344,7 @@ def summarisePerformance(
     accountSummary.dividendsByYear = totalDivi
     accountSummary.dividendYieldByYear = totalDiviYieldByYear
     accountSummary.incomeByYear = totalIncome
+    accountSummary.allIncomeByYearMonth = allIncome
     accountSummary.incomeYieldByYear = totalIncomeYieldByYear
     accountSummary.interestByYear = totalInterest
     accountSummary.totalYieldByYear = totalYieldByYear

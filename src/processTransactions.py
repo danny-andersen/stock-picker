@@ -148,13 +148,13 @@ def processStockTxns(
         if not details.startDate:
             details.startDate = txn.date
         if txn_type == BUY:
-            details.qtyHeld += txn.qty
+            details.qtyHeld += float(txn.qty)
             debit = convertToSterling(
                 stocks.get(txn.debitCurrency, None), txn, txn.debit
             )
-            priceIncCosts = debit / txn.qty
+            priceIncCosts = debit / Decimal(txn.qty)
             if txn.price != 0:
-                costs = debit - (txn.qty * txn.price)
+                costs = debit - (Decimal(txn.qty) * txn.price)
             else:
                 costs = 0
             details.totalInvested += debit
@@ -167,14 +167,14 @@ def processStockTxns(
                 details.diviInvested += debit
             else:
                 details.cashInvested += debit
-            details.avgSharePrice = details.totalInvested / details.qtyHeld
+            details.avgSharePrice = details.totalInvested / Decimal(details.qtyHeld)
             details.costsByYear[taxYear] = (
                 details.costsByYear.get(taxYear, Decimal(0.0)) + costs
             )  # Stamp duty and charges
             details.investmentHistory.append(
                 CapitalGain(
                     date=txn.date,
-                    qty=txn.qty,
+                    qty=float(txn.qty),
                     price=priceIncCosts,
                     transaction=BUY,
                     avgBuyPrice=priceIncCosts,
@@ -188,28 +188,28 @@ def processStockTxns(
             credit = convertToSterling(
                 stocks.get(txn.creditCurrency, None), txn, txn.credit
             )
-            priceIncCosts = credit / txn.qty
+            priceIncCosts = credit / Decimal(txn.qty)
             gain = (
                 priceIncCosts - details.avgSharePrice
             ) * txn.qty  # CGT uses average purchase price at time of selling
             details.cashInvested -= (
-                details.avgSharePrice * txn.qty
+                details.avgSharePrice * Decimal(txn.qty)
             )  # Reduce amount of cash invested by amount of shares sold at avg buy price
             details.realisedCapitalGainByYear[taxYear] = (
                 details.realisedCapitalGainByYear.get(taxYear, Decimal(0.0)) + gain
             )
-            details.qtyHeld -= txn.qty
+            details.qtyHeld -= float(txn.qty)
             if txn.price != 0:
                 costs = credit - (
-                    txn.price * txn.qty
+                    txn.price * Decimal(txn.qty)
                 )  # Diff between what should have received vs what was credited
                 details.costsByYear[taxYear] = (
                     details.costsByYear.get(taxYear, Decimal(0.0)) + costs
                 )  # Stamp duty and charges
-            details.totalInvested = details.avgSharePrice * details.qtyHeld
+            details.totalInvested = details.avgSharePrice * Decimal(details.qtyHeld)
             cg = CapitalGain(
                 date=txn.date,
-                qty=txn.qty,
+                qty=float(txn.qty),
                 price=priceIncCosts,
                 transaction=SELL,
                 avgBuyPrice=details.avgSharePrice,
@@ -267,7 +267,7 @@ def processStockTxns(
                     stocks.get(txn.creditCurrency, None), txn, txn.credit
                 )
                 details.totalInvested -= eql
-                details.avgSharePrice = details.totalInvested / details.qtyHeld
+                details.avgSharePrice = details.totalInvested / Decimal(details.qtyHeld)
                 details.cashInvested -= eql
         else:
             print(

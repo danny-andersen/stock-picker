@@ -321,7 +321,7 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
         cgtxns = sorted(cgtxns, key=lambda txn: txn[-1].date, reverse=False)
         for cgtxn in cgtxns:
             (account, stock, cg) = cgtxn
-            capGain = cg.qty * (cg.price - cg.avgBuyPrice)
+            capGain = Decimal(cg.qty) * (cg.price - cg.avgBuyPrice)
             totalTaxableCG += capGain
             tx.appendChild(
                 tr(
@@ -942,6 +942,22 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
     dom.append(byYear)
 
     getSecurityStrs(accountSummary, allAccounts, dom, retStrs)
+
+    dom.appendChild(h2("Monthly Income"))
+    incTable = table()
+    incTable.appendChild(tr(th("Year"), th("Month"), th("Total Income")))
+    nowyr = datetime.now().year
+    for yr in [f"{nowyr}", f"{nowyr-1}"]:
+        total = 0
+        if yr in accountSummary.allIncomeByYearMonth:
+            incMonths = accountSummary.allIncomeByYearMonth[yr]
+            for month in range(12, 1, -1):
+                if month in incMonths:
+                    row = tr()
+                    total += incMonths[month]
+                    incTable.appendChild(tr(td(yr),td(month),td(incMonths[month])))
+            incTable.appendChild(tr(td(f'Total {yr} Income'),td('->'),td(total)))
+    dom.appendChild(incTable)
 
     dom.appendChild(h2("Payments by Tax Year"))
     for yr in [lastTaxYear, currentTaxYear]:

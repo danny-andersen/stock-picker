@@ -318,7 +318,7 @@ class Security:
 class CapitalGain:
     # Buy and sell history of stock
     date: datetime
-    qty: int
+    qty: float
     price: Decimal
     transaction: str
     avgBuyPrice: Decimal
@@ -331,7 +331,7 @@ class SecurityDetails:
     isin: str = None
     name: str = None
     account: str = None
-    qtyHeld: int = 0
+    qtyHeld: float = 0.0
     startDate: datetime = None
     endDate: datetime = None
     cashInvested: Decimal = Decimal(0.0)
@@ -370,14 +370,14 @@ class SecurityDetails:
         cashInv = 0
         for inv in self.investmentHistory:
             if inv.transaction == BUY:
-                cashInv += inv.avgBuyPrice * inv.qty
+                cashInv += inv.avgBuyPrice * Decimal(inv.qty)
         return cashInv
 
     def historicCashDivested(self):
         cashDiv = 0
         for inv in self.investmentHistory:
             if inv.transaction == SELL:
-                cashDiv += inv.price * inv.qty
+                cashDiv += inv.price * Decimal(inv.qty)
         return cashDiv
 
     def totalGain(self):
@@ -446,7 +446,7 @@ class SecurityDetails:
         )
 
     def marketValue(self):
-        return self.currentSharePrice * self.qtyHeld
+        return self.currentSharePrice * Decimal(self.qtyHeld)
 
     def capitalGain(self):
         return self.realisedCapitalGain() + self.paperCGT()
@@ -484,10 +484,11 @@ class AccountSummary:
     aggInvestedByYear: dict[str, Decimal(0.0)] = field(default_factory=dict)
     realisedGainForTaxByYear: dict[str, Decimal(0.0)] = field(default_factory=dict)
     dealingCostsByYear: dict[str, Decimal(0.0)] = field(default_factory=dict)
-    dividendsByYear: dict[str, Decimal(0.0)] = field(default_factory=dict)
+    dividendsByYear: dict[str, Decimal(0.0)] = field(default_factory=dict) #This includes all payments - dividends, bond income, interest
     dividendTxnsByYear: dict[str, set[Transaction]] = field(default_factory=dict)
     dividendYieldByYear: dict[str, Decimal(0.0)] = field(default_factory=dict)
-    incomeByYear: dict[str, Decimal(0.0)] = field(default_factory=dict)
+    incomeByYear: dict[str, Decimal(0.0)] = field(default_factory=dict) #Total income by tax year
+    allIncomeByYearMonth: dict[str, dict[str, Decimal(0.0)]] = field(default_factory=dict) #All types of income (divi, interest, bond income) broken down by month
     incomeTxnsByYear: dict[str, set[Transaction]] = field(default_factory=dict)
     interestByYear: dict[str, Decimal(0.0)] = field(default_factory=dict)
     interestTxnsByYear: dict[str, set[Transaction]] = field(default_factory=dict)
@@ -586,6 +587,20 @@ class AccountSummary:
         for yr in summary.incomeByYear:
             if yr not in self.incomeByYear:
                 self.incomeByYear[yr] = summary.incomeByYear[yr]
+
+        for yr in self.allIncomeByYearMonth:
+            if yr not in summary.allIncomeByYearMonth:
+                summary.allIncomeByYearMonth[yr] = dict()
+            for mon in self.allIncomeByYearMonth[yr]:
+                self.allIncomeByYearMonth[yr][mon] += summary.allIncomeByYearMonth[yr].get(mon, Decimal(0.0))
+            for mon in summary.allIncomeByYearMonth[yr]:
+                if mon not in self.allIncomeByYearMonth:
+                    self.allIncomeByYearMonth[yr][mon] = summary.allIncomeByYearMonth[yr][mon]
+        for yr in summary.allIncomeByYearMonth:
+            if yr not in self.allIncomeByYearMonth:
+                self.allIncomeByYearMonth[yr] = dict()
+            for mon in summary.allIncomeByYearMonth[yr]:
+                self.allIncomeByYearMonth[yr][mon] = summary.allIncomeByYearMonth[yr][mon]
 
         for yr in self.taxfreeCashOutByYear:
             self.taxfreeCashOutByYear[yr] += summary.taxfreeCashOutByYear.get(
@@ -974,6 +989,13 @@ def getTaxYear(inDate):
         year = f"{inDate.year}-{inDate.year+1}"
     return year
 
+def getCalYear(taxYrStr: str, mon: int):
+    yrs = taxYrStr.split('-')
+    if mon in range(1,3):
+        calYear = yrs[1]
+    else:
+        calYear = yrs[0]
+    return calYear
 
 def convertToSterling(currencyTxns, txn, amount):
     if currencyTxns:
