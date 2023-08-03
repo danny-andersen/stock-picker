@@ -1,6 +1,7 @@
 import io
 import csv
 from datetime import timedelta, datetime, timezone
+import calendar
 from statistics import mean
 from decimal import Decimal
 from dataclasses import asdict
@@ -947,7 +948,7 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
     incTable = table()
     incTable.appendChild(tr(th("Year"), th("Month"), th("Total Income")))
     nowyr = datetime.now().year
-    for yr in [f"{nowyr}", f"{nowyr-1}"]:
+    for yr in [f"{nowyr}", f"{nowyr-1}", f"{nowyr-2}"]:
         total = 0
         if yr in accountSummary.allIncomeByYearMonth:
             incMonths = accountSummary.allIncomeByYearMonth[yr]
@@ -955,8 +956,8 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
                 if month in incMonths:
                     row = tr()
                     total += incMonths[month]
-                    incTable.appendChild(tr(td(yr),td(month),td(incMonths[month])))
-            incTable.appendChild(tr(td(f'Total {yr} Income'),td('->'),td(total)))
+                    incTable.appendChild(tr(td(yr),td(calendar.month_name[month]),td(incMonths[month])))
+            incTable.appendChild(tr(td(f'Total {yr} Income'),td(''),td(total)))
     dom.appendChild(incTable)
 
     dom.appendChild(h2("Payments by Tax Year"))

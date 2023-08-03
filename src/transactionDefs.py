@@ -589,18 +589,17 @@ class AccountSummary:
                 self.incomeByYear[yr] = summary.incomeByYear[yr]
 
         for yr in self.allIncomeByYearMonth:
-            if yr not in summary.allIncomeByYearMonth:
-                summary.allIncomeByYearMonth[yr] = dict()
-            for mon in self.allIncomeByYearMonth[yr]:
-                self.allIncomeByYearMonth[yr][mon] += summary.allIncomeByYearMonth[yr].get(mon, Decimal(0.0))
-            for mon in summary.allIncomeByYearMonth[yr]:
-                if mon not in self.allIncomeByYearMonth:
-                    self.allIncomeByYearMonth[yr][mon] = summary.allIncomeByYearMonth[yr][mon]
+            if yr in summary.allIncomeByYearMonth:
+                for mon in self.allIncomeByYearMonth[yr]:
+                    self.allIncomeByYearMonth[yr][mon] += summary.allIncomeByYearMonth[yr].get(mon, Decimal(0.0))
+                for mon, inc in summary.allIncomeByYearMonth[yr].items():
+                    if mon not in self.allIncomeByYearMonth[yr]:
+                        self.allIncomeByYearMonth[yr][mon] = inc
         for yr in summary.allIncomeByYearMonth:
             if yr not in self.allIncomeByYearMonth:
                 self.allIncomeByYearMonth[yr] = dict()
-            for mon in summary.allIncomeByYearMonth[yr]:
-                self.allIncomeByYearMonth[yr][mon] = summary.allIncomeByYearMonth[yr][mon]
+                for mon, inc in summary.allIncomeByYearMonth[yr].items():
+                    self.allIncomeByYearMonth[yr][mon] = inc
 
         for yr in self.taxfreeCashOutByYear:
             self.taxfreeCashOutByYear[yr] += summary.taxfreeCashOutByYear.get(
