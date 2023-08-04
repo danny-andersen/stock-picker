@@ -3,5 +3,9 @@
     "python.linting.pylintEnabled": true,
     "python.linting.pylintArgs": [
         "--disable=C0103,no-member,C0301,C0302"
-    ]
+    ],
+    "[python]": {
+        "editor.defaultFormatter": "ms-python.black-formatter"
+    },
+    "python.formatting.provider": "none"
 }

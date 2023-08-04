@@ -944,20 +944,50 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
 
     getSecurityStrs(accountSummary, allAccounts, dom, retStrs)
 
-    dom.appendChild(h2("Monthly Income"))
+    dom.appendChild(h2("Monthly Income (exc Interest)"))
     incTable = table()
-    incTable.appendChild(tr(th("Year"), th("Month"), th("Total Income")))
+    if allAccounts:
+        otherAccounts = accountSummary.mergedAccounts
+        row = tr()
+        row.appendChild(th("Year"))
+        row.appendChild(th("Month"))
+        for acc in otherAccounts:
+            row.appendChild(th(acc.name))
+        row.appendChild(th("Total Income"))
+        incTable.appendChild(row)
+    else:
+        incTable.appendChild(tr(th("Year"), th("Month"), th("Total Income")))
     nowyr = datetime.now().year
     for yr in [f"{nowyr}", f"{nowyr-1}", f"{nowyr-2}"]:
-        total = 0
+        totals = dict()
+        totals[accountSummary.name] = 0
         if yr in accountSummary.allIncomeByYearMonth:
             incMonths = accountSummary.allIncomeByYearMonth[yr]
             for month in range(12, 1, -1):
                 if month in incMonths:
+                    totals[accountSummary.name] += incMonths[month]
                     row = tr()
-                    total += incMonths[month]
-                    incTable.appendChild(tr(td(yr),td(calendar.month_name[month]),td(incMonths[month])))
-            incTable.appendChild(tr(td(f'Total {yr} Income'),td(''),td(total)))
+                    row.appendChild(td(yr))
+                    row.appendChild(td(calendar.month_name[month]))
+                    if allAccounts:
+                        for acc in otherAccounts:
+                            if acc.name not in totals:
+                                totals[acc.name] = 0
+                            val = acc.allIncomeByYearMonth.get(yr, dict()).get(
+                                month, Decimal(0.0)
+                            )
+                            totals[acc.name] += val
+                            row.appendChild(td(val))
+                    row.appendChild(td(incMonths[month]))
+                    incTable.appendChild(row)
+            row = tr(_style="font-weight: bold;")
+            row.appendChild(td(f"Total {yr} Income"))
+            row.appendChild(td(""))
+            if allAccounts:
+                for acc in otherAccounts:
+                    row.appendChild(td(totals[acc.name]))
+            row.appendChild(td(totals[accountSummary.name]))
+            incTable.appendChild(row)
     dom.appendChild(incTable)
 
     dom.appendChild(h2("Payments by Tax Year"))
