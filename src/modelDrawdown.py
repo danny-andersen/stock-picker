@@ -19,6 +19,7 @@ def calculate_drawdown(
     )
     montlyMoneyRequired = int(pensionConfig["monthlyIncomeRequired"])
     annualDBIncome = int(pensionConfig["finalSalaryPension"])
+    pensionIncome = int(pensionConfig["statePensionPerMonth"]) * 12
     taxAllowance = int(config["tax_thresholds"]["incomeTaxAllowance"])
     cgtaxAllowance = int(config["tax_thresholds"]["capitalGainTaxAllowance"])
     cgtaxRate = int(config["trading_tax_rates"]["capitalGainLowerTax"])
@@ -28,12 +29,7 @@ def calculate_drawdown(
     netannualDBIncome = (
         annualDBIncome - (annualDBIncome - taxAllowance) * lowerTaxRate / 100
     )
-    maxSippIncome = (
-        maxTaxableIncome - annualDBIncome
-    )  # Max can take out of SIPP to keep below upper tax threshold
-    netMaxSippIncome = maxSippIncome - (
-        maxSippIncome * lowerTaxRate / 100
-    )  # Net of tax SIPP income
+
     # Set up dict that contains a dict of model name that has a dict of all account values by year that can be plotted
     accValues: dict[str, dict[float, dict[str, Decimal]]] = dict()
     for rateReturn in [-3, -5, 1, 2, 3, 4, 5]:
@@ -49,6 +45,13 @@ def calculate_drawdown(
         for acc, summary in accounts.items():
             accValues[model][0][acc] = summary.totalMarketValue
         lastYear = 0
+        maxSippIncome = (
+            maxTaxableIncome - annualDBIncome
+        )  # Max can take out of SIPP to keep below upper tax threshold
+        netMaxSippIncome = maxSippIncome - (
+            maxSippIncome * lowerTaxRate / 100
+        )  # Net of tax SIPP income
+        netPensionMonthlyIncome = 0
         for year in np.arange(1.0, noOfYears, 0.5):
             # Run model every 6 months
             # TODO: Allow for inflation
@@ -59,6 +62,14 @@ def calculate_drawdown(
             lastYear = year
             currentAccs = accValues[model][year]
             isaAllowance = maxISAInvestment / 2
+            if year == 7.0:
+                maxSippIncome -= pensionIncome
+                netMaxSippIncome = maxSippIncome - (
+                    maxSippIncome * lowerTaxRate / 100
+                )  # Net of tax SIPP income
+                netPensionMonthlyIncome = (
+                    pensionIncome - (pensionIncome * lowerTaxRate / 100)
+                ) / 12
             for acc, summary in accounts.items():
                 # 1. Increase value by 6 monthly return
                 if rateReturn == -3:
@@ -72,6 +83,7 @@ def calculate_drawdown(
                 else:
                     currentAccs[acc] *= Decimal(1 + (rateReturn / 100) / 2)
             totalRequired = montlyMoneyRequired * 6
+            totalRequired -= netPensionMonthlyIncome
             residual6MonthlyIncome = 0
             if currentAccs["sipp"] >= maxSippIncome / 2:
                 # 2(a). Take out max income from SIPP
