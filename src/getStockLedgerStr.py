@@ -78,6 +78,18 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
         )
     )
     smry.appendChild(
+        tr(
+            td("Historic 3yr Fund Return"),
+            td(f"{accountSummary.avgFund3YrReturn:02.2f}%"),
+        )
+    )
+    smry.appendChild(
+        tr(
+            td("Historic 5yr Fund Return"),
+            td(f"{accountSummary.avgFund5YrReturn:02.2f}%"),
+        )
+    )
+    smry.appendChild(
         tr(td("Total Income"), td(f"£{accountSummary.totalIncome():,.0f}"))
     )
     smry.appendChild(
@@ -404,7 +416,8 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
             accgain = (
                 100 * float((marketValue - bookCost) / bookCost) if bookCost > 0 else 0
             )
-            gainDict["Date"].append(dtime)
+            dt = datetime.fromtimestamp(dtime)
+            gainDict["Date"].append(dt)
             gainDict["Total"].append(accgain)
             lastElem = len(gainDict["Date"]) - 1
             ftv = accountSummary.historicValueByType[dtime]
@@ -418,7 +431,7 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
                 )
             fs.appendChild(
                 tr(
-                    td(f"{dtime.date()}"),
+                    td(f"{dt.date()}"),
                     td(f"£{marketValue:,.0f}"),
                     td(f"£{bookCost:,.0f}"),
                     td(f"{accgain:0.2f}%"),
@@ -1109,6 +1122,7 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
 
     ht.append(dom)
     retStrs[f"{accountSummary.name}-Summary.html"] = f"{ht}"
+    retStrs[f"csvFiles/{accountSummary.name}-Summary.json"] = accountSummary.to_json()
     return retStrs
 
 

@@ -188,7 +188,9 @@ def summarisePerformance(
                 calyr = getCalYear(year, month)
                 if calyr not in allIncome:
                     allIncome[calyr] = dict()
-                allIncome[calyr][month] = allIncome[calyr].get(month, Decimal(0.0)) + txn.credit
+                allIncome[calyr][month] = (
+                    allIncome[calyr].get(month, Decimal(0.0)) + txn.credit
+                )
 
     # If a cash account, add in to CASH type
 
@@ -225,6 +227,10 @@ def summarisePerformance(
         fundTotals[fundType].totGeoVal += accountSummary.cashBalance
 
     totalGain += accountSummary.totalInterest()
+
+    historic3yrReturn = 0.0
+    historic5yrReturn = 0.0
+
     for typ, fund in fundTotals.items():
         value = float(fund.totalValue)
         if value == 0:
@@ -264,6 +270,8 @@ def summarisePerformance(
         fund.maturity = (
             fund.maturity / float(fund.totMatVal) if fund.totMatVal != 0 else 0.0
         )
+        historic3yrReturn += fund.return3Yr
+        historic5yrReturn += fund.return5Yr
         fund.return3Yr = fund.return3Yr / value
         fund.return5Yr = fund.return5Yr / value
         fund.sensitive = (
@@ -350,6 +358,12 @@ def summarisePerformance(
     accountSummary.totalYieldByYear = totalYieldByYear
     accountSummary.fundTotals = fundTotals
     accountSummary.totalByInstitution = totalByInstitution
+    accountSummary.avgFund3YrReturn = (
+        historic3yrReturn / float(totalMarketValue) if totalMarketValue > 0 else 0.0
+    )
+    accountSummary.avgFund5YrReturn = (
+        historic5yrReturn / float(totalMarketValue) if totalMarketValue > 0 else 0.0
+    )
 
 
 def getPortfolioOverviews(
@@ -370,7 +384,7 @@ def getPortfolioOverviews(
 
     # Process each portfolio file
     securitiesByDateByAccount: dict[datetime, dict[str, dict[str, Security]]] = dict()
-    for (portfolioFile, mtime) in portfolioFiles:
+    for portfolioFile, mtime in portfolioFiles:
         # print(f"Processing portfolio file {portfolioFile}")
         accountName = portfolioFile.split("_")[0]
         dtStr = portfolioFile.split("_")[6]
@@ -425,7 +439,6 @@ def getPortfolioOverviews(
 
 
 def getStoredTransactions(config):
-
     # Dict of stocks by accountname, stocks are a dict of stock txns keyed by symbol
     stockListByAcc = getAllStockTxnSaved(config)
     # Need to convert transactions from json to dataclass
@@ -502,7 +515,7 @@ def processLatestTxnFiles(config, stockListByAcc, isinBySymbol):
                     print(f"Unsupported date format: {dt}. Exiting!! \n")
                     exit()
                 rowQuant = row.get("Quantity", "").strip()
-                qty=-1 if rowQuant in ("",'n/a') else strToDec(rowQuant)
+                qty = -1 if rowQuant in ("", "n/a") else strToDec(rowQuant)
                 txn = Transaction(
                     date=datetime.strptime(row[dateField], fmt).replace(
                         tzinfo=timezone.utc
@@ -844,7 +857,7 @@ def processTransactions(config):
         print(f"{datetime.now()}: Processing account: {account}")
         stockLedger = dict()
         rates = taxAllowances.copy()
-        for rate, val in config[account + "_tax_rates"].items():
+        for rate, val in config[f"{account}_tax_rates"].items():
             rates[rate] = val
         accountSummary = AccountSummary(
             owner=owner,
@@ -933,6 +946,9 @@ def processTransactions(config):
     # Add in other account totals that are outside of the scope of these calcs
     # NOTE: If these have a (significant) impact on taxable earnings, they need to be brought into scope and account created for them
     otherAccs = config[f"{owner}_other_accs"]
+    rates = taxAllowances.copy()
+    for rate, val in config[f"{owner}_other_accs_tax_rates"].items():
+        rates[rate] = val
     otherAccounts = AccountSummary(
         owner=owner,
         name="Other Accs",

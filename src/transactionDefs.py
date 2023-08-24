@@ -54,16 +54,16 @@ class Risk(IntEnum):
     HIGH = 3
 
 
-class FundType(Enum):
-    FUND = 1
-    LONG_GILT = 2
-    SHORT_GILT = 3
-    CORP_BOND = 4
-    STOCK_ETF = 5
-    BOND_ETF = 6
-    SHARE = 7
-    CASH = 8
-    GOLD = 9
+class FundType(str, Enum):
+    FUND: str = "fund"
+    LONG_GILT: str = "long_gilt"
+    SHORT_GILT: str = "short_gilt"
+    CORP_BOND: str = "corp_bond"
+    STOCK_ETF: str = "stock_etf"
+    BOND_ETF: str = "bond_etf"
+    SHARE: str = "share"
+    CASH: str = "cash"
+    GOLD: str = "gold"
 
 
 @dataclass
@@ -461,6 +461,7 @@ class SecurityDetails:
             return Decimal(0.0)
 
 
+@dataclass_json
 @dataclass
 class AccountSummary:
     name: str
@@ -475,6 +476,8 @@ class AccountSummary:
     totalPaperGainForTax: Decimal = Decimal(
         0.0
     )  # All paper gain of currently held securities
+    avgFund3YrReturn: float = 0.0
+    avgFund5YrReturn: float = 0.0
 
     portfolioPerc: dict[str, str] = field(default_factory=dict)
     cashInByYear: dict[str, Decimal(0.0)] = field(default_factory=dict)
@@ -484,27 +487,33 @@ class AccountSummary:
     aggInvestedByYear: dict[str, Decimal(0.0)] = field(default_factory=dict)
     realisedGainForTaxByYear: dict[str, Decimal(0.0)] = field(default_factory=dict)
     dealingCostsByYear: dict[str, Decimal(0.0)] = field(default_factory=dict)
-    dividendsByYear: dict[str, Decimal(0.0)] = field(default_factory=dict) #This includes all payments - dividends, bond income, interest
+    dividendsByYear: dict[str, Decimal(0.0)] = field(
+        default_factory=dict
+    )  # This includes all payments - dividends, bond income, interest
     dividendTxnsByYear: dict[str, set[Transaction]] = field(default_factory=dict)
     dividendYieldByYear: dict[str, Decimal(0.0)] = field(default_factory=dict)
-    incomeByYear: dict[str, Decimal(0.0)] = field(default_factory=dict) #Total income by tax year
-    allIncomeByYearMonth: dict[str, dict[str, Decimal(0.0)]] = field(default_factory=dict) #All types of income (divi, interest, bond income) broken down by month
+    incomeByYear: dict[str, Decimal(0.0)] = field(
+        default_factory=dict
+    )  # Total income by tax year
+    allIncomeByYearMonth: dict[str, dict[str, Decimal(0.0)]] = field(
+        default_factory=dict
+    )  # All types of income (divi, interest, bond income) broken down by month
     incomeTxnsByYear: dict[str, set[Transaction]] = field(default_factory=dict)
     interestByYear: dict[str, Decimal(0.0)] = field(default_factory=dict)
     interestTxnsByYear: dict[str, set[Transaction]] = field(default_factory=dict)
     incomeYieldByYear: dict[str, Decimal(0.0)] = field(default_factory=dict)
     totalYieldByYear: dict[str, Decimal(0.0)] = field(default_factory=dict)
-    fundTotals: dict[FundType, FundOverview] = field(default_factory=dict)
+    fundTotals: dict[str, FundOverview] = field(default_factory=dict)
     totalByInstitution: dict[str, Decimal] = field(default_factory=dict)
     transactions: list[Transaction] = field(default_factory=list)
     stocks: list[SecurityDetails] = field(default_factory=list)
     taxRates: dict = field(default_factory=dict)
     taxBandByYear: dict[str, str] = field(default_factory=dict)
     mergedAccounts: list = field(default_factory=list)
-    historicValue: dict[datetime, (Decimal(0.0), Decimal(0.0))] = field(
+    historicValue: dict[float, (Decimal(0.0), Decimal(0.0))] = field(
         default_factory=dict
     )  # (market value, book cost)
-    historicValueByType: dict[datetime, dict[str, (float, float)]] = field(
+    historicValueByType: dict[float, dict[str, (float, float)]] = field(
         default_factory=dict
     )  # (market value, book cost)
 
@@ -515,10 +524,30 @@ class AccountSummary:
         if summary.portfolioValueDate < self.portfolioValueDate:
             self.portfolioValueDate = summary.portfolioValueDate
         self.totalDiviReInvested += summary.totalDiviReInvested
+        totMV = float(self.totalMarketValue + summary.totalMarketValue)
+        self.avgFund3YrReturn = (
+            (
+                self.avgFund3YrReturn * float(self.totalMarketValue)
+                + (summary.avgFund3YrReturn * float(summary.totalMarketValue))
+            )
+            / totMV
+            if totMV > 0
+            else 0.0
+        )
+        self.avgFund5YrReturn = (
+            (
+                self.avgFund5YrReturn * float(self.totalMarketValue)
+                + (summary.avgFund5YrReturn * float(summary.totalMarketValue))
+            )
+            / totMV
+            if totMV > 0
+            else 0.0
+        )
         self.totalMarketValue += summary.totalMarketValue
         self.cashBalance += summary.cashBalance
         self.totalInvestedInSecurities += summary.totalInvestedInSecurities
         self.totalPaperGainForTax += summary.totalPaperGainForTax
+
         self.transactions.extend(summary.transactions)
         # Sort all transactions by date
         self.transactions = sorted(self.transactions, key=lambda txn: txn.date)
@@ -591,7 +620,9 @@ class AccountSummary:
         for yr in self.allIncomeByYearMonth:
             if yr in summary.allIncomeByYearMonth:
                 for mon in self.allIncomeByYearMonth[yr]:
-                    self.allIncomeByYearMonth[yr][mon] += summary.allIncomeByYearMonth[yr].get(mon, Decimal(0.0))
+                    self.allIncomeByYearMonth[yr][mon] += summary.allIncomeByYearMonth[
+                        yr
+                    ].get(mon, Decimal(0.0))
                 for mon, inc in summary.allIncomeByYearMonth[yr].items():
                     if mon not in self.allIncomeByYearMonth[yr]:
                         self.allIncomeByYearMonth[yr][mon] = inc
@@ -757,7 +788,7 @@ class AccountSummary:
     def totalGain(self):
         return (
             self.totalRealisedGain()
-            + self.totalPaperGainForTax 
+            + self.totalPaperGainForTax
             + self.totalDividends()
             + self.totalIncome()
         )
@@ -988,13 +1019,15 @@ def getTaxYear(inDate):
         year = f"{inDate.year}-{inDate.year+1}"
     return year
 
+
 def getCalYear(taxYrStr: str, mon: int):
-    yrs = taxYrStr.split('-')
-    if mon in range(1,3):
+    yrs = taxYrStr.split("-")
+    if mon in range(1, 3):
         calYear = yrs[1]
     else:
         calYear = yrs[0]
     return calYear
+
 
 def convertToSterling(currencyTxns, txn, amount):
     if currencyTxns:
@@ -1039,8 +1072,8 @@ def strToDec(p: str):
         except:
             pass
     return retVal
-    
-    
+
+
 def priceStrToDec(strValue: str):
     if not strValue or strValue.strip() == "" or strValue.strip().lower() == "n/a":
         val = Decimal(0.0)

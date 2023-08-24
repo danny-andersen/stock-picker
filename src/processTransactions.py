@@ -106,8 +106,9 @@ def processAccountTxns(
                         (security.marketValue, security.bookCost),
                     )
                 ]
-            account.historicValue[portDate] = (totalValue, totalCost)
-            account.historicValueByType[portDate] = byFundType
+            dt = portDate.timestamp()
+            account.historicValue[dt] = (totalValue, totalCost)
+            account.historicValueByType[dt] = byFundType
     return account
 
 
@@ -189,11 +190,11 @@ def processStockTxns(
                 stocks.get(txn.creditCurrency, None), txn, txn.credit
             )
             priceIncCosts = credit / Decimal(txn.qty)
-            gain = (
-                priceIncCosts - details.avgSharePrice
-            ) * txn.qty  # CGT uses average purchase price at time of selling
-            details.cashInvested -= (
-                details.avgSharePrice * Decimal(txn.qty)
+            gain = Decimal(
+                float(priceIncCosts - details.avgSharePrice) * txn.qty
+            )  # CGT uses average purchase price at time of selling
+            details.cashInvested -= details.avgSharePrice * Decimal(
+                txn.qty
             )  # Reduce amount of cash invested by amount of shares sold at avg buy price
             details.realisedCapitalGainByYear[taxYear] = (
                 details.realisedCapitalGainByYear.get(taxYear, Decimal(0.0)) + gain

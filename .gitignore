@@ -135,6 +135,8 @@ heldstocklist.txt
 stocklist.txt
 stocklist-full.txt
 stopCluster.sh
+stocksToReprocess.txt
+model-output.html
 
 #Private transaction files
 transactions/
