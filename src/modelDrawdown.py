@@ -11,7 +11,9 @@ from domonic.html import td, tr, th, a, body, table, h1, h2, h3, html, meta, sty
 
 
 def calculate_drawdown(
-    config: configparser.ConfigParser, accounts: dict[str, AccountSummary]
+    config: configparser.ConfigParser,
+    ratesOfReturn: list,
+    accounts: dict[str, AccountSummary],
 ):
     pensionConfig = config["pension_model"]
     noOfYears = int(pensionConfig["ageMoneyRequiredUntil"]) - int(
@@ -32,7 +34,7 @@ def calculate_drawdown(
 
     # Set up dict that contains a dict of model name that has a dict of all account values by year that can be plotted
     accValues: dict[str, dict[float, dict[str, Decimal]]] = dict()
-    for rateReturn in [-3, -5, 1, 2, 3, 4, 5]:
+    for rateReturn in ratesOfReturn:
         if rateReturn == -3:
             model = "hist3yr%"
         elif rateReturn == -5:
@@ -52,7 +54,7 @@ def calculate_drawdown(
             maxSippIncome * lowerTaxRate / 100
         )  # Net of tax SIPP income
         netPensionMonthlyIncome = 0
-        for year in np.arange(1.0, noOfYears, 0.5):
+        for year in np.arange(1.0, noOfYears + 0.5, 0.5):
             # Run model every 6 months
             # TODO: Allow for inflation
             # 0. Set up this years starting values as the same as end of last period
@@ -135,17 +137,36 @@ def calculate_drawdown(
     return accValues
 
 
-def htmlReport(
+def plotAccountValues(
     dom: body,
-    monthlyAmtRequired,
-    monthlyDBGrossIncome,
     accountValues: dict[str, dict[float, dict[str, Decimal]]],
 ):
-    dom.append(h1("Modelling drawdown on investment funds"))
-    dom.append(h3(f"Monthly Required Income: £{monthlyAmtRequired:,.0f}"))
-    dom.append(
-        h3(f"Monthly Gross Defined Benefit Income: £{monthlyDBGrossIncome:,.0f}")
+    # Plot summary showing total values across all scenarios
+    dom.append(h2("Total account values for each scenario by year"))
+    graphVals: dict[str, list[float]] = {"Year": list()}
+    firstModel = True
+    for model, accVals in accountValues.items():
+        graphVals[model] = list()
+        for year, fund_value in accVals.items():
+            if firstModel:
+                graphVals["Year"].append(year)
+            graphVals[model].append(
+                fund_value["trading"] + fund_value["isa"] + fund_value["sipp"]
+            )
+        firstModel = False
+    df = DataFrame(graphVals)
+    fig = px.line(
+        df,
+        x="Year",
+        y=df.columns,
+        hover_data={"Year"},
+        labels={"Total": "£"},
     )
+    # fig.update_xaxes(dtick="M1", tickformat="%b\n%Y")
+    # fig.show()
+    dom.appendChild(fig.to_html())
+
+    # Plot each scenario
     for model, accVals in accountValues.items():
         dom.append(h2(f"Scenario: {model} annual return"))
         graphVals: dict[str, list[float]] = {
@@ -176,52 +197,12 @@ def htmlReport(
 
     # for model, accVals in accountValues.items():
     #     print(f"Scenario: {model} annual return\n")
-    #     print("\nYear\tTotal\ttrading\tisa\tsipp")
+    #     print("\nYear\tTotal\ttrading\tisa\tsipp")int(x.strip())
     #     for year, fund_value in accVals.items():
     #         total = fund_value["trading"] + fund_value["isa"] + fund_value["sipp"]
     #         print(
     #             f"{year}\t£{total:,.0f}\t£{fund_value['trading']:,.0f}\t£{fund_value['isa']:,.0f}\t£{fund_value['sipp']:,.0f}\n"
     #         )
-    # for dtime in dateList:
-    # (marketValue, bookCost) = accountSummary.historicValue[dtime]
-    # accgain = (
-    #     100 * float((marketValue - bookCost) / bookCost) if bookCost > 0 else 0
-    # )
-    # dt = datetime.fromtimestamp(dtime)
-    # gainDict["Date"].append(dt)
-    # gainDict["Total"].append(accgain)
-    # lastElem = len(gainDict["Date"]) - 1
-    # ftv = accountSummary.historicValueByType[dtime]
-    # for ftyp in fundTypes:
-    #     gainDict[ftyp.name].append(
-    #         100.0
-    #         * float(
-    #             (ftv.get(ftyp, (0, 0))[0] - ftv.get(ftyp, (0, 0))[1])
-    #             / ftv.get(ftyp, (1, 1))[1]
-    #         )
-    #     )
-    # fs.appendChild(
-    #     tr(
-    #         td(f"{dt.date()}"),
-    #         td(f"£{marketValue:,.0f}"),
-    #         td(f"£{bookCost:,.0f}"),
-    #         td(f"{accgain:0.2f}%"),
-    #         "".join(
-    #             [
-    #                 f"{td(100.0*float(ftv.get(ftyp,(0,0))[0]/marketValue)):0.1f}"
-    #                 for ftyp in fundTypes
-    #             ]
-    #         ),
-    #         "".join(
-    #             [
-    #                 f"{td(gainDict[ftyp.name][lastElem]):0.1f}"
-    #                 for ftyp in fundTypes
-    #             ]
-    #         ),
-    #         _class="positive" if accgain > 0 else "negative",
-    #     )
-    # )
-    # dom.appendChild(fs)
 
 
 def main():
@@ -242,6 +223,9 @@ def main():
 
     # Read in account summaries
     accountList = config["pension_model"][f"{accountOwner}_accounts"].split(",")
+    ratesOfReturn = [
+        int(x.strip()) for x in config["pension_model"]["ratesOfReturn"].split(",")
+    ]
     accounts: dict[str, AccountSummary] = dict()
     for acc in accountList:
         accounts[acc] = AccountSummary.from_json(
@@ -251,7 +235,20 @@ def main():
             )
         )
 
-    accountValues = calculate_drawdown(config, accounts)
+    accountValues = calculate_drawdown(config, ratesOfReturn, accounts)
+
+    taxAllowance = int(config["tax_thresholds"]["incomeTaxAllowance"])
+    lowerTaxRate = int(config["sipp_tax_rates"]["withdrawlLowerTax"])
+    pensionConfig = config["pension_model"]
+    monthlyMoneyRequired = int(pensionConfig["monthlyIncomeRequired"])
+    annualDBIncome = int(pensionConfig["finalSalaryPension"])
+    pensionIncome = int(pensionConfig["statePensionPerMonth"]) * 12
+    netPensionMonthlyIncome = (
+        pensionIncome - (pensionIncome * lowerTaxRate / 100)
+    ) / 12
+    netannualDBIncome = (
+        annualDBIncome - (annualDBIncome - taxAllowance) * lowerTaxRate / 100
+    )
 
     ht = html(meta(_charset="UTF-8"))
     ht.appendChild(
@@ -266,11 +263,14 @@ def main():
     )
     dom = body()
     ht.append(dom)
-    pensionConfig = config["pension_model"]
-    montlyMoneyRequired = int(pensionConfig["monthlyIncomeRequired"])
-    annualDBIncome = int(pensionConfig["finalSalaryPension"]) / 12
+    dom.append(h1("Modelling drawdown on investment funds"))
+    dom.append(h3(f"Monthly Required Income: £{monthlyMoneyRequired:,.0f}"))
+    dom.append(h3(f"Net Monthly Defined Benefit Income: £{netannualDBIncome/12:,.0f}"))
+    dom.append(
+        h3(f"Net Monthly Pension Income (Year 7+): £{netPensionMonthlyIncome:,.0f}")
+    )
 
-    htmlReport(dom, montlyMoneyRequired, annualDBIncome, accountValues)
+    plotAccountValues(dom, accountValues)
     # # Display the results
     # for model, accVals in accountValues.items():
     #     print(f"Scenario: {model} annual return\n")
@@ -281,7 +281,7 @@ def main():
     #             f"{year}\t£{total:,.0f}\t£{fund_value['trading']:,.0f}\t£{fund_value['isa']:,.0f}\t£{fund_value['sipp']:,.0f}\n"
     #         )
     retStr = f"{ht}"
-    with open("model-output.html", "w") as fp:
+    with open("model-output.html", "w", encoding="utf-8") as fp:
         fp.write(retStr)
 
 
