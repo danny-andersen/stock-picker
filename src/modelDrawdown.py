@@ -26,6 +26,7 @@ def calculate_drawdown(
     cgtaxAllowance = int(config["tax_thresholds"]["capitalGainTaxAllowance"])
     cgtaxRate = int(config["trading_tax_rates"]["capitalGainLowerTax"])
     lowerTaxRate = int(config["sipp_tax_rates"]["withdrawlLowerTax"])
+    upperTaxRate = int(config["sipp_tax_rates"]["withdrawlUpperTax"])
     maxTaxableIncome = int(config["tax_thresholds"]["incomeUpperThreshold"])
     maxISAInvestment = int(config["isa_tax_rates"]["maxYearlyInvestment"])
     netannualDBIncome = (
@@ -54,7 +55,7 @@ def calculate_drawdown(
             maxSippIncome * lowerTaxRate / 100
         )  # Net of tax SIPP income
         netPensionMonthlyIncome = 0
-        for year in np.arange(1.0, noOfYears + 0.5, 0.5):
+        for year in np.arange(0.5, noOfYears + 0.5, 0.5):
             # Run model every 6 months
             # TODO: Allow for inflation
             # 0. Set up this years starting values as the same as end of last period
@@ -85,7 +86,7 @@ def calculate_drawdown(
                 else:
                     currentAccs[acc] *= Decimal(1 + (rateReturn / 100) / 2)
             totalRequired = montlyMoneyRequired * 6
-            totalRequired -= netPensionMonthlyIncome
+            totalRequired -= netPensionMonthlyIncome * 6
             residual6MonthlyIncome = 0
             if currentAccs["sipp"] >= maxSippIncome / 2:
                 # 2(a). Take out max income from SIPP
@@ -107,10 +108,27 @@ def calculate_drawdown(
                         totalRequired += amtTaxed * cgtaxRate / 100
                     currentAccs["trading"] -= Decimal(totalRequired)
                     totalRequired = 0
-                else:
-                    # 2(c) Run out of funds in both SIPP and trading - take it from ISA
+                elif currentAccs["isa"] > totalRequired:
+                    # 2(c) Run out of funds in trading - take it from ISA
+                    if currentAccs["trading"] > 0:
+                        totalRequired -= float(currentAccs["trading"])
+                        currentAccs["trading"] = 0
                     currentAccs["isa"] -= Decimal(totalRequired)
                     totalRequired = 0
+                elif currentAccs["sipp"] > totalRequired:
+                    # 2(d) Only have funds in SIPP - take amount required from there but taxed at upper rate
+                    if currentAccs["trading"] > 0:
+                        totalRequired -= float(currentAccs["trading"])
+                        currentAccs["trading"] = 0
+                    if currentAccs["isa"] > 0:
+                        totalRequired -= float(currentAccs["isa"])
+                        currentAccs["isa"] = 0
+                    totalRequired += totalRequired * upperTaxRate / 100
+                    if currentAccs["sipp"] > totalRequired:
+                        currentAccs["sipp"] -= Decimal(totalRequired)
+                    else:
+                        currentAccs["sipp"] = 0
+
             if residual6MonthlyIncome > 0:
                 # 3(a) If money left, add to investments
                 if residual6MonthlyIncome < isaAllowance:
