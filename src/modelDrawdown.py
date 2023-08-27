@@ -12,6 +12,7 @@ from domonic.html import td, tr, th, a, body, table, h1, h2, h3, html, meta, sty
 
 def calculate_drawdown(
     config: configparser.ConfigParser,
+    monthlyMoneyRequired: int,
     ratesOfReturn: list,
     accounts: dict[str, AccountSummary],
 ):
@@ -19,7 +20,6 @@ def calculate_drawdown(
     noOfYears = int(pensionConfig["ageMoneyRequiredUntil"]) - int(
         pensionConfig["ageAtRetirement"]
     )
-    montlyMoneyRequired = int(pensionConfig["monthlyIncomeRequired"])
     annualDBIncome = int(pensionConfig["finalSalaryPension"])
     pensionIncome = int(pensionConfig["statePensionPerMonth"]) * 12
     taxAllowance = int(config["tax_thresholds"]["incomeTaxAllowance"])
@@ -45,8 +45,11 @@ def calculate_drawdown(
         # Set initial value based on current market value of accounts
         accValues[model] = dict()
         accValues[model][0] = dict()
+        total = 0
         for acc, summary in accounts.items():
             accValues[model][0][acc] = summary.totalMarketValue
+            total += summary.totalMarketValue
+        accValues[model][0]["Total"] = total
         lastYear = 0
         maxSippIncome = (
             maxTaxableIncome - annualDBIncome
@@ -67,11 +70,11 @@ def calculate_drawdown(
             isaAllowance = maxISAInvestment / 2
             if year == 7.0:
                 maxSippIncome -= pensionIncome
-                netMaxSippIncome = maxSippIncome - (
-                    maxSippIncome * lowerTaxRate / 100
+                netMaxSippIncome = maxSippIncome * (
+                    1 - (lowerTaxRate / 100)
                 )  # Net of tax SIPP income
                 netPensionMonthlyIncome = (
-                    pensionIncome - (pensionIncome * lowerTaxRate / 100)
+                    pensionIncome * (1 - (lowerTaxRate / 100))
                 ) / 12
             for acc, summary in accounts.items():
                 # 1. Increase value by 6 monthly return
@@ -85,7 +88,7 @@ def calculate_drawdown(
                     )
                 else:
                     currentAccs[acc] *= Decimal(1 + (rateReturn / 100) / 2)
-            totalRequired = montlyMoneyRequired * 6
+            totalRequired = monthlyMoneyRequired * 6
             totalRequired -= netPensionMonthlyIncome * 6
             residual6MonthlyIncome = 0
             if currentAccs["sipp"] >= maxSippIncome / 2:
@@ -99,6 +102,10 @@ def calculate_drawdown(
                 else:
                     # Income from DB and max SIPP income not enough
                     totalRequired -= totalIncome
+            else:
+                # Clear out SIPP
+                totalRequired -= float(currentAccs["sipp"]) * (1 - lowerTaxRate / 100)
+                currentAccs["sipp"] = 0
             if totalRequired > 0:
                 if currentAccs["trading"] > totalRequired:
                     # 2(b) Need more income - take out required income from trading account
@@ -115,14 +122,15 @@ def calculate_drawdown(
                         currentAccs["trading"] = 0
                     currentAccs["isa"] -= Decimal(totalRequired)
                     totalRequired = 0
-                elif currentAccs["sipp"] > totalRequired:
-                    # 2(d) Only have funds in SIPP - take amount required from there but taxed at upper rate
+                elif currentAccs["sipp"] > 0:
+                    # 2(d) Use SIPP if anything left after taking dregs from other accounts
                     if currentAccs["trading"] > 0:
                         totalRequired -= float(currentAccs["trading"])
                         currentAccs["trading"] = 0
                     if currentAccs["isa"] > 0:
                         totalRequired -= float(currentAccs["isa"])
                         currentAccs["isa"] = 0
+                    # 2(d) If only have funds in SIPP - take amount required from there but taxed at upper rate
                     totalRequired += totalRequired * upperTaxRate / 100
                     if currentAccs["sipp"] > totalRequired:
                         currentAccs["sipp"] -= Decimal(totalRequired)
@@ -130,7 +138,7 @@ def calculate_drawdown(
                         currentAccs["sipp"] = 0
 
             if residual6MonthlyIncome > 0:
-                # 3(a) If money left, add to investments
+                # 3(a) If income left, add to investments
                 if residual6MonthlyIncome < isaAllowance:
                     # 4(a) Put all residual income in ISA
                     currentAccs["isa"] += Decimal(residual6MonthlyIncome)
@@ -151,6 +159,9 @@ def calculate_drawdown(
                     currentAccs["isa"] += currentAccs["trading"]
                     currentAccs["trading"] = 0
                 isaAllowance = 0
+            currentAccs["Total"] = (
+                currentAccs["trading"] + currentAccs["isa"] + currentAccs["sipp"]
+            )
 
     return accValues
 
@@ -168,9 +179,7 @@ def plotAccountValues(
         for year, fund_value in accVals.items():
             if firstModel:
                 graphVals["Year"].append(year)
-            graphVals[model].append(
-                fund_value["trading"] + fund_value["isa"] + fund_value["sipp"]
-            )
+            graphVals[model].append(fund_value["Total"])
         firstModel = False
     df = DataFrame(graphVals)
     fig = px.line(
@@ -196,9 +205,6 @@ def plotAccountValues(
         }
         for year, fund_value in accVals.items():
             graphVals["Year"].append(year)
-            graphVals["Total"].append(
-                fund_value["trading"] + fund_value["isa"] + fund_value["sipp"]
-            )
             for key, val in fund_value.items():
                 graphVals[key].append(val)
         df = DataFrame(graphVals)
@@ -253,21 +259,7 @@ def main():
             )
         )
 
-    accountValues = calculate_drawdown(config, ratesOfReturn, accounts)
-
-    taxAllowance = int(config["tax_thresholds"]["incomeTaxAllowance"])
-    lowerTaxRate = int(config["sipp_tax_rates"]["withdrawlLowerTax"])
-    pensionConfig = config["pension_model"]
-    monthlyMoneyRequired = int(pensionConfig["monthlyIncomeRequired"])
-    annualDBIncome = int(pensionConfig["finalSalaryPension"])
-    pensionIncome = int(pensionConfig["statePensionPerMonth"]) * 12
-    netPensionMonthlyIncome = (
-        pensionIncome - (pensionIncome * lowerTaxRate / 100)
-    ) / 12
-    netannualDBIncome = (
-        annualDBIncome - (annualDBIncome - taxAllowance) * lowerTaxRate / 100
-    )
-
+    # Initialise output html dom
     ht = html(meta(_charset="UTF-8"))
     ht.appendChild(
         head(
@@ -281,14 +273,82 @@ def main():
     )
     dom = body()
     ht.append(dom)
+
+    pensionConfig = config["pension_model"]
+
+    # Run drawdown with various monthlyRequired to get close as possible to 0 for the required number of years
+    noOfYears = int(pensionConfig["ageMoneyRequiredUntil"]) - int(
+        pensionConfig["ageAtRetirement"]
+    )
+    maxDrawdownByModel = dict()
+    for rate in ratesOfReturn:
+        monthlyMoneyRequired = int(pensionConfig["monthlyIncomeRequired"])
+        if rate == -3:
+            model = "hist3yr%"
+        elif rate == -5:
+            model = "hist5yr%"
+        else:
+            model = f"{rate}%"
+        lastMonthly = 0
+        while True:
+            accVals = calculate_drawdown(config, monthlyMoneyRequired, [rate], accounts)
+            if accVals[model][noOfYears]["Total"] > 0:
+                # Had money left so increase monthly outgoings by 1% until we have used it all
+                lastMonthly = monthlyMoneyRequired
+                lastTotal = accVals[model][noOfYears]["Total"]
+                monthlyMoneyRequired *= 1.01
+            elif lastMonthly > 0:
+                # Got max value, which is previous attempt
+                maxDrawdownByModel[model] = (lastMonthly, lastTotal)
+                break
+            else:
+                # First attempt failed - reduce by .5% until greater than 0
+                monthlyMoneyRequired *= 0.995
+
+    # Print out max drawdown results
+    dom.append(h2("Max monthly total income by rate of return"))
+    maxResults = table()
+    maxResults.appendChild(
+        tr(
+            td("Rate of Return"),
+            td("Total Monthly Income"),
+            td(f"Residual value at {pensionConfig['ageMoneyRequiredUntil']}"),
+        )
+    )
+    for rate, (monthlyIncome, residual) in maxDrawdownByModel.items():
+        maxResults.appendChild(
+            tr(td(f"{rate}"), td(f"£{monthlyIncome:,.0f}"), td(f"£{residual:,.0f}"))
+        )
+    dom.append(maxResults)
+
+    monthlyMoneyRequired = int(pensionConfig["monthlyIncomeRequired"])
+    # Run drawdown with various rates of return for required income
+    accountValues = calculate_drawdown(
+        config, monthlyMoneyRequired, ratesOfReturn, accounts
+    )
+
+    # Print out results based on required drawdown
+    taxAllowance = int(config["tax_thresholds"]["incomeTaxAllowance"])
+    lowerTaxRate = int(config["sipp_tax_rates"]["withdrawlLowerTax"])
+    monthlyMoneyRequired = int(pensionConfig["monthlyIncomeRequired"])
+    annualDBIncome = int(pensionConfig["finalSalaryPension"])
+    pensionIncome = int(pensionConfig["statePensionPerMonth"]) * 12
+    netPensionMonthlyIncome = (
+        pensionIncome - (pensionIncome * lowerTaxRate / 100)
+    ) / 12
+    netannualDBIncome = (
+        annualDBIncome - (annualDBIncome - taxAllowance) * lowerTaxRate / 100
+    )
     dom.append(h1("Modelling drawdown on investment funds"))
     dom.append(h3(f"Monthly Required Income: £{monthlyMoneyRequired:,.0f}"))
     dom.append(h3(f"Net Monthly Defined Benefit Income: £{netannualDBIncome/12:,.0f}"))
     dom.append(
-        h3(f"Net Monthly Pension Income (Year 7+): £{netPensionMonthlyIncome:,.0f}")
+        h3(
+            f"Net Monthly State Pension Income (Year 7+): £{netPensionMonthlyIncome:,.0f}"
+        )
     )
-
     plotAccountValues(dom, accountValues)
+
     # # Display the results
     # for model, accVals in accountValues.items():
     #     print(f"Scenario: {model} annual return\n")
