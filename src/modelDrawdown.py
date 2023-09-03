@@ -441,7 +441,7 @@ def main():
     #             f"{year}\t£{total:,.0f}\t£{fund_value['trading']:,.0f}\t£{fund_value['isa']:,.0f}\t£{fund_value['sipp']:,.0f}\n"
     #         )
     retStr = f"{ht}"
-    saveStringToDropbox(config["store"], "model-output.html", retStr)
+    saveStringToDropbox(config["store"], "/model-output.html", retStr)
     # with open("model-output.html", "w", encoding="utf-8") as fp:
     #     fp.write(retStr)
 
