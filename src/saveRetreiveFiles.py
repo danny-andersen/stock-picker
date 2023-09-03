@@ -325,6 +325,9 @@ def retrieveStringFromDropbox(config, path):
     else:
         # Dropbox is synced locally so can write to a local dir to upload to DB
         dbDir = config["dropBoxLocalDir"]
-        with open(f"{dbDir}{path}", mode="r", encoding="utf-8") as fp:
-            retStr = fp.read()
+        try:
+            with open(f"{dbDir}{path}", mode="r", encoding="utf-8") as fp:
+                retStr = fp.read()
+        except FileNotFoundError:
+            retStr = "NO FILE READ"
     return retStr

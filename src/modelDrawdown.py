@@ -1,27 +1,27 @@
 import configparser
 import locale
-import argparse
+
+# import argparse
 import numpy as np
-from saveRetreiveFiles import retrieveStringFromDropbox
-from transactionDefs import AccountSummary
 from decimal import Decimal
 import plotly.express as px
 from pandas import DataFrame
-from domonic.html import td, tr, th, a, body, table, h1, h2, h3, html, meta, style, head
+from domonic.html import td, tr, th, body, table, h1, h2, h3, html, meta, style, head
+
+from saveRetreiveFiles import retrieveStringFromDropbox, saveStringToDropbox
+from transactionDefs import AccountSummary
 
 
 def calculate_drawdown(
     config: configparser.ConfigParser,
     monthlyMoneyRequired: int,
     ratesOfReturn: list,
-    accounts: dict[str, AccountSummary],
+    accounts: dict[str, dict[str, AccountSummary]],
 ):
     pensionConfig = config["pension_model"]
     noOfYears = int(pensionConfig["ageMoneyRequiredUntil"]) - int(
         pensionConfig["ageAtRetirement"]
     )
-    annualDBIncome = int(pensionConfig["finalSalaryPension"])
-    pensionIncome = int(pensionConfig["statePensionPerMonth"]) * 12
     taxAllowance = int(config["tax_thresholds"]["incomeTaxAllowance"])
     cgtaxAllowance = int(config["tax_thresholds"]["capitalGainTaxAllowance"])
     cgtaxRate = int(config["trading_tax_rates"]["capitalGainLowerTax"])
@@ -29,12 +29,34 @@ def calculate_drawdown(
     upperTaxRate = int(config["sipp_tax_rates"]["withdrawlUpperTax"])
     maxTaxableIncome = int(config["tax_thresholds"]["incomeUpperThreshold"])
     maxISAInvestment = int(config["isa_tax_rates"]["maxYearlyInvestment"])
-    netannualDBIncome = (
-        annualDBIncome - (annualDBIncome - taxAllowance) * lowerTaxRate / 100
-    )
 
-    # Set up dict that contains a dict of model name that has a dict of all account values by year that can be plotted
-    accValues: dict[str, dict[float, dict[str, Decimal]]] = dict()
+    owners = accounts.keys()
+    pensionIncomeByOwner = dict()
+    netAnnualDBIncomeByOwner = dict()
+    annualDBIncomeByOwner = dict()
+    for owner in owners:
+        annualDBIncomeByOwner[owner] = int(pensionConfig[f"{owner}_finalSalaryPension"])
+        pensionIncomeByOwner[owner] = (
+            int(pensionConfig[f"{owner}_statePensionPerMonth"]) * 12
+        )
+        netAnnualDBIncomeByOwner[owner] = (
+            annualDBIncomeByOwner[owner]
+            - (annualDBIncomeByOwner[owner] - taxAllowance) * lowerTaxRate / 100
+        )
+    # work out ratios of income by owner, so contribute proportionate amount
+    # for owner in accounts:
+    #     for acc in accounts[owner]:
+    #         total[owner] += accValues[model][lastYear][acc]
+    #         grandTotal += accValues[model][lastYear][acc]
+    contributionRatioByOwner: dict[str, float] = dict()
+    for owner in accounts:
+        contributionRatioByOwner[owner] = netAnnualDBIncomeByOwner[owner] / sum(
+            netAnnualDBIncomeByOwner.values()
+        )
+
+    # Set up dict that contains a dict of model name that has a dict of owners with a dict of account values by year that can be plotted
+    # Account values: model [ year [ owner [account, value]]]
+    accValues: dict[str, dict[float, dict[str, dict[str, Decimal]]]] = dict()
     for rateReturn in ratesOfReturn:
         if rateReturn == -3:
             model = "hist3yr%"
@@ -45,130 +67,168 @@ def calculate_drawdown(
         # Set initial value based on current market value of accounts
         accValues[model] = dict()
         accValues[model][0] = dict()
-        total = 0
-        for acc, summary in accounts.items():
-            accValues[model][0][acc] = summary.totalMarketValue
-            total += summary.totalMarketValue
-        accValues[model][0]["Total"] = total
+        for owner in accounts:
+            accValues[model][0][owner] = dict()
+            for acc, summary in accounts[owner].items():
+                accValues[model][0][owner][acc] = summary.totalMarketValue
+            accValues[model][0][owner]["Total"] = sum(
+                accValues[model][0][owner].values()
+            )
         lastYear = 0
-        maxSippIncome = (
-            maxTaxableIncome - annualDBIncome
-        )  # Max can take out of SIPP to keep below upper tax threshold
-        netMaxSippIncome = maxSippIncome - (
-            maxSippIncome * lowerTaxRate / 100
-        )  # Net of tax SIPP income
-        netPensionMonthlyIncome = 0
         for year in np.arange(0.5, noOfYears + 0.5, 0.5):
             # Run model every 6 months
             # TODO: Allow for inflation
             # 0. Set up this years starting values as the same as end of last period
             accValues[model][year] = dict()
-            for acc in accounts:
-                accValues[model][year][acc] = accValues[model][lastYear][acc]
-            lastYear = year
-            currentAccs = accValues[model][year]
-            isaAllowance = maxISAInvestment / 2
-            if year == 7.0:
-                maxSippIncome -= pensionIncome
-                netMaxSippIncome = maxSippIncome * (
-                    1 - (lowerTaxRate / 100)
-                )  # Net of tax SIPP income
-                netPensionMonthlyIncome = (
-                    pensionIncome * (1 - (lowerTaxRate / 100))
-                ) / 12
-            for acc, summary in accounts.items():
-                # 1. Increase value by 6 monthly return
-                if rateReturn == -3:
-                    currentAccs[acc] *= Decimal(
-                        1 + (summary.avgFund3YrReturn / 100) / 2
-                    )
-                elif rateReturn == -5:
-                    currentAccs[acc] *= Decimal(
-                        1 + (summary.avgFund5YrReturn / 100) / 2
-                    )
-                else:
-                    currentAccs[acc] *= Decimal(1 + (rateReturn / 100) / 2)
-            totalRequired = monthlyMoneyRequired * 6
-            totalRequired -= netPensionMonthlyIncome * 6
-            residual6MonthlyIncome = 0
-            if currentAccs["sipp"] >= maxSippIncome / 2:
-                # 2(a). Take out max income from SIPP
-                currentAccs["sipp"] -= Decimal(maxSippIncome / 2)
-                totalIncome = (netannualDBIncome + netMaxSippIncome) / 2
-                if totalIncome > totalRequired:
-                    # Work out how much money is left after taking out required spends from total income (Defined benefit + max SIPP)
-                    residual6MonthlyIncome = totalIncome - totalRequired
-                    totalRequired = 0
-                else:
-                    # Income from DB and max SIPP income not enough
-                    totalRequired -= totalIncome
-            else:
-                # Clear out SIPP
-                totalRequired -= float(currentAccs["sipp"]) * (1 - lowerTaxRate / 100)
-                currentAccs["sipp"] = 0
-            if totalRequired > 0:
-                if currentAccs["trading"] > totalRequired:
-                    # 2(b) Need more income - take out required income from trading account
-                    if totalRequired > cgtaxAllowance:
-                        # Need to take off cg tax, so amount need take out increased
-                        amtTaxed = totalRequired - cgtaxAllowance
-                        totalRequired += amtTaxed * cgtaxRate / 100
-                    currentAccs["trading"] -= Decimal(totalRequired)
-                    totalRequired = 0
-                elif currentAccs["isa"] > totalRequired:
-                    # 2(c) Run out of funds in trading - take it from ISA
-                    if currentAccs["trading"] > 0:
-                        totalRequired -= float(currentAccs["trading"])
-                        currentAccs["trading"] = 0
-                    currentAccs["isa"] -= Decimal(totalRequired)
-                    totalRequired = 0
-                elif currentAccs["sipp"] > 0:
-                    # 2(d) Use SIPP if anything left after taking dregs from other accounts
-                    if currentAccs["trading"] > 0:
-                        totalRequired -= float(currentAccs["trading"])
-                        currentAccs["trading"] = 0
-                    if currentAccs["isa"] > 0:
-                        totalRequired -= float(currentAccs["isa"])
-                        currentAccs["isa"] = 0
-                    # 2(d) If only have funds in SIPP - take amount required from there but taxed at upper rate
-                    totalRequired += totalRequired * upperTaxRate / 100
-                    if currentAccs["sipp"] > totalRequired:
-                        currentAccs["sipp"] -= Decimal(totalRequired)
+            for owner in accounts:
+                accValues[model][year][owner] = dict()
+                for acc in accounts[owner]:
+                    accValues[model][year][owner][acc] = accValues[model][lastYear][
+                        owner
+                    ][acc]
+                currentAccs = accValues[model][year][owner]
+                for acc, summary in accounts[owner].items():
+                    # 1(a). Increase value by 6 monthly return
+                    if rateReturn == -3:
+                        currentAccs[acc] *= Decimal(
+                            1 + (summary.avgFund3YrReturn / 100) / 2
+                        )
+                    elif rateReturn == -5:
+                        currentAccs[acc] *= Decimal(
+                            1 + (summary.avgFund5YrReturn / 100) / 2
+                        )
                     else:
-                        currentAccs["sipp"] = 0
-
-            if residual6MonthlyIncome > 0:
-                # 3(a) If income left, add to investments
-                if residual6MonthlyIncome < isaAllowance:
-                    # 4(a) Put all residual income in ISA
-                    currentAccs["isa"] += Decimal(residual6MonthlyIncome)
-                    isaAllowance -= residual6MonthlyIncome
+                        currentAccs[acc] *= Decimal(1 + (rateReturn / 100) / 2)
+                # 1(b). Add in state pension
+                if year < 7.0:
+                    # No state pension
+                    maxSippIncome = (
+                        maxTaxableIncome - annualDBIncomeByOwner[owner]
+                    )  # Max can take out of SIPP to keep below upper tax threshold
+                    netMaxSippIncome = maxSippIncome - (
+                        maxSippIncome * lowerTaxRate / 100
+                    )  # Net of tax SIPP income
+                    netPensionMonthlyIncome = 0
                 else:
-                    # 4(b) Amount exceeds ISA investment limits - invest remainder in trading account"
-                    currentAccs["isa"] += Decimal(isaAllowance)
-                    currentAccs["trading"] += Decimal(
-                        residual6MonthlyIncome - isaAllowance
+                    # With state pension
+                    maxSippIncome = (
+                        maxTaxableIncome
+                        - annualDBIncomeByOwner[owner]
+                        - pensionIncomeByOwner[owner]
                     )
-                    isaAllowance = 0
-            if isaAllowance > 0 and currentAccs["trading"] > 0:
-                # ISA allowance available - move from trading to ISA
-                if currentAccs["trading"] > isaAllowance:
-                    currentAccs["isa"] += Decimal(isaAllowance)
-                    currentAccs["trading"] -= Decimal(isaAllowance)
+                    if maxSippIncome < 0:
+                        maxSippIncome = 0
+                    netMaxSippIncome = maxSippIncome * (
+                        1 - (lowerTaxRate / 100)
+                    )  # Net of tax SIPP income
+                    netPensionMonthlyIncome = (
+                        pensionIncomeByOwner[owner] * (1 - (lowerTaxRate / 100))
+                    ) / 12
+                # 1(c). Take off required income from guaranteed income (DB + State pension)
+                # adjusted by ratio of contribution required
+                totalRequired = (
+                    contributionRatioByOwner[owner] * monthlyMoneyRequired * 6
+                )
+                guaranteedIncome = (netAnnualDBIncomeByOwner[owner] / 2) + (
+                    netPensionMonthlyIncome * 6
+                )
+                if totalRequired > guaranteedIncome:
+                    totalRequired -= guaranteedIncome
+                    residual6MonthlyIncome = 0
                 else:
-                    currentAccs["isa"] += currentAccs["trading"]
-                    currentAccs["trading"] = 0
-                isaAllowance = 0
-            currentAccs["Total"] = (
-                currentAccs["trading"] + currentAccs["isa"] + currentAccs["sipp"]
-            )
+                    totalRequired = 0
+                    residual6MonthlyIncome = guaranteedIncome - totalRequired
+                # Set this period's isaAllowance
+                isaAllowance = maxISAInvestment / 2
+
+                if maxSippIncome > 0:
+                    if currentAccs["sipp"] >= maxSippIncome / 2:
+                        # 2(a). Take out max income from SIPP, i.e. up to upper tax threshold, to make most of tax allowance
+                        currentAccs["sipp"] -= Decimal(maxSippIncome / 2)
+                        sippIncome = netMaxSippIncome / 2
+                        if sippIncome > totalRequired:
+                            # Work out how much money is left after taking out required spends from total income (Defined benefit + max SIPP)
+                            # This will then be invested in ISA or trading accounts
+                            residual6MonthlyIncome += sippIncome - totalRequired
+                            totalRequired = 0
+                        else:
+                            # Income from DB and max SIPP income not enough
+                            totalRequired -= sippIncome
+                    else:
+                        # Clear out SIPP
+                        sippNet = float(currentAccs["sipp"]) * (1 - lowerTaxRate / 100)
+                        if totalRequired > sippNet:
+                            totalRequired -= sippNet
+                        else:
+                            residual6MonthlyIncome += sippNet - totalRequired
+                        currentAccs["sipp"] = 0
+                if totalRequired > 0:
+                    # Still need more cash
+                    if currentAccs["trading"] > totalRequired:
+                        # 2(b) Need more income - take out required income from trading account
+                        if totalRequired > cgtaxAllowance:
+                            # Need to take off cg tax, so amount need take out increased
+                            amtTaxed = totalRequired - cgtaxAllowance
+                            totalRequired += amtTaxed * cgtaxRate / 100
+                        currentAccs["trading"] -= Decimal(totalRequired)
+                        totalRequired = 0
+                    elif currentAccs["isa"] > totalRequired:
+                        # 2(c) Run out of funds in trading - take it from ISA
+                        if currentAccs["trading"] > 0:
+                            totalRequired -= float(currentAccs["trading"])
+                            currentAccs["trading"] = 0
+                        currentAccs["isa"] -= Decimal(totalRequired)
+                        totalRequired = 0
+                    elif currentAccs["sipp"] > 0:
+                        # 2(d) Not enough in other accounts - take more from SIPP account (i.e. above upper tax threshold)
+                        if currentAccs["trading"] > 0:
+                            totalRequired -= float(currentAccs["trading"])
+                            currentAccs["trading"] = 0
+                        if currentAccs["isa"] > 0:
+                            totalRequired -= float(currentAccs["isa"])
+                            currentAccs["isa"] = 0
+                        # 2(d) If only have funds in SIPP - take amount required from there but taxed at upper rate
+                        totalRequired += totalRequired * upperTaxRate / 100
+                        if currentAccs["sipp"] > totalRequired:
+                            currentAccs["sipp"] -= Decimal(totalRequired)
+                        else:
+                            currentAccs["sipp"] = 0
+
+                if residual6MonthlyIncome > 0:
+                    # 3(a) If income left, add to investments
+                    if residual6MonthlyIncome < isaAllowance:
+                        # 4(a) Put all residual income in ISA
+                        currentAccs["isa"] += Decimal(residual6MonthlyIncome)
+                        isaAllowance -= residual6MonthlyIncome
+                    else:
+                        # 4(b) Amount exceeds ISA investment limits - invest remainder in trading account"
+                        currentAccs["isa"] += Decimal(isaAllowance)
+                        currentAccs["trading"] += Decimal(
+                            residual6MonthlyIncome - isaAllowance
+                        )
+                        isaAllowance = 0
+                if isaAllowance > 0 and currentAccs["trading"] > 0:
+                    # ISA allowance available - move from trading to ISA
+                    if currentAccs["trading"] > isaAllowance:
+                        currentAccs["isa"] += Decimal(isaAllowance)
+                        currentAccs["trading"] -= Decimal(isaAllowance)
+                    else:
+                        currentAccs["isa"] += currentAccs["trading"]
+                        currentAccs["trading"] = 0
+                    isaAllowance = 0
+                currentAccs["Total"] = (
+                    currentAccs["trading"] + currentAccs["isa"] + currentAccs["sipp"]
+                )
+            lastYear = year
 
     return accValues
 
 
+# Account values: model [ owner [ account [year, value]]]
 def plotAccountValues(
     dom: body,
-    accountValues: dict[str, dict[float, dict[str, Decimal]]],
+    # Account values: model [ year [ owner [account, value]]]
+    accountValues: dict[str, dict[float, dict[str, dict[str, Decimal]]]],
 ):
     # Plot summary showing total values across all scenarios
     dom.append(h2("Total account values for each scenario by year"))
@@ -176,10 +236,13 @@ def plotAccountValues(
     firstModel = True
     for model, accVals in accountValues.items():
         graphVals[model] = list()
-        for year, fund_value in accVals.items():
+        for year, owners in accVals.items():
+            total = 0
             if firstModel:
                 graphVals["Year"].append(year)
-            graphVals[model].append(fund_value["Total"])
+            for accs in owners.values():
+                total += accs["Total"]
+            graphVals[model].append(total)
         firstModel = False
     df = DataFrame(graphVals)
     fig = px.line(
@@ -198,15 +261,17 @@ def plotAccountValues(
         dom.append(h2(f"Scenario: {model} annual return"))
         graphVals: dict[str, list[float]] = {
             "Year": list(),
-            "Total": list(),
-            "trading": list(),
-            "isa": list(),
-            "sipp": list(),
         }
-        for year, fund_value in accVals.items():
+        firstYear = True
+        for year, owners in accVals.items():
             graphVals["Year"].append(year)
-            for key, val in fund_value.items():
-                graphVals[key].append(val)
+            for owner, accs in owners.items():
+                for acc, val in accs.items():
+                    accName = f"{owner}-{acc}"
+                    if firstYear:
+                        graphVals[accName] = list()
+                    graphVals[accName].append(val)
+            firstYear = False
         df = DataFrame(graphVals)
         fig = px.line(
             df,
@@ -230,34 +295,45 @@ def plotAccountValues(
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Process accounts to model drawdown")
+    # parser = argparse.ArgumentParser(description="Process accounts to model drawdown")
     # parser.add_argument('-d', '--hdfs', action='store_const', const=False, default=True,
     #                    help='Set if using hdfs filesystem rather than local store (True)')
-    parser.add_argument(
-        "--owner", default="danny", help="name of the owner of the accounts"
-    )
-    args = vars(parser.parse_args())
-    accountOwner = args["owner"]
+    # parser.add_argument(
+    #     "--owner", default="danny", help="name of the owner of the accounts"
+    # )
+    # args = vars(parser.parse_args())
+    # accountOwner = args["owner"]
 
     config = configparser.ConfigParser()
     config.read("./stockpicker.ini")
     localeStr = config["stats"]["locale"]
-    locale.setlocale(locale.LC_ALL, localeStr)
-    config.set("owner", "accountowner", accountOwner)
 
-    # Read in account summaries
-    accountList = config["pension_model"][f"{accountOwner}_accounts"].split(",")
-    ratesOfReturn = [
-        int(x.strip()) for x in config["pension_model"]["ratesOfReturn"].split(",")
-    ]
-    accounts: dict[str, AccountSummary] = dict()
-    for acc in accountList:
-        accounts[acc] = AccountSummary.from_json(
-            retrieveStringFromDropbox(
+    modelConfig = config["pension_model"]
+    locale.setlocale(locale.LC_ALL, localeStr)
+    owners: list() = modelConfig["model_owners"].split(",")
+
+    accounts: dict[str, dict[str, AccountSummary]] = dict()
+    accountList = ("sipp", "trading", "isa")
+    for accountOwner in owners:
+        # Read in account summaries
+        ratesOfReturn = [
+            int(x.strip()) for x in config["pension_model"]["ratesOfReturn"].split(",")
+        ]
+        accounts[accountOwner] = dict()
+        for acc in accountList:
+            retStr: str = retrieveStringFromDropbox(
                 config["store"],
                 f"/{accountOwner}-performance/csvFiles/{acc}-Summary.json",
             )
-        )
+            if "NO FILE READ" not in retStr:
+                accounts[accountOwner][acc] = AccountSummary.from_json(retStr)
+            else:
+                # Calculated Summary not available - use figure in ini file
+                summary = AccountSummary(acc, accountOwner)
+                summary.totalMarketValue = Decimal(
+                    config["pension_model"][f"{accountOwner}_{acc}"]
+                )
+                accounts[accountOwner][acc] = summary
 
     # Initialise output html dom
     ht = html(meta(_charset="UTF-8"))
@@ -274,15 +350,15 @@ def main():
     dom = body()
     ht.append(dom)
 
-    pensionConfig = config["pension_model"]
-
     # Run drawdown with various monthlyRequired to get close as possible to 0 for the required number of years
-    noOfYears = int(pensionConfig["ageMoneyRequiredUntil"]) - int(
-        pensionConfig["ageAtRetirement"]
+    # This shows the maximum safe withdrawal rate as a net income
+    noOfYears = int(modelConfig["ageMoneyRequiredUntil"]) - int(
+        modelConfig["ageAtRetirement"]
     )
+    minResidualValue = int(modelConfig["requiredLegacyAmount"])
     maxDrawdownByModel = dict()
     for rate in ratesOfReturn:
-        monthlyMoneyRequired = int(pensionConfig["monthlyIncomeRequired"])
+        monthlyMoneyRequired = int(modelConfig["monthlyIncomeRequired"])
         if rate == -3:
             model = "hist3yr%"
         elif rate == -5:
@@ -292,10 +368,13 @@ def main():
         lastMonthly = 0
         while True:
             accVals = calculate_drawdown(config, monthlyMoneyRequired, [rate], accounts)
-            if accVals[model][noOfYears]["Total"] > 0:
+            total = 0
+            for owner in owners:
+                total += accVals[model][noOfYears][owner]["Total"]
+            if total > minResidualValue:
                 # Had money left so increase monthly outgoings by 1% until we have used it all
                 lastMonthly = monthlyMoneyRequired
-                lastTotal = accVals[model][noOfYears]["Total"]
+                lastTotal = total
                 monthlyMoneyRequired *= 1.01
             elif lastMonthly > 0:
                 # Got max value, which is previous attempt
@@ -309,10 +388,10 @@ def main():
     dom.append(h2("Max monthly total income by rate of return"))
     maxResults = table()
     maxResults.appendChild(
-        tr(
+        th(
             td("Rate of Return"),
             td("Total Monthly Income"),
-            td(f"Residual value at {pensionConfig['ageMoneyRequiredUntil']}"),
+            td(f"Residual value at {modelConfig['ageMoneyRequiredUntil']}"),
         )
     )
     for rate, (monthlyIncome, residual) in maxDrawdownByModel.items():
@@ -321,7 +400,7 @@ def main():
         )
     dom.append(maxResults)
 
-    monthlyMoneyRequired = int(pensionConfig["monthlyIncomeRequired"])
+    monthlyMoneyRequired = int(modelConfig["monthlyIncomeRequired"])
     # Run drawdown with various rates of return for required income
     accountValues = calculate_drawdown(
         config, monthlyMoneyRequired, ratesOfReturn, accounts
@@ -330,18 +409,21 @@ def main():
     # Print out results based on required drawdown
     taxAllowance = int(config["tax_thresholds"]["incomeTaxAllowance"])
     lowerTaxRate = int(config["sipp_tax_rates"]["withdrawlLowerTax"])
-    monthlyMoneyRequired = int(pensionConfig["monthlyIncomeRequired"])
-    annualDBIncome = int(pensionConfig["finalSalaryPension"])
-    pensionIncome = int(pensionConfig["statePensionPerMonth"]) * 12
-    netPensionMonthlyIncome = (
-        pensionIncome - (pensionIncome * lowerTaxRate / 100)
-    ) / 12
-    netannualDBIncome = (
-        annualDBIncome - (annualDBIncome - taxAllowance) * lowerTaxRate / 100
-    )
+    monthlyMoneyRequired = int(modelConfig["monthlyIncomeRequired"])
+    netAnnualDBIncome = 0
+    netPensionMonthlyIncome = 0
+    for owner in owners:
+        annualDBIncome = int(modelConfig[f"{owner}_finalSalaryPension"])
+        netAnnualDBIncome += (
+            annualDBIncome - (annualDBIncome - taxAllowance) * lowerTaxRate / 100
+        )
+        pensionIncome = int(modelConfig[f"{owner}_statePensionPerMonth"]) * 12
+        netPensionMonthlyIncome += (
+            pensionIncome - (pensionIncome * lowerTaxRate / 100)
+        ) / 12
     dom.append(h1("Modelling drawdown on investment funds"))
     dom.append(h3(f"Monthly Required Income: £{monthlyMoneyRequired:,.0f}"))
-    dom.append(h3(f"Net Monthly Defined Benefit Income: £{netannualDBIncome/12:,.0f}"))
+    dom.append(h3(f"Net Monthly Defined Benefit Income: £{netAnnualDBIncome/12:,.0f}"))
     dom.append(
         h3(
             f"Net Monthly State Pension Income (Year 7+): £{netPensionMonthlyIncome:,.0f}"
@@ -359,8 +441,9 @@ def main():
     #             f"{year}\t£{total:,.0f}\t£{fund_value['trading']:,.0f}\t£{fund_value['isa']:,.0f}\t£{fund_value['sipp']:,.0f}\n"
     #         )
     retStr = f"{ht}"
-    with open("model-output.html", "w", encoding="utf-8") as fp:
-        fp.write(retStr)
+    saveStringToDropbox(config["store"], "model-output.html", retStr)
+    # with open("model-output.html", "w", encoding="utf-8") as fp:
+    #     fp.write(retStr)
 
 
 if __name__ == "__main__":
