@@ -28,6 +28,38 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
                 """
               .positive { color: green}
               .negative { color: red}
+        /* Add CSS styles to make the table look attractive */
+        table {
+            font-family: Arial, sans-serif;
+            border-collapse: collapse;
+            width: 80%;
+            margin: 20px auto;
+            box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        th, td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+
+        th {
+            background-color: #f2f2f2;
+            color: #333;
+        }
+
+        tr:hover {
+            background-color: #f5f5f5;
+        }
+
+        tr:nth-child(even) {
+            background-color: #f2f2f2;
+        }
+
+        caption {
+            font-size: 1.5em;
+            margin-bottom: 10px;
+        }
         """
             )
         )
@@ -976,7 +1008,7 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
         totals[accountSummary.name] = 0
         if yr in accountSummary.allIncomeByYearMonth:
             incMonths = accountSummary.allIncomeByYearMonth[yr]
-            for month in range(12, 1, -1):
+            for month in range(12, 0, -1):
                 if month in incMonths:
                     totals[accountSummary.name] += incMonths[month]
                     row = tr()

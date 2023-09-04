@@ -6,7 +6,7 @@ import numpy as np
 from decimal import Decimal
 import plotly.express as px
 from pandas import DataFrame
-from domonic.html import td, tr, th, body, table, h1, h2, h3, html, meta, style, head
+from domonic.html import td, tr, th, body, table, h1, h2, h3, html, meta, style, head, b
 
 from saveRetreiveFiles import retrieveStringFromDropbox, saveStringToDropbox
 from transactionDefs import AccountSummary
@@ -250,7 +250,7 @@ def plotAccountValues(
         x="Year",
         y=df.columns,
         hover_data={"Year"},
-        labels={"Total": "£"},
+        labels={"value": "Account Total £"},
     )
     # fig.update_xaxes(dtick="M1", tickformat="%b\n%Y")
     # fig.show()
@@ -278,7 +278,7 @@ def plotAccountValues(
             x="Year",
             y=df.columns,
             hover_data={"Year"},
-            labels={"Value": "£"},
+            labels={"value": "Account total £"},
         )
         # fig.update_xaxes(dtick="M1", tickformat="%b\n%Y")
         # fig.show()
@@ -343,6 +343,38 @@ def main():
                 """
               .positive { color: green}
               .negative { color: red}
+        /* Add CSS styles to make the table look attractive */
+        table {
+            font-family: Arial, sans-serif;
+            border-collapse: collapse;
+            width: 80%;
+            margin: 20px auto;
+            box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        th, td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+
+        th {
+            background-color: #f2f2f2;
+            color: #333;
+        }
+
+        tr:hover {
+            background-color: #f5f5f5;
+        }
+
+        tr:nth-child(even) {
+            background-color: #f2f2f2;
+        }
+
+        caption {
+            font-size: 1.5em;
+            margin-bottom: 10px;
+        }
         """
             )
         )
@@ -388,10 +420,10 @@ def main():
     dom.append(h2("Max monthly total income by rate of return"))
     maxResults = table()
     maxResults.appendChild(
-        th(
-            td("Rate of Return"),
-            td("Total Monthly Income"),
-            td(f"Residual value at {modelConfig['ageMoneyRequiredUntil']}"),
+        tr(
+            td(b("Rate of Return")),
+            td(b("Monthly Income")),
+            td(b(f"Residual value at {modelConfig['ageMoneyRequiredUntil']}")),
         )
     )
     for rate, (monthlyIncome, residual) in maxDrawdownByModel.items():
