@@ -633,6 +633,7 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
     dom.appendChild(fs)
     dom.appendChild(h3("Portfolio Percentages and guardrails"))
     fs = table()
+    percByType: dict[str, float] = dict()
     fs.appendChild(
         tr(
             th("Type"),
@@ -645,6 +646,7 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
         )
     )
     stocksPerc = 100 * totStocks / totalAccountValue
+    percByType["Stocks"] = stocksPerc
     smin = int(portPerc["stocks_min"])
     smax = int(portPerc["stocks_max"])
     ideal = int(portPerc["stocks_ideal"])
@@ -671,6 +673,7 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
         )
     )
     bondsPerc = 100 * totBonds / totalAccountValue
+    percByType["Bonds"] = bondsPerc
     smin = int(portPerc["bonds_min"])
     smax = int(portPerc["bonds_max"])
     ideal = int(portPerc["bonds_ideal"])
@@ -691,6 +694,7 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
         )
     )
     cashPerc = 100 * totCash / totalAccountValue
+    percByType["Cash"] = cashPerc
     smin = int(portPerc["cash_min"])
     smax = int(portPerc["cash_max"])
     ideal = int(portPerc["cash_ideal"])
@@ -711,6 +715,7 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
         )
     )
     goldPerc = 100 * totGold / totalAccountValue
+    percByType["Gold"] = goldPerc
     smin = int(portPerc["gold_min"])
     smax = int(portPerc["gold_max"])
     ideal = int(portPerc["gold_ideal"])
@@ -737,19 +742,32 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
             td(f"{goldPerc+cashPerc+bondsPerc+stocksPerc:0.02f}%"),
         )
     )
+    fig = px.pie(names=percByType.keys(), values=percByType.values())
+    fig.update_traces(textposition="inside", textinfo="percent+label")
+    fig.update_layout(
+        legend=dict(
+            xref="paper", orientation="h", x=0.4
+        ),  # Position legend horizontally and adjust 'y' to position it
+    )
+    dom.appendChild(fig.to_html())
+    # Show table below
     dom.appendChild(fs)
+
+    percByInstitute = dict()
     if len(accountSummary.totalByInstitution) > 0:
-        dom.appendChild(h3("Value by Institution"))
+        dom.appendChild(h3("Value by Institution and % split"))
         fi = table()
         totVal = Decimal(0.0)
         val = Decimal(0.0)
         fi.appendChild(tr(th("Institution"), th("Value"), th("Total Account %")))
         for inst, val in accountSummary.totalByInstitution.items():
+            perc = 100.0 * float(val / totalAccountValue)
+            percByInstitute[inst] = perc
             fi.appendChild(
                 tr(
                     td(inst),
                     td(f"£{val:,.0f}"),
-                    td(f"{100.0*float(val/totalAccountValue):0.02f}%"),
+                    td(f"{perc:0.02f}%"),
                 )
             )
             totVal += val
@@ -760,6 +778,19 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
                 td(f"{100.0*float(totVal/totalAccountValue):0.02f}%"),
             )
         )
+        fig = px.pie(
+            names=percByInstitute.keys(),
+            values=percByInstitute.values(),
+        )
+        fig.update_traces(textposition="inside", textinfo="percent+label")
+        fig.update_layout(
+            showlegend=True,  # Show legend
+            legend=dict(
+                xref="paper", orientation="v", x=0.75
+            ),  # Position legend horizontally and adjust 'y' to position it
+        )
+        dom.appendChild(fig.to_html())
+        # Show table below
         dom.appendChild(fi)
 
     dom.appendChild(h3("Fund Risks"))
@@ -891,7 +922,26 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
             td(f"{totPerc:0.02f}%"),
         )
     )
+    fig = px.pie(
+        names=("Americas", "Asia", "UK", "Europe exUK"),
+        values=(
+            (totamer + totamerem) / totVal,
+            (totasia + totasiaem) / totVal,
+            totuk / totVal,
+            (toteuro + toteuroem) / totVal,
+        ),
+    )
+    fig.update_traces(textposition="inside", textinfo="percent+label")
+    fig.update_layout(
+        showlegend=True,  # Show legend
+        legend=dict(
+            xref="paper", orientation="h", x=0.4
+        ),  # Position legend horizontally and adjust 'y' to position it
+    )
+    dom.appendChild(fig.to_html())
+    # Show table below chart
     dom.appendChild(fr)
+
     dom.appendChild(h3("Fund Diversity"))
     fr = table()
     fr.appendChild(
