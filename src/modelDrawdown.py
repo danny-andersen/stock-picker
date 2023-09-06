@@ -294,22 +294,8 @@ def plotAccountValues(
     #         )
 
 
-def main():
-    # parser = argparse.ArgumentParser(description="Process accounts to model drawdown")
-    # parser.add_argument('-d', '--hdfs', action='store_const', const=False, default=True,
-    #                    help='Set if using hdfs filesystem rather than local store (True)')
-    # parser.add_argument(
-    #     "--owner", default="danny", help="name of the owner of the accounts"
-    # )
-    # args = vars(parser.parse_args())
-    # accountOwner = args["owner"]
-
-    config = configparser.ConfigParser()
-    config.read("./stockpicker.ini")
-    localeStr = config["stats"]["locale"]
-
+def runDrawdownModel(config: configparser.ConfigParser):
     modelConfig = config["pension_model"]
-    locale.setlocale(locale.LC_ALL, localeStr)
     owners: list() = modelConfig["model_owners"].split(",")
 
     accounts: dict[str, dict[str, AccountSummary]] = dict()
@@ -479,4 +465,18 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    # parser = argparse.ArgumentParser(description="Process accounts to model drawdown")
+    # parser.add_argument('-d', '--hdfs', action='store_const', const=False, default=True,
+    #                    help='Set if using hdfs filesystem rather than local store (True)')
+    # parser.add_argument(
+    #     "--owner", default="danny", help="name of the owner of the accounts"
+    # )
+    # args = vars(parser.parse_args())
+    # accountOwner = args["owner"]
+
+    config = configparser.ConfigParser()
+    config.read("./stockpicker.ini")
+    localeStr = config["stats"]["locale"]
+    locale.setlocale(locale.LC_ALL, localeStr)
+
+    runDrawdownModel(config)

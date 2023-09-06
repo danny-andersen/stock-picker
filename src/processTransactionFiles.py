@@ -13,6 +13,8 @@ from getStockLedgerStr import (
 )
 from decimal import Decimal
 
+from modelDrawdown import runDrawdownModel
+
 
 def saveStockLedger(config, accountSummary: AccountSummary):
     for details in accountSummary.stocks:
@@ -977,3 +979,9 @@ def processTransactions(config):
     totalSummary.mergeInAccountSummary(otherAccounts)
     print(f"{datetime.now()}:Saving and generating summary", flush=True)
     saveAccountSummary(configStore, totalSummary)  # Create overall summary
+    # Run drawdown model
+    print(
+        f"{datetime.now()}:Running drawdown model based on latest account details",
+        flush=True,
+    )
+    runDrawdownModel(config)
