@@ -427,6 +427,11 @@ def runDrawdownModel(config: configparser.ConfigParser):
             "Max monthly total income by rate of return relative to inflation, in terms of today's money"
         )
     )
+    dom.append(
+        h3(
+            f"Required amount to be left at aged {ageRequiredTo}: £{minResidualValue:,.0f}"
+        )
+    )
     maxResults = table()
     maxResults.appendChild(
         tr(
@@ -436,6 +441,8 @@ def runDrawdownModel(config: configparser.ConfigParser):
         )
     )
     for rate, (monthlyIncome, residual) in maxDrawdownByModel.items():
+        if rate == "0.0%":
+            zeroGrowthMaxDrawdown = monthlyIncome
         maxResults.appendChild(
             tr(td(f"{rate}"), td(f"£{monthlyIncome:,.0f}"), td(f"£{residual:,.0f}"))
         )
@@ -506,6 +513,52 @@ def runDrawdownModel(config: configparser.ConfigParser):
     dom.append(
         h3(
             f"Calculated minimum rate of return (less inflation) to support average required income is {minimiumSustainableRate:,.1f}%, giving residual value of £{residualAmountAtMinRate:,.0f} at aged {ageRequiredTo}"
+        )
+    )
+    plotAccountValues(dom, accountValues)
+
+    # Run model drawdown with max drawdown for 0% growth rate (as calculated above) with various rates of return
+    # This will show how the account values change over the drawdown period
+    monthlyMoneyRequired = zeroGrowthMaxDrawdown
+    # Re-create rates of return array
+    ratesOfReturn = [
+        int(x.strip()) for x in config["pension_model"]["ratesOfReturn"].split(",")
+    ]
+    # Insert rates of return that indicate to use account historic rates
+    ratesOfReturn.insert(0, 3000)
+    ratesOfReturn.insert(0, 5000)
+    accountValues = calculate_drawdown(
+        config, monthlyMoneyRequired, ratesOfReturn, accounts
+    )
+
+    # Print out results based on required drawdown
+    taxAllowance = int(config["tax_thresholds"]["incomeTaxAllowance"])
+    lowerTaxRate = int(config["sipp_tax_rates"]["withdrawlLowerTax"])
+    monthlyMoneyRequired = zeroGrowthMaxDrawdown
+    netAnnualDBIncome = 0
+    netPensionMonthlyIncome = 0
+    for owner in owners:
+        annualDBIncome = int(modelConfig[f"{owner}_finalSalaryPension"])
+        netAnnualDBIncome += (
+            annualDBIncome - (annualDBIncome - taxAllowance) * lowerTaxRate / 100
+        )
+        pensionIncome = int(modelConfig[f"{owner}_statePensionPerMonth"]) * 12
+        netPensionMonthlyIncome += (
+            pensionIncome - (pensionIncome * lowerTaxRate / 100)
+        ) / 12
+    dom.append(
+        h1("Modelling max sustainable drawdown with zero growth on investment funds")
+    )
+    dom.append(h3(f"Average Monthly Drawdown amount: £{monthlyMoneyRequired:,.0f}"))
+    dom.append(h3(f"Net Monthly Defined Benefit Income: £{netAnnualDBIncome/12:,.0f}"))
+    dom.append(
+        h3(
+            f"Net Monthly State Pension Income (Year 7+): £{netPensionMonthlyIncome:,.0f}"
+        )
+    )
+    dom.append(
+        h3(
+            f"Required amount to be left at aged {ageRequiredTo}: £{minResidualValue:,.0f}"
         )
     )
     plotAccountValues(dom, accountValues)
