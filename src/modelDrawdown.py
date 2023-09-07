@@ -29,6 +29,7 @@ def calculate_drawdown(
     upperTaxRate = int(config["sipp_tax_rates"]["withdrawlUpperTax"])
     maxTaxableIncome = int(config["tax_thresholds"]["incomeUpperThreshold"])
     maxISAInvestment = int(config["isa_tax_rates"]["maxYearlyInvestment"])
+    minResidualValue = int(pensionConfig["requiredLegacyAmount"])
 
     owners = accounts.keys()
     pensionIncomeByOwner = dict()
@@ -58,12 +59,13 @@ def calculate_drawdown(
     # Account values: model [ year [ owner [account, value]]]
     accValues: dict[str, dict[float, dict[str, dict[str, Decimal]]]] = dict()
     for rateReturn in ratesOfReturn:
-        if rateReturn == -3:
+        # Convert "special" rates passed in to historic rates
+        if rateReturn == 3000:
             model = "hist3yr%"
-        elif rateReturn == -5:
+        elif rateReturn == 5000:
             model = "hist5yr%"
         else:
-            model = f"{rateReturn}%"
+            model = f"{rateReturn:.1f}%"
         # Set initial value based on current market value of accounts
         accValues[model] = dict()
         accValues[model][0] = dict()
@@ -75,11 +77,12 @@ def calculate_drawdown(
                 accValues[model][0][owner].values()
             )
         lastYear = 0
+        lastRemainingTotal = 0
         for year in np.arange(0.5, noOfYears + 0.5, 0.5):
             # Run model every 6 months
-            # TODO: Allow for inflation
             # 0. Set up this years starting values as the same as end of last period
             accValues[model][year] = dict()
+            totalAccounts = 0
             for owner in accounts:
                 accValues[model][year][owner] = dict()
                 for acc in accounts[owner]:
@@ -89,17 +92,18 @@ def calculate_drawdown(
                 currentAccs = accValues[model][year][owner]
                 for acc, summary in accounts[owner].items():
                     # 1(a). Increase value by 6 monthly return
-                    if rateReturn == -3:
+                    # Convert "special" rates passed into historical rates
+                    if rateReturn == 3000:
                         currentAccs[acc] *= Decimal(
-                            1 + (summary.avgFund3YrReturn / 100) / 2
+                            1 + (summary.avgFund3YrReturn / 200)
                         )
-                    elif rateReturn == -5:
+                    elif rateReturn == 5000:
                         currentAccs[acc] *= Decimal(
-                            1 + (summary.avgFund5YrReturn / 100) / 2
+                            1 + (summary.avgFund5YrReturn / 200)
                         )
                     else:
-                        currentAccs[acc] *= Decimal(1 + (rateReturn / 100) / 2)
-                # 1(b). Add in state pension
+                        currentAccs[acc] *= Decimal(1 + rateReturn / 200)
+                # 1(b). Add in state pension at 67
                 if year < 7.0:
                     # No state pension
                     maxSippIncome = (
@@ -121,23 +125,25 @@ def calculate_drawdown(
                     netMaxSippIncome = maxSippIncome * (
                         1 - (lowerTaxRate / 100)
                     )  # Net of tax SIPP income
+                    # Fully tax state pension
                     netPensionMonthlyIncome = (
                         pensionIncomeByOwner[owner] * (1 - (lowerTaxRate / 100))
                     ) / 12
                 # 1(c). Take off required income from guaranteed income (DB + State pension)
                 # adjusted by ratio of contribution required
                 totalRequired = (
-                    contributionRatioByOwner[owner] * monthlyMoneyRequired * 6
+                    lastRemainingTotal
+                    + contributionRatioByOwner[owner] * monthlyMoneyRequired * 6
                 )
                 guaranteedIncome = (netAnnualDBIncomeByOwner[owner] / 2) + (
                     netPensionMonthlyIncome * 6
                 )
                 if totalRequired > guaranteedIncome:
-                    totalRequired -= guaranteedIncome
                     residual6MonthlyIncome = 0
+                    totalRequired -= guaranteedIncome
                 else:
-                    totalRequired = 0
                     residual6MonthlyIncome = guaranteedIncome - totalRequired
+                    totalRequired = 0
                 # Set this period's isaAllowance
                 isaAllowance = maxISAInvestment / 2
 
@@ -191,9 +197,12 @@ def calculate_drawdown(
                         totalRequired += totalRequired * upperTaxRate / 100
                         if currentAccs["sipp"] > totalRequired:
                             currentAccs["sipp"] -= Decimal(totalRequired)
+                            totalRequired = 0
                         else:
+                            totalRequired -= currentAccs["sipp"]
                             currentAccs["sipp"] = 0
-
+                # Carry forward any remaining total
+                lastRemainingTotal = totalRequired
                 if residual6MonthlyIncome > 0:
                     # 3(a) If income left, add to investments
                     if residual6MonthlyIncome < isaAllowance:
@@ -219,6 +228,10 @@ def calculate_drawdown(
                 currentAccs["Total"] = (
                     currentAccs["trading"] + currentAccs["isa"] + currentAccs["sipp"]
                 )
+                totalAccounts += currentAccs["Total"]
+            if totalAccounts <= minResidualValue:
+                # We are bust - break from simulation
+                break
             lastYear = year
 
     return accValues
@@ -300,11 +313,14 @@ def runDrawdownModel(config: configparser.ConfigParser):
 
     accounts: dict[str, dict[str, AccountSummary]] = dict()
     accountList = ("sipp", "trading", "isa")
+    ratesOfReturn = [
+        int(x.strip()) for x in config["pension_model"]["ratesOfReturn"].split(",")
+    ]
+    # Insert rates of return that indicate to use account historic rates
+    ratesOfReturn.insert(0, 3000)
+    ratesOfReturn.insert(0, 5000)
     for accountOwner in owners:
         # Read in account summaries
-        ratesOfReturn = [
-            int(x.strip()) for x in config["pension_model"]["ratesOfReturn"].split(",")
-        ]
         accounts[accountOwner] = dict()
         for acc in accountList:
             retStr: str = retrieveStringFromDropbox(
@@ -368,28 +384,31 @@ def runDrawdownModel(config: configparser.ConfigParser):
     dom = body()
     ht.append(dom)
 
-    # Run drawdown with various monthlyRequired to get close as possible to 0 for the required number of years
+    # Run drawdown with various monthlyRequired to get close as possible to the requiredlegacyAmount for the required number of years
     # This shows the maximum safe withdrawal rate as a net income
-    noOfYears = int(modelConfig["ageMoneyRequiredUntil"]) - int(
-        modelConfig["ageAtRetirement"]
-    )
+    ageRequiredTo = modelConfig["ageMoneyRequiredUntil"]
+    noOfYears = int(ageRequiredTo) - int(modelConfig["ageAtRetirement"])
+
     minResidualValue = int(modelConfig["requiredLegacyAmount"])
     maxDrawdownByModel = dict()
     for rate in ratesOfReturn:
         monthlyMoneyRequired = int(modelConfig["monthlyIncomeRequired"])
-        if rate == -3:
+        if rate == 3000:
             model = "hist3yr%"
-        elif rate == -5:
+        elif rate == 5000:
             model = "hist5yr%"
         else:
-            model = f"{rate}%"
+            model = f"{rate:,.1f}%"
         lastMonthly = 0
         while True:
             accVals = calculate_drawdown(config, monthlyMoneyRequired, [rate], accounts)
             total = 0
-            for owner in owners:
-                total += accVals[model][noOfYears][owner]["Total"]
-            if total > minResidualValue:
+            # Check whether the given return rate failed, i.e. money ran out before the years were up
+            fail = max(accVals[model].keys()) < noOfYears
+            if not fail:
+                for owner in owners:
+                    total += accVals[model][noOfYears][owner]["Total"]
+            if not fail and total > minResidualValue:
                 # Had money left so increase monthly outgoings by 1% until we have used it all
                 lastMonthly = monthlyMoneyRequired
                 lastTotal = total
@@ -403,13 +422,17 @@ def runDrawdownModel(config: configparser.ConfigParser):
                 monthlyMoneyRequired *= 0.995
 
     # Print out max drawdown results
-    dom.append(h2("Max monthly total income by rate of return"))
+    dom.append(
+        h2(
+            "Max monthly total income by rate of return relative to inflation, in terms of today's money"
+        )
+    )
     maxResults = table()
     maxResults.appendChild(
         tr(
             td(b("Rate of Return")),
             td(b("Monthly Income")),
-            td(b(f"Residual value at {modelConfig['ageMoneyRequiredUntil']}")),
+            td(b(f"Residual value at {ageRequiredTo}")),
         )
     )
     for rate, (monthlyIncome, residual) in maxDrawdownByModel.items():
@@ -418,8 +441,41 @@ def runDrawdownModel(config: configparser.ConfigParser):
         )
     dom.append(maxResults)
 
+    # Run drawdown with various negative growths to get close as possible to requiredlegacyAmount for the required number of years
+    # whilst maintaining the required net income.
+    # This shows what the worst case growth rate that we can observe without impacting what monthly money is drawdown
+
     monthlyMoneyRequired = int(modelConfig["monthlyIncomeRequired"])
-    # Run drawdown with various rates of return for required income
+    rate = 0
+    lastRate = 0.1
+    lastTotal = -1
+    while True:
+        accVals = calculate_drawdown(config, monthlyMoneyRequired, [rate], accounts)
+        total = 0
+        fail = max(accVals[f"{rate:,.1f}%"].keys()) < noOfYears
+        if not fail:
+            for owner in owners:
+                total += accVals[f"{rate:,.1f}%"][noOfYears][owner]["Total"]
+        if not fail and total > minResidualValue:
+            # Had money left so decrease rate of return by 0.1% until we hit zero
+            lastRate = rate
+            lastTotal = total
+            rate -= 0.1
+        elif lastTotal != -1:
+            # Got min return rate, which is previous attempt
+            break
+        else:
+            # First attempt failed - increase rate until final amount above legacy amount
+            rate += 0.1
+
+    # Save results
+    minimiumSustainableRate = lastRate
+    residualAmountAtMinRate = lastTotal
+
+    # Run model drawdown with various rates of return for required income
+    # This will show how the account values change over the drawdown period
+    monthlyMoneyRequired = int(modelConfig["monthlyIncomeRequired"])
+    ratesOfReturn.insert(0, minimiumSustainableRate)
     accountValues = calculate_drawdown(
         config, monthlyMoneyRequired, ratesOfReturn, accounts
     )
@@ -440,16 +496,21 @@ def runDrawdownModel(config: configparser.ConfigParser):
             pensionIncome - (pensionIncome * lowerTaxRate / 100)
         ) / 12
     dom.append(h1("Modelling drawdown on investment funds"))
-    dom.append(h3(f"Monthly Required Income: £{monthlyMoneyRequired:,.0f}"))
+    dom.append(h3(f"Average Monthly Required Income: £{monthlyMoneyRequired:,.0f}"))
     dom.append(h3(f"Net Monthly Defined Benefit Income: £{netAnnualDBIncome/12:,.0f}"))
     dom.append(
         h3(
             f"Net Monthly State Pension Income (Year 7+): £{netPensionMonthlyIncome:,.0f}"
         )
     )
+    dom.append(
+        h3(
+            f"Calculated minimum rate of return (less inflation) to support average required income is {minimiumSustainableRate:,.1f}%, giving residual value of £{residualAmountAtMinRate:,.0f} at aged {ageRequiredTo}"
+        )
+    )
     plotAccountValues(dom, accountValues)
 
-    # # Display the results
+    # Display the results
     # for model, accVals in accountValues.items():
     #     print(f"Scenario: {model} annual return\n")
     #     print("\nYear\tTotal\ttrading\tisa\tsipp")
