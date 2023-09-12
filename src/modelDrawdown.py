@@ -11,24 +11,28 @@ from domonic.html import td, tr, th, body, table, h1, h2, h3, html, meta, style,
 from saveRetreiveFiles import retrieveStringFromDropbox, saveStringToDropbox
 from transactionDefs import AccountSummary
 
+HIST3YR = "3yr Historic return%"
+HIST5YR = "5yr Historic return%"
+TOTAL = "Total"
+
 
 def calculate_drawdown(
-    config: configparser.ConfigParser,
+    configIni: configparser.ConfigParser,
     monthlyMoneyRequired: int,
     ratesOfReturn: list,
     accounts: dict[str, dict[str, AccountSummary]],
 ):
-    pensionConfig = config["pension_model"]
+    pensionConfig = configIni["pension_model"]
     noOfYears = int(pensionConfig["ageMoneyRequiredUntil"]) - int(
         pensionConfig["ageAtRetirement"]
     )
-    taxAllowance = int(config["tax_thresholds"]["incomeTaxAllowance"])
-    cgtaxAllowance = int(config["tax_thresholds"]["capitalGainTaxAllowance"])
-    cgtaxRate = int(config["trading_tax_rates"]["capitalGainLowerTax"])
-    lowerTaxRate = int(config["sipp_tax_rates"]["withdrawlLowerTax"])
-    upperTaxRate = int(config["sipp_tax_rates"]["withdrawlUpperTax"])
-    maxTaxableIncome = int(config["tax_thresholds"]["incomeUpperThreshold"])
-    maxISAInvestment = int(config["isa_tax_rates"]["maxYearlyInvestment"])
+    taxAllowance = int(configIni["tax_thresholds"]["incomeTaxAllowance"])
+    cgtaxAllowance = int(configIni["tax_thresholds"]["capitalGainTaxAllowance"])
+    cgtaxRate = int(configIni["trading_tax_rates"]["capitalGainLowerTax"])
+    lowerTaxRate = int(configIni["sipp_tax_rates"]["withdrawlLowerTax"])
+    upperTaxRate = int(configIni["sipp_tax_rates"]["withdrawlUpperTax"])
+    maxTaxableIncome = int(configIni["tax_thresholds"]["incomeUpperThreshold"])
+    maxISAInvestment = int(configIni["isa_tax_rates"]["maxYearlyInvestment"])
     minResidualValue = int(pensionConfig["requiredLegacyAmount"])
 
     owners = accounts.keys()
@@ -61,9 +65,9 @@ def calculate_drawdown(
     for rateReturn in ratesOfReturn:
         # Convert "special" rates passed in to historic rates
         if rateReturn == 3000:
-            model = "hist3yr%"
+            model = HIST3YR
         elif rateReturn == 5000:
-            model = "hist5yr%"
+            model = HIST5YR
         else:
             model = f"{rateReturn:.1f}%"
         # Set initial value based on current market value of accounts
@@ -73,9 +77,7 @@ def calculate_drawdown(
             accValues[model][0][owner] = dict()
             for acc, summary in accounts[owner].items():
                 accValues[model][0][owner][acc] = summary.totalMarketValue
-            accValues[model][0][owner]["Total"] = sum(
-                accValues[model][0][owner].values()
-            )
+            accValues[model][0][owner][TOTAL] = sum(accValues[model][0][owner].values())
         lastYear = 0
         lastRemainingTotal = 0
         for year in np.arange(0.5, noOfYears + 0.5, 0.5):
@@ -225,10 +227,10 @@ def calculate_drawdown(
                         currentAccs["isa"] += currentAccs["trading"]
                         currentAccs["trading"] = 0
                     isaAllowance = 0
-                currentAccs["Total"] = (
+                currentAccs[TOTAL] = (
                     currentAccs["trading"] + currentAccs["isa"] + currentAccs["sipp"]
                 )
-                totalAccounts += currentAccs["Total"]
+                totalAccounts += currentAccs[TOTAL]
             if totalAccounts <= minResidualValue:
                 # We are bust - break from simulation
                 break
@@ -254,7 +256,7 @@ def plotAccountValues(
             if firstModel:
                 graphVals["Year"].append(year)
             for accs in owners.values():
-                total += accs["Total"]
+                total += accs[TOTAL]
             graphVals[model].append(total)
         firstModel = False
     df = DataFrame(graphVals)
@@ -307,14 +309,14 @@ def plotAccountValues(
     #         )
 
 
-def runDrawdownModel(config: configparser.ConfigParser):
-    modelConfig = config["pension_model"]
+def runDrawdownModel(configFile: configparser.ConfigParser):
+    modelConfig = configFile["pension_model"]
     owners: list() = modelConfig["model_owners"].split(",")
 
     accounts: dict[str, dict[str, AccountSummary]] = dict()
     accountList = ("sipp", "trading", "isa")
     ratesOfReturn = [
-        int(x.strip()) for x in config["pension_model"]["ratesOfReturn"].split(",")
+        int(x.strip()) for x in configFile["pension_model"]["ratesOfReturn"].split(",")
     ]
     # Insert rates of return that indicate to use account historic rates
     ratesOfReturn.insert(0, 3000)
@@ -324,7 +326,7 @@ def runDrawdownModel(config: configparser.ConfigParser):
         accounts[accountOwner] = dict()
         for acc in accountList:
             retStr: str = retrieveStringFromDropbox(
-                config["store"],
+                configFile["store"],
                 f"/{accountOwner}-performance/csvFiles/{acc}-Summary.json",
             )
             if "NO FILE READ" not in retStr:
@@ -333,7 +335,7 @@ def runDrawdownModel(config: configparser.ConfigParser):
                 # Calculated Summary not available - use figure in ini file
                 summary = AccountSummary(acc, accountOwner)
                 summary.totalMarketValue = Decimal(
-                    config["pension_model"][f"{accountOwner}_{acc}"]
+                    configFile["pension_model"][f"{accountOwner}_{acc}"]
                 )
                 accounts[accountOwner][acc] = summary
 
@@ -394,20 +396,22 @@ def runDrawdownModel(config: configparser.ConfigParser):
     for rate in ratesOfReturn:
         monthlyMoneyRequired = int(modelConfig["monthlyIncomeRequired"])
         if rate == 3000:
-            model = "hist3yr%"
+            model = HIST3YR
         elif rate == 5000:
-            model = "hist5yr%"
+            model = HIST5YR
         else:
             model = f"{rate:,.1f}%"
         lastMonthly = 0
         while True:
-            accVals = calculate_drawdown(config, monthlyMoneyRequired, [rate], accounts)
+            accVals = calculate_drawdown(
+                configFile, monthlyMoneyRequired, [rate], accounts
+            )
             total = 0
             # Check whether the given return rate failed, i.e. money ran out before the years were up
             fail = max(accVals[model].keys()) < noOfYears
             if not fail:
                 for owner in owners:
-                    total += accVals[model][noOfYears][owner]["Total"]
+                    total += accVals[model][noOfYears][owner][TOTAL]
             if not fail and total > minResidualValue:
                 # Had money left so increase monthly outgoings by 1% until we have used it all
                 lastMonthly = monthlyMoneyRequired
@@ -436,7 +440,7 @@ def runDrawdownModel(config: configparser.ConfigParser):
     maxResults.appendChild(
         tr(
             td(b("Rate of Return")),
-            td(b("Monthly Income")),
+            td(b("Max Monthly Income")),
             td(b(f"Residual value at {ageRequiredTo}")),
         )
     )
@@ -457,12 +461,12 @@ def runDrawdownModel(config: configparser.ConfigParser):
     lastRate = 0.1
     lastTotal = -1
     while True:
-        accVals = calculate_drawdown(config, monthlyMoneyRequired, [rate], accounts)
+        accVals = calculate_drawdown(configFile, monthlyMoneyRequired, [rate], accounts)
         total = 0
         fail = max(accVals[f"{rate:,.1f}%"].keys()) < noOfYears
         if not fail:
             for owner in owners:
-                total += accVals[f"{rate:,.1f}%"][noOfYears][owner]["Total"]
+                total += accVals[f"{rate:,.1f}%"][noOfYears][owner][TOTAL]
         if not fail and total > minResidualValue:
             # Had money left so decrease rate of return by 0.1% until we hit zero
             lastRate = rate
@@ -484,12 +488,12 @@ def runDrawdownModel(config: configparser.ConfigParser):
     monthlyMoneyRequired = int(modelConfig["monthlyIncomeRequired"])
     ratesOfReturn.insert(0, minimiumSustainableRate)
     accountValues = calculate_drawdown(
-        config, monthlyMoneyRequired, ratesOfReturn, accounts
+        configFile, monthlyMoneyRequired, ratesOfReturn, accounts
     )
 
     # Print out results based on required drawdown
-    taxAllowance = int(config["tax_thresholds"]["incomeTaxAllowance"])
-    lowerTaxRate = int(config["sipp_tax_rates"]["withdrawlLowerTax"])
+    taxAllowance = int(configFile["tax_thresholds"]["incomeTaxAllowance"])
+    lowerTaxRate = int(configFile["sipp_tax_rates"]["withdrawlLowerTax"])
     monthlyMoneyRequired = int(modelConfig["monthlyIncomeRequired"])
     netAnnualDBIncome = 0
     netPensionMonthlyIncome = 0
@@ -515,6 +519,34 @@ def runDrawdownModel(config: configparser.ConfigParser):
             f"Calculated minimum rate of return (less inflation) to support average required income is {minimiumSustainableRate:,.1f}%, giving residual value of £{residualAmountAtMinRate:,.0f} at aged {ageRequiredTo}"
         )
     )
+
+    dom.append(
+        h2(
+            f"Residual value by rate of return (relative to inflation), in terms of today's money at age {ageRequiredTo}"
+        )
+    )
+
+    results = table()
+    results.appendChild(
+        tr(
+            td(b("Rate of Return")),
+            td(b(f"{owners[0]} total value")),
+            td(b(f"{owners[1]} total value")),
+            td(b("Final total value")),
+        )
+    )
+    for model, accVals in accountValues.items():
+        accOwners = accVals[noOfYears]
+        row = tr()
+        row.append(td(model))
+        total0 = accOwners[owners[0]][TOTAL]
+        total1 = accOwners[owners[1]][TOTAL]
+        row.appendChild(td(f"£{total0:,.0f}"))
+        row.appendChild(td(f"£{total1:,.0f}"))
+        row.appendChild(td(f"£{total0+total1:,.0f}"))
+        results.appendChild(row)
+    dom.append(results)
+
     plotAccountValues(dom, accountValues)
 
     # Run model drawdown with max drawdown for 0% growth rate (as calculated above) with various rates of return
@@ -522,18 +554,18 @@ def runDrawdownModel(config: configparser.ConfigParser):
     monthlyMoneyRequired = zeroGrowthMaxDrawdown
     # Re-create rates of return array
     ratesOfReturn = [
-        int(x.strip()) for x in config["pension_model"]["ratesOfReturn"].split(",")
+        int(x.strip()) for x in configFile["pension_model"]["ratesOfReturn"].split(",")
     ]
     # Insert rates of return that indicate to use account historic rates
     ratesOfReturn.insert(0, 3000)
     ratesOfReturn.insert(0, 5000)
     accountValues = calculate_drawdown(
-        config, monthlyMoneyRequired, ratesOfReturn, accounts
+        configFile, monthlyMoneyRequired, ratesOfReturn, accounts
     )
 
     # Print out results based on required drawdown
-    taxAllowance = int(config["tax_thresholds"]["incomeTaxAllowance"])
-    lowerTaxRate = int(config["sipp_tax_rates"]["withdrawlLowerTax"])
+    taxAllowance = int(configFile["tax_thresholds"]["incomeTaxAllowance"])
+    lowerTaxRate = int(configFile["sipp_tax_rates"]["withdrawlLowerTax"])
     monthlyMoneyRequired = zeroGrowthMaxDrawdown
     netAnnualDBIncome = 0
     netPensionMonthlyIncome = 0
@@ -573,7 +605,7 @@ def runDrawdownModel(config: configparser.ConfigParser):
     #             f"{year}\t£{total:,.0f}\t£{fund_value['trading']:,.0f}\t£{fund_value['isa']:,.0f}\t£{fund_value['sipp']:,.0f}\n"
     #         )
     retStr = f"{ht}"
-    saveStringToDropbox(config["store"], "/model-output.html", retStr)
+    saveStringToDropbox(configFile["store"], "/model-output.html", retStr)
     # with open("model-output.html", "w", encoding="utf-8") as fp:
     #     fp.write(retStr)
 
