@@ -404,9 +404,12 @@ def getPortfolioOverviews(
             csv_reader = csv.DictReader(csvFile, dialect="excel")
             # print(csv_reader.fieldnames)
             symbolField = None
+            gainField = "Gain"
             for fieldname in csv_reader.fieldnames:
                 if "Symbol" in fieldname:
                     symbolField = fieldname
+                if "Gain/Loss" in fieldname:
+                    gainField = "Gain/Loss"
             for row in csv_reader:
                 symbolTxt = row[symbolField].strip()
                 if symbolTxt != "" and not "Total" in symbolTxt:
@@ -415,7 +418,7 @@ def getPortfolioOverviews(
                         symbol=symbolTxt.replace("..", "."),
                         qty=0 if row["Qty"] == "" else float(row["Qty"]),
                         desc=row.get("Description", ""),
-                        gain=row["Gain"],
+                        gain=row[gainField],
                     )
                     if security.symbol.endswith("."):
                         security.symbol = security.symbol + "L"
