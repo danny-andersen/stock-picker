@@ -624,6 +624,9 @@ def processLatestTxnFiles(config, stockListByAcc, isinBySymbol):
                     txn.type = FEES
                 elif "refund" in desc and txn.credit != 0:
                     txn.type = REFUND
+                elif "mandatory redemption" in desc and txn.credit != 0:
+                    #Fund has been closed and all held stock sold
+                    txn.type = REDEMPTION
                 else:
                     print(f"Unknown transaction type {txn}")
 

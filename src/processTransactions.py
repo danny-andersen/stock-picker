@@ -46,7 +46,7 @@ def processAccountTxns(
                 stocks.get(txn.debitCurrency, None), txn, txn.debit
             )
             account.cashBalance -= debit
-        elif txn_type == SELL:
+        elif txn_type in [SELL, REDEMPTION]:
             if txn.isin != USD and txn.isin != EUR:
                 # Ignore currency sells as we have factored this in from dividends already
                 credit = convertToSterling(
@@ -181,7 +181,10 @@ def processStockTxns(
                     avgBuyPrice=priceIncCosts,
                 )
             )
-        elif txn_type == SELL:
+        elif txn_type in [SELL, REDEMPTION]:
+            if txn_type == REDEMPTION:
+                # All of held stock has been sold as fund has been closed <sigh>
+                txn.qty = details.qtyHeld
             if not details.name:
                 if details.isin == USD or details.isin == EUR:
                     details.name = details.isin
