@@ -162,9 +162,9 @@ def summarisePerformance(
                         details.dividendTxnsByYear[year]
                     )
                 else:
-                    accountSummary.interestTxnsByYear[
-                        year
-                    ] = details.dividendTxnsByYear[year].copy()
+                    accountSummary.interestTxnsByYear[year] = (
+                        details.dividendTxnsByYear[year].copy()
+                    )
         else:
             for year, divi in details.dividendsByYear.items():
                 totalDivi[year] = totalDivi.get(year, Decimal(0.0)) + divi
@@ -181,9 +181,9 @@ def summarisePerformance(
                             f"Failed to update txns {uplen} into set pre:{prelen} post:{postlen} - dupe or broken hash?"
                         )
                 else:
-                    accountSummary.dividendTxnsByYear[
-                        year
-                    ] = details.dividendTxnsByYear[year].copy()
+                    accountSummary.dividendTxnsByYear[year] = (
+                        details.dividendTxnsByYear[year].copy()
+                    )
         for year, txns in details.dividendTxnsByYear.items():
             for txn in txns:
                 month = txn.date.month
@@ -601,6 +601,7 @@ def processLatestTxnFiles(config, stockListByAcc, isinBySymbol):
                     desc.startswith("debit card")
                     or "subscription" in desc
                     or desc.startswith("trf")
+                    or desc.startswith("to ")
                     or "transfer" in desc
                     or "faster payment" in desc
                     or "tax relief" in desc
@@ -625,7 +626,7 @@ def processLatestTxnFiles(config, stockListByAcc, isinBySymbol):
                 elif "refund" in desc and txn.credit != 0:
                     txn.type = REFUND
                 elif "mandatory redemption" in desc and txn.credit != 0:
-                    #Fund has been closed and all held stock sold
+                    # Fund has been closed and all held stock sold
                     txn.type = REDEMPTION
                 else:
                     print(f"Unknown transaction type {txn}")
@@ -842,9 +843,9 @@ def processTransactions(config):
     )
     print(f"{datetime.now()}: Processing latest portfolio files", flush=True)
     # Top directory should only have one set of portfolio files, all with the same date
-    currentPortfolioByDateByAccount: dict[
-        str, dict[datetime, dict[str, Security]]
-    ] = getPortfolioOverviews(portfolioDir, isinBySymbol, fundOverviews)
+    currentPortfolioByDateByAccount: dict[str, dict[datetime, dict[str, Security]]] = (
+        getPortfolioOverviews(portfolioDir, isinBySymbol, fundOverviews)
+    )
     # Get historic Account portolio positions
     print(f"{datetime.now()}: Processing historic portfolio files", flush=True)
     portfolioDir = f"{config['owner']['accountowner']}/{config['files']['portfoliosLocation']}/Archive"
