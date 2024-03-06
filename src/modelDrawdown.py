@@ -311,7 +311,7 @@ def plotAccountValues(
 
 def runDrawdownModel(configFile: configparser.ConfigParser):
     modelConfig = configFile["pension_model"]
-    owners: list() = modelConfig["model_owners"].split(",")
+    owners: list = modelConfig["model_owners"].split(",")
 
     accounts: dict[str, dict[str, AccountSummary]] = dict()
     accountList = ("sipp", "trading", "isa")
@@ -452,11 +452,80 @@ def runDrawdownModel(configFile: configparser.ConfigParser):
         )
     dom.append(maxResults)
 
+    dom.append(
+        h2(
+            f"Yearly income by source, assuming investment growth + pension increase by RPI (0% growth)"
+        )
+    )
+    monthlyMoneyRequired = int(modelConfig["monthlyIncomeRequired"])
+    results = table()
+    headerRow = tr()
+    headerRow.append(td(b("Source")))
+    # Account values: model [ year [ owner [account, value]]]
+    # Inv total value [ owner [ income]]
+    sourceRows: dict[str, list] = dict()
+    pensionConfig = configFile["pension_model"]
+    pensionIncomeByOwner = dict()
+    annualDBIncomeByOwner = dict()
+
+    for owner in owners:
+        sourceRows[owner] = list()
+        sourceRows[owner].append(tr(td(f"{owner} Final Salary Pension")))
+        sourceRows[owner].append(tr(td(f"{owner} Gov Pension")))
+        sourceRows[owner].append(tr(td(f"{owner} Inv + DD Income")))
+        sourceRows[owner].append(tr(td(f"{owner} Gross Income")))
+        annualDBIncomeByOwner[owner] = int(pensionConfig[f"{owner}_finalSalaryPension"])
+        pensionIncomeByOwner[owner] = (
+            int(pensionConfig[f"{owner}_statePensionPerMonth"]) * 12
+        )
+    grossRow = tr(td(b("Total Gross Income")))
+
+    # Calculate income needed from investments based on different required monthly incomes
+    invValue: dict[int, dict[str, float]] = dict()
+    invIncomeByReqdIncome: dict[int, dict[str, int]] = dict()
+    for monthly in range(monthlyMoneyRequired, int(zeroGrowthMaxDrawdown), 1000):
+        # Account values: model [ year [ owner [account, value]]]
+        accountValues = calculate_drawdown(configFile, monthly, [0], accounts)
+        for model, accVals in accountValues.items():
+            if "0.0%" in model:
+                for year, ownerAccs in accVals.items():
+                    invValue[year] = dict()
+                    for owner, accs in ownerAccs.items():
+                        invValue[year][owner] = accs[TOTAL]
+        invIncomeByReqdIncome[monthly] = dict()
+        invIncomeByReqdIncome[monthly]["Pre State Pension"] = int(
+            invValue[0][owner] - invValue[1][owner]
+        )
+        invIncomeByReqdIncome[monthly]["Post State Pension"] = int(
+            invValue[8][owner] - invValue[9][owner]
+        )
+    for monthlyIncome, invIncome in invIncomeByReqdIncome.items():
+        for title, income in invIncome.items():
+            grandTotal = 0
+            headerRow.append(td(f"Monthly Income of £{monthlyIncome:n}, {title}"))
+            for owner in owners:
+                db = annualDBIncomeByOwner[owner]
+                sourceRows[owner][0].append(td(f"£{db:n}"))
+                state = 0 if "Pre" in title else pensionIncomeByOwner[owner]
+                sourceRows[owner][1].append(td(f"£{state:n}"))
+                inc = income if income > 0 else 0
+                sourceRows[owner][2].append(td(f"£{inc:n}"))
+                total = db + state + inc
+                sourceRows[owner][3].append(td(f"£{total:n}"))
+                grandTotal += total
+            grossRow.append(td(b(f"£{grandTotal:n}")))
+
+    results.appendChild(headerRow)
+    for owner in owners:
+        for i in range(0, len(sourceRows[owner])):
+            results.appendChild(sourceRows[owner][i])
+    results.appendChild(grossRow)
+    dom.append(results)
+
     # Run drawdown with various negative growths to get close as possible to requiredlegacyAmount for the required number of years
     # whilst maintaining the required net income.
     # This shows what the worst case growth rate that we can observe without impacting what monthly money is drawdown
 
-    monthlyMoneyRequired = int(modelConfig["monthlyIncomeRequired"])
     rate = 0
     lastRate = 0.1
     lastTotal = -1
@@ -487,6 +556,8 @@ def runDrawdownModel(configFile: configparser.ConfigParser):
     # This will show how the account values change over the drawdown period
     monthlyMoneyRequired = int(modelConfig["monthlyIncomeRequired"])
     ratesOfReturn.insert(0, minimiumSustainableRate)
+
+    # Account values: model [ year [ owner [account, value]]]
     accountValues = calculate_drawdown(
         configFile, monthlyMoneyRequired, ratesOfReturn, accounts
     )
@@ -507,7 +578,9 @@ def runDrawdownModel(configFile: configparser.ConfigParser):
             pensionIncome - (pensionIncome * lowerTaxRate / 100)
         ) / 12
     dom.append(h1("Modelling drawdown on investment funds"))
-    dom.append(h3(f"Average Monthly Required Income: £{monthlyMoneyRequired:,.0f}"))
+    dom.append(
+        h3(f"Average Monthly Required Income (Net): £{monthlyMoneyRequired:,.0f}")
+    )
     dom.append(h3(f"Net Monthly Defined Benefit Income: £{netAnnualDBIncome/12:,.0f}"))
     dom.append(
         h3(
