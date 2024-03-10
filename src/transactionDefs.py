@@ -339,18 +339,57 @@ class SecurityDetails:
     diviInvested: Decimal = Decimal(0.0)
     totalInvested: Decimal = Decimal(0.0)
     avgSharePrice: Decimal = Decimal(0.0)
-    realisedCapitalGainByYear: dict[str, Decimal(0.0)] = field(default_factory=dict)
+    realisedCapitalGainByYear: dict[str, Decimal] = field(default_factory=dict)
     cgtransactionsByYear: dict[str, list[CapitalGain]] = field(default_factory=dict)
     currentSharePrice: Decimal = Decimal(0.0)
     currentSharePriceDate: datetime = None
-    costsByYear: dict[str, Decimal(0.0)] = field(default_factory=dict)
-    dividendsByYear: dict[str, Decimal(0.0)] = field(default_factory=dict)
-    dividendYieldByYear: dict[str, Decimal(0.0)] = field(default_factory=dict)
+    costsByYear: dict[str, Decimal] = field(default_factory=dict)
+    dividendsByYear: dict[str, Decimal] = field(default_factory=dict)
+    dividendYieldByYear: dict[str, Decimal] = field(default_factory=dict)
     investmentHistory: list[CapitalGain] = field(default_factory=list)
     transactions: set[Transaction] = field(default_factory=set)
     dividendTxnsByYear: dict[str, set[Transaction]] = field(default_factory=dict)
     historicHoldings: list = field(default_factory=list)
     fundOverview: FundOverview = None
+
+    def mergeInStockLtd(self, other):
+        # Only merge in top level values for account summary
+        if (
+            self.sedol != other.sedol
+            or self is None
+            or other is None
+            or other.startDate is None
+            or other.qtyHeld is None
+        ):
+            return
+        self.startDate = (
+            self.startDate if other.startDate > self.startDate else other.startDate
+        )
+        if self.endDate is not None and other.endDate is not None:
+            self.endDate = (
+                self.endDate if self.endDate > other.endDate else other.endDate
+            )
+        self.account = f"{self.account},{other.account}"
+        self.cashInvested += other.cashInvested
+        self.diviInvested += other.diviInvested
+        self.totalInvested += other.totalInvested
+        self.avgSharePrice = Decimal(
+            (
+                (float(self.avgSharePrice) * self.qtyHeld)
+                + (float(other.avgSharePrice) * other.qtyHeld)
+            )
+            / (self.qtyHeld + other.qtyHeld)
+        )
+        self.qtyHeld += other.qtyHeld
+        for yr, divi in other.dividendsByYear.items():
+            self.dividendsByYear[yr] = self.dividendsByYear.get(yr, Decimal(0.0)) + divi
+        for yr, gain in other.realisedCapitalGainByYear.items():
+            self.realisedCapitalGainByYear[yr] = (
+                self.realisedCapitalGainByYear.get(yr, Decimal(0.0)) + gain
+            )
+        if self.currentSharePriceDate > other.currentSharePriceDate:
+            self.currentSharePriceDate = other.currentSharePriceDate
+            self.currentSharePrice = other.currentSharePrice
 
     def yearsHeld(self):
         if self.startDate:

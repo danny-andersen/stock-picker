@@ -2,6 +2,7 @@ import io
 import csv
 from datetime import timedelta, datetime, timezone
 import calendar
+from copy import deepcopy
 from statistics import mean
 from decimal import Decimal
 from dataclasses import asdict
@@ -167,9 +168,11 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
             td("Total Paper Capital Gain of current holdings"),
             td(
                 f"£{accountSummary.totalPaperGainForTax:,.0f} ({accountSummary.totalPaperGainForTaxPerc():0.2f}%)",
-                _class="positive"
-                if accountSummary.totalPaperGainForTax > 0
-                else "negative",
+                _class=(
+                    "positive"
+                    if accountSummary.totalPaperGainForTax > 0
+                    else "negative"
+                ),
             ),
         )
     )
@@ -193,9 +196,11 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
             td("Total Capital gain (realised + current on paper)"),
             td(
                 f"£{accountSummary.totalGainFromInvestments():,.0f}",
-                _class="positive"
-                if accountSummary.totalGainFromInvestments() > 0
-                else "negative",
+                _class=(
+                    "positive"
+                    if accountSummary.totalGainFromInvestments() > 0
+                    else "negative"
+                ),
             ),
             _style="font-weight: bold;",
         )
@@ -207,9 +212,9 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
             ),
             td(
                 f"£{accountSummary.totalGainLessFees():,.0f} ({accountSummary.totalGainPerc():0.2f}%)",
-                _class="positive"
-                if accountSummary.totalGainLessFees() > 0
-                else "negative",
+                _class=(
+                    "positive" if accountSummary.totalGainLessFees() > 0 else "negative"
+                ),
             ),
             _style="font-weight: bold;",
         )
@@ -220,9 +225,9 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
             td("Average return per year"),
             td(
                 f"£{accountSummary.avgReturnPerYear():,.0f}",
-                _class="positive"
-                if accountSummary.totalGainLessFees() > 0
-                else "negative",
+                _class=(
+                    "positive" if accountSummary.totalGainLessFees() > 0 else "negative"
+                ),
             ),
             _style="font-weight: bold;",
         )
@@ -351,7 +356,7 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
             )
         )
         totalTaxableCG = Decimal(0.0)
-        cgtxns: list[(account, SecurityDetails, CapitalGain)] = []
+        cgtxns: list[(AccountSummary, SecurityDetails, CapitalGain)] = []
         for account in accounts:
             accountLocation = f"./{account.name}-Summary.html#Tax%20Liability"
             cgRealised = account.realisedGainForTaxByYear.get(yr, 0)
@@ -1100,9 +1105,11 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
             )
         total = Decimal(0)
         txns = sorted(
-            accountSummary.dividendTxnsByYear[yr]
-            if yr in accountSummary.dividendTxnsByYear
-            else list(),
+            (
+                accountSummary.dividendTxnsByYear[yr]
+                if yr in accountSummary.dividendTxnsByYear
+                else list()
+            ),
             key=lambda txn: txn.date,
             reverse=True,
         )
@@ -1248,7 +1255,33 @@ def getSecurityStrs(
         csvOut.writeheader()
     else:
         csvOut = None
-    for stockDetails in accountSummary.stocks:
+    # If all accounts then process stocklist twice
+    # The first time aggregate the same stock held in multiple accounts
+    # Put the aggreate into a new list
+    # Sort by gain when done
+    # The second pass, print the new aggregate list out out
+    stocksToShow = accountSummary.stocks
+    if allAccounts:
+        newStocks: list[SecurityDetails] = list()
+        for stockDetails in accountSummary.stocks:
+            if stockDetails.totalInvested != 0:
+                # Ignore historic stocks
+                newStock = None
+                for stock in newStocks:
+                    if stock.sedol == stockDetails.sedol:
+                        newStock = stock
+                        break
+                if newStock:
+                    # Merge in
+                    newStock.mergeInStockLtd(stockDetails)
+                else:
+                    # Copy in
+                    newStocks.append(deepcopy(stockDetails))
+        stocksToShow = sorted(
+            newStocks, key=lambda stock: stock.avgGainPerYearPerc(), reverse=True
+        )
+
+    for stockDetails in stocksToShow:
         csvRow = {title: "" for title in headings}
         historicStocks.extend(stockDetails.historicHoldings)
         if stockDetails.totalInvested != 0:
@@ -1426,9 +1459,9 @@ def getSecurityStrs(
             csvOut.writerow(csvRow)
     dom.append(stockTable)
     if csvOut:
-        fileStrs[
-            f"csvFiles/{accountSummary.name}-historic-securities.csv"
-        ] = secIO.getvalue()
+        fileStrs[f"csvFiles/{accountSummary.name}-historic-securities.csv"] = (
+            secIO.getvalue()
+        )
         secIO.close()
 
 
