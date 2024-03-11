@@ -1255,13 +1255,13 @@ def getSecurityStrs(
         csvOut.writeheader()
     else:
         csvOut = None
-    # If all accounts then process stocklist twice
-    # The first time aggregate the same stock held in multiple accounts
-    # Put the aggreate into a new list
-    # Sort by gain when done
-    # The second pass, print the new aggregate list out out
     stocksToShow = accountSummary.stocks
     if allAccounts:
+        # If all accounts then process stocklist twice
+        # The first time aggregate the same stock held in multiple accounts
+        # Put the aggreate into a new list
+        # Sort by gain when done
+        # The second pass, print the new aggregate list out out
         newStocks: list[SecurityDetails] = list()
         for stockDetails in accountSummary.stocks:
             if stockDetails.totalInvested != 0:
@@ -1282,7 +1282,6 @@ def getSecurityStrs(
         )
 
     for stockDetails in stocksToShow:
-        csvRow = {title: "" for title in headings}
         historicStocks.extend(stockDetails.historicHoldings)
         if stockDetails.totalInvested != 0:
             stockRow = tr(
@@ -1299,7 +1298,6 @@ def getSecurityStrs(
             else:
                 detailLocation = f"./{accountSummary.name}/{symbol}.txt"
             stockRow.appendChild(td(a(f"{symbol}", _href=detailLocation)))
-            csvRow["Security"] = symbol
             if allAccounts:
                 accountLocation = (
                     f"./{stockDetails.account}-Summary.html#Stock%20Summary"
@@ -1307,56 +1305,79 @@ def getSecurityStrs(
                 stockRow.appendChild(
                     td(a(f"{stockDetails.account}", _href=accountLocation))
                 )
-                csvRow["Account"] = stockDetails.account
             ft = (
                 stockDetails.fundOverview.fundType.name
                 if stockDetails.fundOverview
                 else "None"
             )
             stockRow.appendChild(td(f"{ft}"))
-            csvRow["Type"] = ft
             stockRow.appendChild(td(f"{stockDetails.name}"))
-            csvRow["Name"] = stockDetails.name
             if stockDetails.fundOverview:
                 fees = f"{stockDetails.fundOverview.fees:0.02f}%"
             else:
                 fees = "N/A"
             stockRow.appendChild(td(fees))
-            csvRow["Fees"] = fees
             stockRow.appendChild(td(f"£{stockDetails.cashInvested:,.0f}"))
-            csvRow["Cash inv"] = stockDetails.cashInvested
             stockRow.appendChild(td(f"£{stockDetails.marketValue():,.0f}"))
-            csvRow["Market Value"] = stockDetails.marketValue()
             stockRow.appendChild(td(f"{stockDetails.averageYearlyDiviYield():,.0f}%"))
-            csvRow["Yield"] = stockDetails.averageYearlyDiviYield()
             stockRow.appendChild(
                 td(
                     f"£{stockDetails.totalGain():,.0f} ({stockDetails.totalGainPerc():0.02f}%)"
                 )
             )
-            csvRow["Return"] = stockDetails.totalGain()
             stockRow.appendChild(td(f"{stockDetails.yearsHeld():0.01f}"))
-            csvRow["Years Held"] = stockDetails.yearsHeld()
             stockRow.appendChild(td(f"{stockDetails.avgGainPerYearPerc():0.02f}%"))
-            csvRow["Annualised Ret"] = stockDetails.avgGainPerYearPerc()
             fund = stockDetails.fundOverview
             if fund:
                 stockRow.appendChild(td(f"{fund.return3Yr:0.02f}%"))
-                csvRow["3yr-Ret"] = fund.return3Yr
                 stockRow.appendChild(td(f"{fund.return5Yr:0.02f}%"))
-                csvRow["5yr-Ret"] = fund.return5Yr
                 stockRow.appendChild(td(f"{fund.alpha3Yr:0.02f}"))
-                csvRow["Alpha"] = fund.alpha3Yr
                 stockRow.appendChild(td(f"{fund.beta3Yr:0.02f}"))
-                csvRow["Beta"] = fund.beta3Yr
                 stockRow.appendChild(td(f"{fund.sharpe3Yr:0.02f}"))
-                csvRow["Sharpe"] = fund.sharpe3Yr
 
             stockTable.appendChild(stockRow)
-            if csvOut:
-                csvOut.writerow(csvRow)
     dom.append(stockTable)
+
     if csvOut:
+        for stockDetails in accountSummary.stocks:
+            csvRow = {title: "" for title in headings}
+            historicStocks.extend(stockDetails.historicHoldings)
+            if stockDetails.totalInvested != 0:
+                symbol = stockDetails.symbol
+                if symbol != "":
+                    if symbol.endswith("."):
+                        symbol = symbol + "L"
+                    elif len(symbol) < 6 and not symbol.endswith(".L"):
+                        symbol = symbol + ".L"
+                csvRow["Security"] = symbol
+                if allAccounts:
+                    csvRow["Account"] = stockDetails.account
+                ft = (
+                    stockDetails.fundOverview.fundType.name
+                    if stockDetails.fundOverview
+                    else "None"
+                )
+                csvRow["Type"] = ft
+                csvRow["Name"] = stockDetails.name
+                if stockDetails.fundOverview:
+                    fees = f"{stockDetails.fundOverview.fees:0.02f}%"
+                else:
+                    fees = "N/A"
+                csvRow["Fees"] = fees
+                csvRow["Cash inv"] = stockDetails.cashInvested
+                csvRow["Market Value"] = stockDetails.marketValue()
+                csvRow["Yield"] = stockDetails.averageYearlyDiviYield()
+                csvRow["Return"] = stockDetails.totalGain()
+                csvRow["Years Held"] = stockDetails.yearsHeld()
+                csvRow["Annualised Ret"] = stockDetails.avgGainPerYearPerc()
+                fund = stockDetails.fundOverview
+                if fund:
+                    csvRow["3yr-Ret"] = fund.return3Yr
+                    csvRow["5yr-Ret"] = fund.return5Yr
+                    csvRow["Alpha"] = fund.alpha3Yr
+                    csvRow["Beta"] = fund.beta3Yr
+                    csvRow["Sharpe"] = fund.sharpe3Yr
+                csvOut.writerow(csvRow)
         fileStrs[f"csvFiles/{accountSummary.name}-securities.csv"] = secIO.getvalue()
         secIO.close()
 
