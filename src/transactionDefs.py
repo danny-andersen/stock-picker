@@ -26,7 +26,7 @@ EUR = "EUREUREUREU1"
 
 SECONDS_IN_YEAR = 365.25 * 24 * 3600
 
-TAX_YEAR_START = date(year=2021, month=4, day=6)
+TAX_YEAR_START = date(year=2020, month=4, day=6)
 
 
 class BondGrade(IntEnum):
@@ -434,11 +434,11 @@ class SecurityDetails:
             return 0.0
 
     def totalGainPerc(self):
-        if self.cashInvested > 0:
-            cashInvested = float(self.historicCashInvested())
-        else:
-            # Historic stock - use historic investment
-            cashInvested = float(self.historicCashInvested())
+        cashInvested = float(
+            self.cashInvested
+            if self.cashInvested > 0
+            else float(self.historicCashInvested())
+        )
         if cashInvested > 0:
             return 100.0 * float(self.totalGain()) / cashInvested
         else:
@@ -1052,7 +1052,7 @@ class AccountSummary:
 
 
 def getTaxYear(inDate):
-    d = date(year=2021, month=inDate.month, day=inDate.day)
+    d = date(year=2020, month=inDate.month, day=inDate.day)
     if d < TAX_YEAR_START:
         year = f"{inDate.year - 1}-{inDate.year}"
     else:
