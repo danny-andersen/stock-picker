@@ -39,6 +39,7 @@ def calculate_drawdown(
     pensionIncomeByOwner = dict()
     netAnnualDBIncomeByOwner = dict()
     annualDBIncomeByOwner = dict()
+    contributionRatioByOwner: dict[str, Decimal] = dict()
     for owner in owners:
         annualDBIncomeByOwner[owner] = int(pensionConfig[f"{owner}_finalSalaryPension"])
         pensionIncomeByOwner[owner] = (
@@ -48,16 +49,8 @@ def calculate_drawdown(
             annualDBIncomeByOwner[owner]
             - (annualDBIncomeByOwner[owner] - taxAllowance) * lowerTaxRate / 100
         )
-    # work out ratios of income by owner, so contribute proportionate amount
-    # for owner in accounts:
-    #     for acc in accounts[owner]:
-    #         total[owner] += accValues[model][lastYear][acc]
-    #         grandTotal += accValues[model][lastYear][acc]
-    contributionRatioByOwner: dict[str, float] = dict()
-    for owner in accounts:
-        contributionRatioByOwner[owner] = netAnnualDBIncomeByOwner[owner] / sum(
-            netAnnualDBIncomeByOwner.values()
-        )
+        # ratios of income by owner, so contribute proportionate amount
+        contributionRatioByOwner[owner] = float(pensionConfig[f"{owner}_drawdownRatio"])
 
     # Set up dict that contains a dict of model name that has a dict of owners with a dict of account values by year that can be plotted
     # Account values: model [ year [ owner [account, value]]]
@@ -201,7 +194,7 @@ def calculate_drawdown(
                             currentAccs["sipp"] -= Decimal(totalRequired)
                             totalRequired = 0
                         else:
-                            totalRequired -= currentAccs["sipp"]
+                            totalRequired -= float(currentAccs["sipp"])
                             currentAccs["sipp"] = 0
                 # Carry forward any remaining total
                 lastRemainingTotal = totalRequired
@@ -483,9 +476,11 @@ def runDrawdownModel(configFile: configparser.ConfigParser):
     # Calculate income needed from investments based on different required monthly incomes
     invValue: dict[int, dict[str, float]] = dict()
     invIncomeByReqdIncome: dict[int, dict[str, int]] = dict()
+    resultsByMoneyRequired: dict[int, dict] = dict()
     for monthly in range(monthlyMoneyRequired, int(zeroGrowthMaxDrawdown), 1000):
         # Account values: model [ year [ owner [account, value]]]
         accountValues = calculate_drawdown(configFile, monthly, [0], accounts)
+        resultsByMoneyRequired[monthlyMoneyRequired] = accountValues
         for model, accVals in accountValues.items():
             if "0.0%" in model:
                 for year, ownerAccs in accVals.items():
@@ -493,22 +488,25 @@ def runDrawdownModel(configFile: configparser.ConfigParser):
                     for owner, accs in ownerAccs.items():
                         invValue[year][owner] = accs[TOTAL]
         invIncomeByReqdIncome[monthly] = dict()
-        invIncomeByReqdIncome[monthly]["Pre State Pension"] = int(
-            invValue[0][owner] - invValue[1][owner]
-        )
-        invIncomeByReqdIncome[monthly]["Post State Pension"] = int(
-            invValue[8][owner] - invValue[9][owner]
-        )
-    for monthlyIncome, invIncome in invIncomeByReqdIncome.items():
-        for title, income in invIncome.items():
+        invIncomeByReqdIncome[monthly]["Pre State Pension"] = dict()
+        invIncomeByReqdIncome[monthly]["Post State Pension"] = dict()
+        for owner in owners:
+            invIncomeByReqdIncome[monthly]["Pre State Pension"][owner] = int(
+                invValue[0][owner] - invValue[1][owner]
+            )
+            invIncomeByReqdIncome[monthly]["Post State Pension"][owner] = int(
+                invValue[8][owner] - invValue[9][owner]
+            )
+    for monthlyIncome, invIncomeByType in invIncomeByReqdIncome.items():
+        for title, incomeByOwner in invIncomeByType.items():
             grandTotal = 0
-            headerRow.append(td(f"Monthly Income of £{monthlyIncome:n}, {title}"))
+            headerRow.append(td(f"For a monthly income of £{monthlyIncome:n}, {title}"))
             for owner in owners:
                 db = annualDBIncomeByOwner[owner]
                 sourceRows[owner][0].append(td(f"£{db:n}"))
                 state = 0 if "Pre" in title else pensionIncomeByOwner[owner]
                 sourceRows[owner][1].append(td(f"£{state:n}"))
-                inc = income if income > 0 else 0
+                inc = incomeByOwner[owner] if incomeByOwner[owner] > 0 else 0
                 sourceRows[owner][2].append(td(f"£{inc:n}"))
                 total = db + state + inc
                 sourceRows[owner][3].append(td(f"£{total:n}"))
