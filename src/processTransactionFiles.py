@@ -543,7 +543,9 @@ def processLatestTxnFiles(config, stockListByAcc, isinBySymbol):
                         descParts = desc.split()
                         vals = []
                         for p in descParts:
-                            vals.append(strToDec(p))
+                            v = strToDec(p)
+                            if v != -1:
+                                vals.append(v)
                         if len(vals) >= 2:
                             txn.qty = vals[0]
                             txn.price = vals[1]

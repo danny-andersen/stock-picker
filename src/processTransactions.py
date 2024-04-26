@@ -154,7 +154,7 @@ def processStockTxns(
                 stocks.get(txn.debitCurrency, None), txn, txn.debit
             )
             priceIncCosts = debit / Decimal(txn.qty)
-            if txn.price != 0:
+            if txn.price > 0 and txn.qty > 0:
                 costs = debit - (Decimal(txn.qty) * txn.price)
             else:
                 costs = 0
@@ -194,7 +194,7 @@ def processStockTxns(
             )
             priceIncCosts = credit / Decimal(txn.qty)
             gain = Decimal(
-                float(priceIncCosts - details.avgSharePrice) * txn.qty
+                float(priceIncCosts - details.avgSharePrice) * float(txn.qty)
             )  # CGT uses average purchase price at time of selling
             details.cashInvested -= details.avgSharePrice * Decimal(
                 txn.qty
@@ -203,7 +203,7 @@ def processStockTxns(
                 details.realisedCapitalGainByYear.get(taxYear, Decimal(0.0)) + gain
             )
             details.qtyHeld -= float(txn.qty)
-            if txn.price != 0:
+            if txn.price > 0 and txn.qty > 0:
                 costs = credit - (
                     txn.price * Decimal(txn.qty)
                 )  # Diff between what should have received vs what was credited
