@@ -5,7 +5,7 @@ from enum import Enum, IntEnum
 from copy import deepcopy
 from statistics import mean
 from dataclasses import dataclass, field
-from dataclasses_json import dataclass_json
+from dataclasses_json import dataclass_json, Undefined
 
 CASH_IN = "Cash in"
 CASH_OUT = "Cash out"
@@ -21,8 +21,12 @@ REDEMPTION = "Redemption"
 NO_STOCK = "No stock"
 INTEREST = "Interest"
 STERLING = "STERLING"
+STERLING_SYMBOL = "£"
 USD = "USDUSDUSDUS1"
+USD_SYMBOL = "$"
 EUR = "EUREUREUREU1"
+EUR_SYMBOL = "€"
+SYMBOLS = {STERLING: STERLING_SYMBOL, USD: USD_SYMBOL, EUR: EUR_SYMBOL}
 
 SECONDS_IN_YEAR = 365.25 * 24 * 3600
 
@@ -67,6 +71,7 @@ class FundType(str, Enum):
     GOLD: str = "gold"
 
 
+@dataclass_json(undefined=Undefined.EXCLUDE)
 @dataclass
 class FundOverview:
     isin: str
@@ -249,7 +254,7 @@ class FundOverview:
                 ) / totValue
 
 
-@dataclass_json
+@dataclass_json(undefined=Undefined.EXCLUDE)
 @dataclass
 class Transaction:
     # An investment transaction of some sort
@@ -268,7 +273,7 @@ class Transaction:
     credit: Decimal = Decimal(0.0)
     creditCurrency: str = "£"
     type: str = "Unknown"
-    accountBalance: Decimal = Decimal(0.0)
+    accountBalance: dict[str, Decimal(0.0)] = field(default_factory=dict)
 
     def __eq__(self, other):
         if not isinstance(other, Transaction):
@@ -325,6 +330,7 @@ class CapitalGain:
     avgBuyPrice: Decimal
 
 
+@dataclass_json(undefined=Undefined.EXCLUDE)
 @dataclass
 class SecurityDetails:
     sedol: str = None
@@ -501,7 +507,7 @@ class SecurityDetails:
             return Decimal(0.0)
 
 
-@dataclass_json
+@dataclass_json(undefined=Undefined.EXCLUDE)
 @dataclass
 class AccountSummary:
     name: str
@@ -509,7 +515,7 @@ class AccountSummary:
     dateOpened: datetime = datetime.now(timezone.utc)
     portfolioValueDate: datetime = datetime.now()
     totalDiviReInvested: Decimal = Decimal(0.0)
-    cashBalance: Decimal = Decimal(0.0)
+    cashBalance: dict[str, Decimal] = field(default_factory=dict)
     totalOtherAccounts: Decimal = Decimal(0.0)
     totalMarketValue: Decimal = Decimal(0.0)
     totalInvestedInSecurities: Decimal = Decimal(0.0)
@@ -520,29 +526,29 @@ class AccountSummary:
     avgFund5YrReturn: float = 0.0
 
     portfolioPerc: dict[str, str] = field(default_factory=dict)
-    cashInByYear: dict[str, Decimal(0.0)] = field(default_factory=dict)
-    cashOutByYear: dict[str, Decimal(0.0)] = field(default_factory=dict)
-    taxfreeCashOutByYear: dict[str, Decimal(0.0)] = field(default_factory=dict)
-    feesByYear: dict[str, Decimal(0.0)] = field(default_factory=dict)
-    aggInvestedByYear: dict[str, Decimal(0.0)] = field(default_factory=dict)
-    realisedGainForTaxByYear: dict[str, Decimal(0.0)] = field(default_factory=dict)
-    dealingCostsByYear: dict[str, Decimal(0.0)] = field(default_factory=dict)
-    dividendsByYear: dict[str, Decimal(0.0)] = field(
+    cashInByYear: dict[str, Decimal] = field(default_factory=dict)
+    cashOutByYear: dict[str, Decimal] = field(default_factory=dict)
+    taxfreeCashOutByYear: dict[str, Decimal] = field(default_factory=dict)
+    feesByYear: dict[str, Decimal] = field(default_factory=dict)
+    aggInvestedByYear: dict[str, Decimal] = field(default_factory=dict)
+    realisedGainForTaxByYear: dict[str, Decimal] = field(default_factory=dict)
+    dealingCostsByYear: dict[str, Decimal] = field(default_factory=dict)
+    dividendsByYear: dict[str, Decimal] = field(
         default_factory=dict
     )  # This includes all payments - dividends, bond income, interest
     dividendTxnsByYear: dict[str, set[Transaction]] = field(default_factory=dict)
-    dividendYieldByYear: dict[str, Decimal(0.0)] = field(default_factory=dict)
-    incomeByYear: dict[str, Decimal(0.0)] = field(
+    dividendYieldByYear: dict[str, Decimal] = field(default_factory=dict)
+    incomeByYear: dict[str, Decimal] = field(
         default_factory=dict
     )  # Total income by tax year
-    allIncomeByYearMonth: dict[str, dict[str, Decimal(0.0)]] = field(
+    allIncomeByYearMonth: dict[str, dict[str, Decimal]] = field(
         default_factory=dict
     )  # All types of income (divi, interest, bond income) broken down by month
     incomeTxnsByYear: dict[str, set[Transaction]] = field(default_factory=dict)
-    interestByYear: dict[str, Decimal(0.0)] = field(default_factory=dict)
+    interestByYear: dict[str, Decimal] = field(default_factory=dict)
     interestTxnsByYear: dict[str, set[Transaction]] = field(default_factory=dict)
-    incomeYieldByYear: dict[str, Decimal(0.0)] = field(default_factory=dict)
-    totalYieldByYear: dict[str, Decimal(0.0)] = field(default_factory=dict)
+    incomeYieldByYear: dict[str, Decimal] = field(default_factory=dict)
+    totalYieldByYear: dict[str, Decimal] = field(default_factory=dict)
     fundTotals: dict[str, FundOverview] = field(default_factory=dict)
     totalByInstitution: dict[str, Decimal] = field(default_factory=dict)
     transactions: list[Transaction] = field(default_factory=list)
@@ -550,7 +556,7 @@ class AccountSummary:
     taxRates: dict = field(default_factory=dict)
     taxBandByYear: dict[str, str] = field(default_factory=dict)
     mergedAccounts: list = field(default_factory=list)
-    historicValue: dict[float, (Decimal(0.0), Decimal(0.0))] = field(
+    historicValue: dict[float, (Decimal, Decimal)] = field(
         default_factory=dict
     )  # (market value, book cost)
     historicValueByType: dict[float, dict[str, (float, float)]] = field(
@@ -584,7 +590,10 @@ class AccountSummary:
             else 0.0
         )
         self.totalMarketValue += summary.totalMarketValue
-        self.cashBalance += summary.cashBalance
+        for currency, val in summary.cashBalance.items():
+            self.cashBalance[currency] = (
+                self.cashBalance.get(currency, Decimal(0.0)) + val
+            )
         self.totalInvestedInSecurities += summary.totalInvestedInSecurities
         self.totalPaperGainForTax += summary.totalPaperGainForTax
 
@@ -790,7 +799,11 @@ class AccountSummary:
 
     # Total market value of account, including cash in hand
     def totalValue(self):
-        return self.totalMarketValue + self.totalOtherAccounts + self.cashBalance
+        return (
+            self.totalMarketValue
+            + self.totalOtherAccounts
+            + self.cashBalance.get(STERLING, Decimal(0.0))
+        )
 
     def totalPaperGainForTaxPerc(self):
         if self.totalInvestedInSecurities > 0:
@@ -1112,6 +1125,21 @@ def strToDec(p: str):
         except:
             pass
     return retVal
+
+
+def printCurrency(currency: str, val: Decimal, precision: int):
+    return f"{SYMBOLS[currency]}{val:0.{precision}f}"
+
+
+def convertCurrencyToStr(currencies: dict[str, Decimal], precision: int):
+    retStr = ""
+    cnt = 0
+    for currency, val in currencies.items():
+        retStr += printCurrency(currency, val, precision)
+        cnt += 1
+        retStr += ", " if cnt < len(currencies) else ""
+
+    return retStr
 
 
 def priceStrToDec(strValue: str):

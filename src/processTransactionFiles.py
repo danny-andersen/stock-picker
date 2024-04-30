@@ -205,28 +205,28 @@ def summarisePerformance(
             dict()
         )  # Reset dividends to zero as all txns classified as dividends are interest payments
         if totalByInstitution.get(fund.institution, None):
-            totalByInstitution[fund.institution] += Decimal(accountSummary.cashBalance)
+            totalByInstitution[fund.institution] += Decimal(accountSummary.cashBalance[STERLING])
         else:
-            totalByInstitution[fund.institution] = Decimal(accountSummary.cashBalance)
-        fundTotals[fundType].totalValue += accountSummary.cashBalance
+            totalByInstitution[fund.institution] = Decimal(accountSummary.cashBalance[STERLING])
+        fundTotals[fundType].totalValue += accountSummary.cashBalance[STERLING]
         fundTotals[fundType].totalInvested += accountSummary.totalCashInvested()
         fundTotals[fundType].uk += 100 * float(
-            accountSummary.cashBalance
+            accountSummary.cashBalance[STERLING]
         )  # Assume UK based
-        fundTotals[fundType].totGeoVal += accountSummary.cashBalance
+        fundTotals[fundType].totGeoVal += accountSummary.cashBalance[STERLING]
         fundTotals[fundType].actualReturn += 100 * float(
-            accountSummary.cashBalance - accountSummary.totalCashInvested()
+            accountSummary.cashBalance[STERLING] - accountSummary.totalCashInvested()
         )  # This is a %
         # If its a cash account, update invested totals
         # totalShareInvested += accountSummary.totalCashInvested()
     else:
         # Add any cash balance of account to Cash fund
         fundType = FundType.CASH
-        fundTotals[fundType].totalValue += accountSummary.cashBalance
+        fundTotals[fundType].totalValue += accountSummary.cashBalance[STERLING]
         fundTotals[fundType].uk += 100 * float(
-            accountSummary.cashBalance
+            accountSummary.cashBalance[STERLING]
         )  # Assume UK based
-        fundTotals[fundType].totGeoVal += accountSummary.cashBalance
+        fundTotals[fundType].totGeoVal += accountSummary.cashBalance[STERLING]
 
     totalGain += accountSummary.totalInterest()
 
@@ -633,9 +633,9 @@ def processLatestTxnFiles(config, stockListByAcc, isinBySymbol):
                 else:
                     print(f"Unknown transaction type {txn}")
 
-                if txn.type == BUY and (txn.isin == USD or txn.isin == EUR):
-                    # Ignore currency conversion BUY transactions
-                    continue
+                # if txn.type == BUY and (txn.isin == USD or txn.isin == EUR):
+                #     # Ignore currency conversion BUY transactions
+                #     continue
                 # Retrieve transactions by stock symbol
                 existingTxns = stockList.get(txn.isin, None)
                 if not existingTxns:

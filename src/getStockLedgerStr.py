@@ -17,6 +17,8 @@ from transactionDefs import (
     FundType,
     SecurityDetails,
     CapitalGain,
+    convertCurrencyToStr,
+    printCurrency,
 )
 
 
@@ -176,7 +178,9 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
             ),
         )
     )
-    smry.appendChild(tr(td("Cash Balance"), td(f"£{accountSummary.cashBalance:,.0f}")))
+    smry.appendChild(
+        tr(td("Cash Balance"), td(convertCurrencyToStr(accountSummary.cashBalance, 0)))
+    )
     if accountSummary.totalOtherAccounts > 0:
         smry.appendChild(
             tr(
@@ -1204,8 +1208,8 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
         detailLocation = f"./{txn.accountName}/{txn.symbol}.txt"
         row.appendChild(td(a(f"{txn.symbol}", _href=detailLocation)))
         row.appendChild(td(f"{txn.desc}"))
-        row.appendChild(td(f"£{txn.credit if txn.credit != 0 else -txn.debit:0.2f}"))
-        row.appendChild(td(f"£{txn.accountBalance:0.2f}"))
+        row.appendChild(td(f"{printCurrency(txn.creditCurrency, txn.credit, 2) if txn.credit != 0 else printCurrency(txn.debitCurrency, -txn.debit, 2)}"))
+        row.appendChild(td(convertCurrencyToStr(txn.accountBalance, 2)))
         txnTable.appendChild(row)
     dom.appendChild(txnTable)
 

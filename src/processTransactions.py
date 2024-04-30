@@ -1,5 +1,6 @@
 from decimal import Decimal
 from datetime import datetime, timedelta, timezone
+from copy import deepcopy
 
 from transactionDefs import *
 
@@ -25,65 +26,65 @@ def processAccountTxns(
             dateOpened = txn.date
         if txn_type == CASH_IN:
             cashInByYear[taxYear] = cashInByYear.get(taxYear, Decimal(0.0)) + txn.credit
-            account.cashBalance += txn.credit
+            account.cashBalance[STERLING] = (
+                account.cashBalance.get(STERLING, Decimal(0.0)) + txn.credit
+            )
         elif txn_type == CASH_OUT:
             cashOutByYear[taxYear] = (
                 cashOutByYear.get(taxYear, Decimal(0.0)) + txn.debit
             )
-            account.cashBalance -= txn.debit
+            account.cashBalance[STERLING] = (
+                account.cashBalance.get(STERLING, Decimal(0.0)) - txn.debit
+            )
             if "tax-free" in txn.desc.lower():
                 account.taxfreeCashOutByYear[taxYear] = (
                     account.taxfreeCashOutByYear.get(taxYear, Decimal(0.0)) + txn.debit
                 )
         elif txn_type == FEES:
             feesByYear[taxYear] = feesByYear.get(taxYear, Decimal(0.0)) + txn.debit
-            account.cashBalance -= txn.debit
+            account.cashBalance[STERLING] = (
+                account.cashBalance.get(STERLING, Decimal(0.0)) - txn.debit
+            )
         elif txn_type == REFUND:
             feesByYear[taxYear] = feesByYear.get(taxYear, Decimal(0.0)) - txn.credit
-            account.cashBalance += txn.credit
+            account.cashBalance[STERLING] = (
+                account.cashBalance.get(STERLING, Decimal(0.0)) + txn.credit
+            )
         elif txn_type == BUY:
-            debit = convertToSterling(
-                stocks.get(txn.debitCurrency, None), txn, txn.debit
+            # debit = convertToSterling(
+            #     stocks.get(txn.debitCurrency, None), txn, txn.debit
+            # )
+            account.cashBalance[txn.debitCurrency] = (
+                account.cashBalance.get(txn.debitCurrency, Decimal(0.0)) - txn.debit
             )
-            account.cashBalance -= debit
-        elif txn_type in [SELL, REDEMPTION]:
-            if txn.isin != USD and txn.isin != EUR:
-                # Ignore currency sells as we have factored this in from dividends already
-                credit = convertToSterling(
-                    stocks.get(txn.creditCurrency, None), txn, txn.credit
-                )
-                account.cashBalance += credit
-        elif txn_type == DIVIDEND:
-            divi = convertToSterling(
-                stocks.get(txn.creditCurrency, None), txn, txn.credit
+        elif txn_type in [SELL, REDEMPTION, DIVIDEND, EQUALISATION]:
+            # if txn.isin != USD and txn.isin != EUR:
+            #     # Ignore currency sells as we have factored this in from dividends already
+            #     credit = convertToSterling(
+            #         stocks.get(txn.creditCurrency, None), txn, txn.credit
+            #     )
+            account.cashBalance[txn.creditCurrency] = (
+                account.cashBalance.get(txn.creditCurrency, Decimal(0.0)) + txn.credit
             )
-            account.cashBalance += divi
         elif txn_type == INTEREST:
-            interest = convertToSterling(
-                stocks.get(txn.creditCurrency, None), txn, txn.credit
+            account.cashBalance[txn.creditCurrency] = (
+                account.cashBalance.get(txn.creditCurrency, Decimal(0.0)) + txn.credit
             )
-            account.cashBalance += interest
             yr = getTaxYear(txn.date)
             # Interest is account level and so add transaction to account
-            account.interestByYear[yr] = (
-                account.interestByYear.get(yr, Decimal(0.0)) + interest
-            )
+            account.interestByYear[yr] = account.interestByYear.get(
+                yr, Decimal(0.0)
+            ) + convertToSterling(stocks.get(txn.creditCurrency, None), txn, txn.credit)
             if yr in account.interestTxnsByYear:
                 account.interestTxnsByYear[yr].add(txn)
             else:
                 account.interestTxnsByYear[yr] = {txn}
-        elif txn_type == EQUALISATION:
-            divi = convertToSterling(
-                stocks.get(txn.creditCurrency, None), txn, txn.credit
-            )
-            account.cashBalance += divi
         else:
             print(
                 f"Got a transaction type '{txn_type}' that isn't recognised for {account.name}: Detail: {txn}\n"
             )
-        txn.accountBalance = (
-            account.cashBalance
-        )  # Capture running balance in transaction
+        # Capture running balance in transaction
+        txn.accountBalance = deepcopy(account.cashBalance)
     account.dateOpened = dateOpened
     account.cashInByYear = cashInByYear
     account.cashOutByYear = cashOutByYear
@@ -95,7 +96,7 @@ def processAccountTxns(
         for portDate, securityBySymbol in securityByDate.items():
             totalValue: Decimal = Decimal(0.0)
             totalCost: Decimal = Decimal(0.0)
-            byFundType: dict[str, (Decimal(0.0), Decimal(0, 0))] = dict()
+            byFundType: dict[str, (Decimal(0.0), Decimal(0.0))] = dict()
             for security in securityBySymbol.values():
                 totalValue += security.marketValue
                 totalCost += security.bookCost
