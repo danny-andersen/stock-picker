@@ -6,7 +6,25 @@ import numpy as np
 from decimal import Decimal
 import plotly.express as px
 from pandas import DataFrame
-from domonic.html import td, tr, th, body, table, h1, h2, h3, html, meta, style, head, b
+from domonic.html import (
+    td,
+    tr,
+    th,
+    body,
+    table,
+    h1,
+    h2,
+    h3,
+    html,
+    meta,
+    style,
+    head,
+    b,
+    ul,
+    li,
+    colgroup,
+    col,
+)
 
 from saveRetreiveFiles import retrieveStringFromDropbox, saveStringToDropbox
 from transactionDefs import AccountSummary
@@ -232,6 +250,33 @@ def calculate_drawdown(
     return accValues
 
 
+def plotScenarioChart(dom: body, accVals: dict[float, dict[str, dict[str, Decimal]]]):
+    graphVals: dict[str, list[float]] = {
+        "Year": list(),
+    }
+    firstYear = True
+    for year, owners in accVals.items():
+        graphVals["Year"].append(year)
+        for owner, accs in owners.items():
+            for acc, val in accs.items():
+                accName = f"{owner}-{acc}"
+                if firstYear:
+                    graphVals[accName] = list()
+                graphVals[accName].append(val)
+        firstYear = False
+    df = DataFrame(graphVals)
+    fig = px.line(
+        df,
+        x="Year",
+        y=df.columns,
+        hover_data={"Year"},
+        labels={"value": "Account total £"},
+    )
+    # fig.update_xaxes(dtick="M1", tickformat="%b\n%Y")
+    # fig.show()
+    dom.appendChild(fig.to_html())
+
+
 # Account values: model [ owner [ account [year, value]]]
 def plotAccountValues(
     dom: body,
@@ -267,30 +312,7 @@ def plotAccountValues(
     # Plot each scenario
     for model, accVals in accountValues.items():
         dom.append(h2(f"Scenario: {model} annual return"))
-        graphVals: dict[str, list[float]] = {
-            "Year": list(),
-        }
-        firstYear = True
-        for year, owners in accVals.items():
-            graphVals["Year"].append(year)
-            for owner, accs in owners.items():
-                for acc, val in accs.items():
-                    accName = f"{owner}-{acc}"
-                    if firstYear:
-                        graphVals[accName] = list()
-                    graphVals[accName].append(val)
-            firstYear = False
-        df = DataFrame(graphVals)
-        fig = px.line(
-            df,
-            x="Year",
-            y=df.columns,
-            hover_data={"Year"},
-            labels={"value": "Account total £"},
-        )
-        # fig.update_xaxes(dtick="M1", tickformat="%b\n%Y")
-        # fig.show()
-        dom.appendChild(fig.to_html())
+        plotScenarioChart(dom, accVals)
 
     # for model, accVals in accountValues.items():
     #     print(f"Scenario: {model} annual return\n")
@@ -340,6 +362,10 @@ def runDrawdownModel(configFile: configparser.ConfigParser):
                 """
               .positive { color: green}
               .negative { color: red}
+        ul {
+                margin: 0px;
+                padding-left: 0;
+        }
         /* Add CSS styles to make the table look attractive */
         table {
             font-family: Arial, sans-serif;
@@ -348,7 +374,6 @@ def runDrawdownModel(configFile: configparser.ConfigParser):
             margin: 20px auto;
             box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1);
         }
-
         th, td {
             padding: 12px 15px;
             text-align: left;
@@ -451,6 +476,11 @@ def runDrawdownModel(configFile: configparser.ConfigParser):
     )
     monthlyMoneyRequired = int(modelConfig["monthlyIncomeRequired"])
     results = table()
+    # colborders = colgroup()
+    # colborder = col()
+    # colborder.style = "border: 1px solid black"
+    # colborders.append(colborder)
+    # results.append(colborders)
     headerRow = tr()
     headerRow.append(td(b("Source")))
     # Account values: model [ year [ owner [account, value]]]
@@ -475,30 +505,38 @@ def runDrawdownModel(configFile: configparser.ConfigParser):
     grossRow = tr(td(b("Total Gross Income")))
 
     # Calculate income needed from investments based on different required monthly incomes
-    invValue: dict[int, dict[str, float]] = dict()
-    invIncomeByReqdIncome: dict[int, dict[str, int]] = dict()
-    finalPotByMoneyReqdByOwner: dict[int, dict[str, int]] = dict()
+    invValue: dict[int, dict[str, dict[str, Decimal]]] = dict()
+    invIncomeByReqdIncome: dict[int, dict[str, dict[str, int]]] = dict()
+    finalPotByMoneyReqdByOwner: dict[int, dict[str, dict[str, int]]] = dict()
     for monthly in range(monthlyMoneyRequired, int(zeroGrowthMaxDrawdown), 1000):
         # Account values: model [ year [ owner [account, value]]]
         accountValues = calculate_drawdown(configFile, monthly, [0], accounts)
         finalPotByMoneyReqdByOwner[monthly] = dict()
-        for model, accVals in accountValues.items():
-            if "0.0%" in model:
-                for year, ownerAccs in accVals.items():
-                    invValue[year] = dict()
-                    for owner, accs in ownerAccs.items():
-                        invValue[year][owner] = accs[TOTAL]
+        for year, ownerAccs in accountValues["0.0%"].items():
+            invValue[year] = dict()
+            for owner, accs in ownerAccs.items():
+                invValue[year][owner] = accs.copy()
         invIncomeByReqdIncome[monthly] = dict()
-        invIncomeByReqdIncome[monthly]["Pre State Pension"] = dict()
-        invIncomeByReqdIncome[monthly]["Post State Pension"] = dict()
+        invIncomeByReqdIncome[monthly]["Pre State Pension, Year 1"] = dict()
+        invIncomeByReqdIncome[monthly]["Post State Pension, Year 8"] = dict()
+        invIncomeByReqdIncome[monthly]["Post State Pension, Year 30"] = dict()
         for owner in owners:
-            invIncomeByReqdIncome[monthly]["Pre State Pension"][owner] = int(
-                invValue[0][owner] - invValue[1][owner]
-            )
-            invIncomeByReqdIncome[monthly]["Post State Pension"][owner] = int(
-                invValue[8][owner] - invValue[9][owner]
-            )
-            finalPotByMoneyReqdByOwner[monthly][owner] = int(invValue[noOfYears][owner])
+            diff = dict()
+            invIncomeByReqdIncome[monthly]["Pre State Pension, Year 1"][owner] = diff
+            for account, amount in invValue[0][owner].items():
+                diff[account] = int(amount - invValue[1][owner][account])
+            diff = dict()
+            invIncomeByReqdIncome[monthly]["Post State Pension, Year 8"][owner] = diff
+            for account, amount in invValue[8][owner].items():
+                diff[account] = int(amount - invValue[9][owner][account])
+            diff = dict()
+            invIncomeByReqdIncome[monthly]["Post State Pension, Year 30"][owner] = diff
+            for account, amount in invValue[29][owner].items():
+                diff[account] = int(amount - invValue[30][owner][account])
+            finalpots = dict()
+            finalPotByMoneyReqdByOwner[monthly][owner] = finalpots
+            for account, amount in invValue[29][owner].items():
+                finalpots[account] = int(invValue[noOfYears][owner][account])
     for monthlyIncome, invIncomeByType in invIncomeByReqdIncome.items():
         for title, incomeByOwner in invIncomeByType.items():
             grandTotal = 0
@@ -513,14 +551,32 @@ def runDrawdownModel(configFile: configparser.ConfigParser):
                 state = 0 if "Pre" in title else pensionIncomeByOwner[owner]
                 sourceRows[owner][1].append(td(f"£{state:n}"))
                 # Investment / DD income
-                inc = incomeByOwner[owner] if incomeByOwner[owner] > 0 else 0
-                sourceRows[owner][2].append(td(f"£{inc:n}"))
+                inc = incomeByOwner[owner][TOTAL]
+                sourceRows[owner][2].append(
+                    td(
+                        ul(
+                            "".join(
+                                f'{li(f"{account}: £{amount:n}")}'
+                                for account, amount in incomeByOwner[owner].items()
+                            )
+                        )
+                    )
+                )
                 # Total gross income
                 total = db + state + inc
                 sourceRows[owner][3].append(td(b(f"£{total:n}")))
                 # Final pot / residual savings value
                 sourceRows[owner][4].append(
-                    td(f"£{finalPotByMoneyReqdByOwner[monthlyIncome][owner]:n}")
+                    td(
+                        ul(
+                            "".join(
+                                f'{li(f"{account}: £{amount:n}")}'
+                                for account, amount in finalPotByMoneyReqdByOwner[
+                                    monthlyIncome
+                                ][owner].items()
+                            )
+                        )
+                    )
                 )
                 grandTotal += total
             grossRow.append(td(b(f"£{grandTotal:n}")))
@@ -560,7 +616,6 @@ def runDrawdownModel(configFile: configparser.ConfigParser):
 
     # Save results
     minimiumSustainableRate = lastRate
-    residualAmountAtMinRate = lastTotal
 
     # Run model drawdown with various rates of return for required income
     # This will show how the account values change over the drawdown period
@@ -597,12 +652,6 @@ def runDrawdownModel(configFile: configparser.ConfigParser):
             f"Net Monthly State Pension Income (Year 7+): £{netPensionMonthlyIncome:,.0f}"
         )
     )
-    dom.append(
-        h3(
-            f"Calculated minimum rate of return (less inflation) to support average required income is {minimiumSustainableRate:,.1f}%, giving residual value of £{residualAmountAtMinRate:,.0f} at aged {ageRequiredTo}"
-        )
-    )
-
     dom.append(
         h2(
             f"Residual value by rate of return (relative to inflation), in terms of today's money at age {ageRequiredTo}"
@@ -662,7 +711,9 @@ def runDrawdownModel(configFile: configparser.ConfigParser):
             pensionIncome - (pensionIncome * lowerTaxRate / 100)
         ) / 12
     dom.append(
-        h1("Modelling max sustainable drawdown with zero growth on investment funds")
+        h1(
+            "Modelling max sustainable drawdown for different rate of return (above inflation) scenarios"
+        )
     )
     dom.append(h3(f"Average Monthly Drawdown amount: £{monthlyMoneyRequired:,.0f}"))
     dom.append(h3(f"Net Monthly Defined Benefit Income: £{netAnnualDBIncome/12:,.0f}"))
