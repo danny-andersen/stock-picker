@@ -273,7 +273,7 @@ class Transaction:
     credit: Decimal = Decimal(0.0)
     creditCurrency: str = "£"
     type: str = "Unknown"
-    accountBalance: dict[str, Decimal(0.0)] = field(default_factory=dict)
+    accountBalance: dict[str, Decimal] = field(default_factory=dict)
 
     def __eq__(self, other):
         if not isinstance(other, Transaction):

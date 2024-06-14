@@ -205,9 +205,13 @@ def summarisePerformance(
             dict()
         )  # Reset dividends to zero as all txns classified as dividends are interest payments
         if totalByInstitution.get(fund.institution, None):
-            totalByInstitution[fund.institution] += Decimal(accountSummary.cashBalance[STERLING])
+            totalByInstitution[fund.institution] += Decimal(
+                accountSummary.cashBalance[STERLING]
+            )
         else:
-            totalByInstitution[fund.institution] = Decimal(accountSummary.cashBalance[STERLING])
+            totalByInstitution[fund.institution] = Decimal(
+                accountSummary.cashBalance[STERLING]
+            )
         fundTotals[fundType].totalValue += accountSummary.cashBalance[STERLING]
         fundTotals[fundType].totalInvested += accountSummary.totalCashInvested()
         fundTotals[fundType].uk += 100 * float(
@@ -968,11 +972,14 @@ def processTransactions(config):
     )
     total = Decimal(0)
     totalInvested = Decimal(0)
+    totalCash = Decimal(0)
     for ft, otherVal in otherAccs.items():
         val = Decimal(otherVal)
         fundt = FundType[ft.upper()]
         if fundt != FundType.CASH:
             totalInvested += val
+        else:
+            totalCash += val
         otherAccounts.fundTotals[fundt] = FundOverview(
             isin="None",
             name="Other savings",
@@ -983,6 +990,7 @@ def processTransactions(config):
         total += val
     otherAccounts.cashInByYear["total"] = total
     otherAccounts.totalInvestedInSecurities = totalInvested
+    otherAccounts.cashBalance = {STERLING: totalCash}
     otherAccounts.totalMarketValue = total
     otherAccounts.totalByInstitution["Other"] = total
     totalSummary.mergeInAccountSummary(otherAccounts)

@@ -9,7 +9,22 @@ from dataclasses import asdict
 from tabulate import tabulate
 import plotly.express as px
 from pandas import DataFrame
-from domonic.html import td, tr, th, a, body, table, h1, h2, h3, html, meta, style, head
+from domonic.html import (
+    td,
+    tr,
+    th,
+    a,
+    body,
+    table,
+    h1,
+    h2,
+    h3,
+    html,
+    meta,
+    style,
+    head,
+    script,
+)
 
 from transactionDefs import (
     AccountSummary,
@@ -64,7 +79,69 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
             margin-bottom: 10px;
         }
         """
-            )
+            ),
+            script(
+                """
+        function sortTable(tableID, columnIndex) {
+			var table, rows, switching, i, x, y, shouldSwitch, direction, switchcount = 0;
+			table = document.getElementById(tableID);
+			switching = true;
+			direction = "asc";
+
+			while (switching) {
+				switching = false;
+				rows = table.rows;
+
+				for (i = 1; i < (rows.length - 1); i++) {
+					shouldSwitch = false;
+					x = rows[i].getElementsByTagName("TD")[columnIndex];
+					y = rows[i + 1].getElementsByTagName("TD")[columnIndex];
+
+					var xContent = x.innerHTML;
+					var yContent = y.innerHTML;
+					// Remove text within brackets
+					xContent = xContent.replace(/\(.*?\)|£|,|%/g, '').trim();
+					yContent = yContent.replace(/\(.*?\)|£|,|%/g, '').trim();
+
+					// Parse as float if the content is a number
+					if (!isNaN(xContent)) {
+						xContent = parseFloat(xContent);
+					} else {
+						xContent = xContent.toLowerCase();
+					}
+					if (!isNaN(yContent)) {
+						yContent = parseFloat(yContent);
+					} else {
+						yContent = yContent.toLowerCase();
+					}
+
+					if (direction == "asc") {
+						if (xContent > yContent) {
+							shouldSwitch = true;
+							break;
+						}
+					} else if (direction == "desc") {
+						if (xContent < yContent) {
+							shouldSwitch = true;
+							break;
+						}
+					}
+				}
+				if (shouldSwitch) {
+					rows[i].parentNode.insertBefore(rows[i + 1], rows[i]);
+					switching = true;
+					switchcount++;
+				} else {
+					if (switchcount == 0 && direction == "asc") {
+						direction = "desc";
+						switching = true;
+					}
+				}
+			}
+		}
+
+        """
+            ),
         )
     )
     dom = body()
@@ -1208,7 +1285,11 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
         detailLocation = f"./{txn.accountName}/{txn.symbol}.txt"
         row.appendChild(td(a(f"{txn.symbol}", _href=detailLocation)))
         row.appendChild(td(f"{txn.desc}"))
-        row.appendChild(td(f"{printCurrency(txn.creditCurrency, txn.credit, 2) if txn.credit != 0 else printCurrency(txn.debitCurrency, -txn.debit, 2)}"))
+        row.appendChild(
+            td(
+                f"{printCurrency(txn.creditCurrency, txn.credit, 2) if txn.credit != 0 else printCurrency(txn.debitCurrency, -txn.debit, 2)}"
+            )
+        )
         row.appendChild(td(convertCurrencyToStr(txn.accountBalance, 2)))
         txnTable.appendChild(row)
     dom.appendChild(txnTable)
@@ -1227,7 +1308,8 @@ def getSecurityStrs(
 ):
     historicStocks: list[SecurityDetails] = list()
     dom.append(h2("Security Summary"))
-    stockTable = table()
+    securityTableId = "security-summary"
+    stockTable = table(id=securityTableId)
     headings = ["Security"]
     if allAccounts:
         headings.append("Account")
@@ -1238,6 +1320,7 @@ def getSecurityStrs(
             "Fees",
             "Cash inv",
             "Market Value",
+            "% of Account",
             "Yield",
             "Return",
             "Years Held",
@@ -1250,8 +1333,10 @@ def getSecurityStrs(
         ]
     )
     headrow = tr()
+    col = 0
     for hd in headings:
-        headrow.appendChild(th(hd))
+        headrow.appendChild(th(hd, onclick=f"sortTable('{securityTableId}', {col})"))
+        col += 1
     stockTable.appendChild(headrow)
     if len(accountSummary.stocks) > 0:
         secIO = io.StringIO()
@@ -1260,6 +1345,7 @@ def getSecurityStrs(
     else:
         csvOut = None
     stocksToShow = accountSummary.stocks
+    accountTotalValue = accountSummary.totalValue()
     if allAccounts:
         # If all accounts then process stocklist twice
         # The first time aggregate the same stock held in multiple accounts
@@ -1323,6 +1409,10 @@ def getSecurityStrs(
             stockRow.appendChild(td(fees))
             stockRow.appendChild(td(f"£{stockDetails.cashInvested:,.0f}"))
             stockRow.appendChild(td(f"£{stockDetails.marketValue():,.0f}"))
+            stockRow.appendChild(
+                td(f"{100*stockDetails.marketValue()/accountTotalValue:,.2f}%")
+            )
+
             stockRow.appendChild(td(f"{stockDetails.averageYearlyDiviYield():,.0f}%"))
             stockRow.appendChild(
                 td(
