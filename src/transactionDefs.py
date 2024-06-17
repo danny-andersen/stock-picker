@@ -71,6 +71,16 @@ class FundType(str, Enum):
     GOLD: str = "gold"
 
 
+class Regions(str, Enum):
+    AMERICAS: str = "Americas"
+    AMERICAS_EMERGE: str = "Americas-Emerging"
+    ASIA: str = "Asia"
+    ASIA_EMERGE: str = "Asia-Emerging"
+    UK: str = "UK"
+    EUROPE: str = "Europe"
+    EUROPE_EMERGE: str = "Europe-Emerging"
+
+
 @dataclass_json(undefined=Undefined.EXCLUDE)
 @dataclass
 class FundOverview:
@@ -84,13 +94,7 @@ class FundOverview:
     risk: Risk = Risk.MED
     maturity: float = 0.0
     bondGrade: BondGrade = BondGrade.NONE
-    americas: float = 0.0
-    americasEmerging: float = 0.0
-    uk: float = 0.0
-    europe: float = 0.0
-    europeEmerging: float = 0.0
-    asia: float = 0.0
-    asiaEmerging: float = 0.0
+    valueByRegion: dict[Regions, float] = field(default_factory=dict)
     cyclical: float = 0.0
     sensitive: float = 0.0
     defensive: float = 0.0
@@ -119,9 +123,12 @@ class FundOverview:
             retStr += f"Bond Grade: {self.bondGrade.name}\n"
         else:
             retStr += f"Stock spread: Cyclical {self.cyclical}%, Sensitive {self.sensitive}%, Defensive {self.defensive}%\n"
-        retStr += f"Geographical Spread: Americas {self.americas}%, Americas Emerging {self.americasEmerging}%, UK {self.uk}%,"
-        retStr += f"Europe {self.europe}%, Europe Emerging {self.europeEmerging}%,"
-        retStr += f"Asia {self.asia}%, Asia Emerging {self.asiaEmerging}%\n"
+        regionStrs = ["Geographical Spread:"]
+        for region in Regions:
+            regionStrs.append(
+                f"{region.value} {(self.valueByRegion[region]/float(self.totalValue) if float(self.totalValue) > 0 else 0.0):0.2f}%,"
+            )
+        retStr += " ".join(regionStrs)
         retStr += f"3 year Stats: Alpha {self.alpha3Yr} Beta {self.beta3Yr} Sharpe {self.sharpe3Yr} Standard Dev {self.stdDev3Yr}\n"
         retStr += f"3 year Return: {self.return3Yr}% 5 year Return: {self.return5Yr}%\n"
         return retStr
@@ -193,48 +200,10 @@ class FundOverview:
                     self.stdDev3Yr * currVal + fund.stdDev3Yr * val
                 ) / totValue
 
-            ownTotGeo = (
-                self.americas
-                + self.americasEmerging
-                + self.asia
-                + self.asiaEmerging
-                + self.europe
-                + self.europeEmerging
-                + self.uk
-            )
-            newTotGeo = (
-                fund.americas
-                + fund.americasEmerging
-                + fund.asia
-                + fund.asiaEmerging
-                + fund.europe
-                + fund.europeEmerging
-                + fund.uk
-            )
-            if ownTotGeo == 0 and newTotGeo != 0:
-                self.americas = fund.americas
-                self.americasEmerging = fund.americasEmerging
-                self.asia = fund.asia
-                self.asiaEmerging = fund.asiaEmerging
-                self.uk = fund.uk
-                self.europe = fund.europe
-                self.europeEmerging = fund.europeEmerging
-            elif ownTotGeo != 0 and newTotGeo != 0:
-                self.americas = (
-                    self.americas * currVal + fund.americas * val
-                ) / totValue
-                self.americasEmerging = (
-                    self.americasEmerging * currVal + fund.americasEmerging * val
-                ) / totValue
-                self.asia = (self.asia * currVal + fund.asia * val) / totValue
-                self.asiaEmerging = (
-                    self.asiaEmerging * currVal + fund.asiaEmerging * val
-                ) / totValue
-                self.europe = (self.europe * currVal + fund.europe * val) / totValue
-                self.europeEmerging = (
-                    self.europeEmerging * currVal + fund.europeEmerging * val
-                ) / totValue
-                self.uk = (self.uk * currVal + fund.uk * val) / totValue
+            for region in Regions:
+                self.valueByRegion[region] = self.valueByRegion.get(
+                    region, 0
+                ) + fund.valueByRegion.get(region, 0)
 
             ownTotDiv = self.cyclical + self.defensive + self.sensitive
             newTotDiv = fund.cyclical + fund.defensive + fund.sensitive

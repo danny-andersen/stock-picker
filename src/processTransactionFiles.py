@@ -6,13 +6,11 @@ from saveRetreiveFiles import (
     saveStockTransactions,
 )
 from transactionDefs import *
-from processTransactions import processAccountTxns, processStockTxns
-from getStockLedgerStr import (
-    getStockLedgerStr,
-    getAccountSummaryStrs,
-)
+
 from decimal import Decimal
 
+from processTransactions import processAccountTxns, processStockTxns
+from getStockLedgerStr import getStockLedgerStr, getAccountSummaryStrs
 from modelDrawdown import runDrawdownModel
 
 
@@ -67,63 +65,62 @@ def summarisePerformance(
         detailsToProcess.extend(details.historicHoldings)
     for details in detailsToProcess:
         value = float(details.marketValue())
-        fund = details.fundOverview
-        if fund:
+        fundOverview = details.fundOverview
+        if fundOverview:
             if value == 0:
                 value = float(details.totalInvested)
-            fundType = fund.fundType
-            if totalByInstitution.get(fund.institution, None):
-                totalByInstitution[fund.institution] += Decimal(value)
+            fundType = fundOverview.fundType
+            if totalByInstitution.get(fundOverview.institution, None):
+                totalByInstitution[fundOverview.institution] += Decimal(value)
             else:
-                totalByInstitution[fund.institution] = Decimal(value)
-            fundTotals[fundType].alpha3Yr += fund.alpha3Yr * value
-            fundTotals[fundType].americas += fund.americas * value
-            fundTotals[fundType].americasEmerging += fund.americasEmerging * value
-            fundTotals[fundType].asia += fund.asia * value
-            fundTotals[fundType].asiaEmerging += fund.asiaEmerging * value
-            fundTotals[fundType].beta3Yr += fund.beta3Yr * value
-            fundTotals[fundType].cyclical += fund.cyclical * value
-            fundTotals[fundType].defensive += fund.defensive * value
-            fundTotals[fundType].uk += fund.uk * value
-            fundTotals[fundType].europe += fund.europe * value
-            fundTotals[fundType].europeEmerging += fund.europeEmerging * value
-            fundTotals[fundType].fees += fund.fees * value
-            fundTotals[fundType].maturity += fund.maturity * value
-            fundTotals[fundType].return3Yr += fund.return3Yr * value
-            fundTotals[fundType].return5Yr += fund.return5Yr * value
-            fundTotals[fundType].sensitive += fund.sensitive * value
-            fundTotals[fundType].sharpe3Yr += fund.sharpe3Yr * value
-            fundTotals[fundType].stdDev3Yr += fund.stdDev3Yr * value
+                totalByInstitution[fundOverview.institution] = Decimal(value)
+            fundTotals[fundType].alpha3Yr += fundOverview.alpha3Yr * value
+            for region in Regions:
+                fundTotals[fundType].valueByRegion[region] = (
+                    fundTotals[fundType].valueByRegion.get(region, 0)
+                    + (fundOverview.valueByRegion.get(region, 0) * value) / 100
+                )
+            fundTotals[fundType].beta3Yr += fundOverview.beta3Yr * value
+            fundTotals[fundType].cyclical += fundOverview.cyclical * value
+            fundTotals[fundType].defensive += fundOverview.defensive * value
+            fundTotals[fundType].fees += fundOverview.fees * value
+            fundTotals[fundType].maturity += fundOverview.maturity * value
+            fundTotals[fundType].return3Yr += fundOverview.return3Yr * value
+            fundTotals[fundType].return5Yr += fundOverview.return5Yr * value
+            fundTotals[fundType].sensitive += fundOverview.sensitive * value
+            fundTotals[fundType].sharpe3Yr += fundOverview.sharpe3Yr * value
+            fundTotals[fundType].stdDev3Yr += fundOverview.stdDev3Yr * value
             fundTotals[fundType].totalValue += Decimal(value)
             fundTotals[fundType].totalInvested += details.totalInvested
             fundTotals[fundType].actualReturn += details.avgGainPerYearPerc() * value
-            if fund.alpha3Yr + fund.beta3Yr + fund.sharpe3Yr + fund.stdDev3Yr > 0:
-                fundTotals[fundType].totRiskVal += Decimal(value)
-            if fund.cyclical + fund.defensive + fund.sensitive > 0:
-                fundTotals[fundType].totDivVal += Decimal(value)
             if (
-                fund.americasEmerging
-                + fund.americas
-                + fund.asia
-                + fund.asiaEmerging
-                + fund.uk
-                + fund.europe
-                + fund.europeEmerging
-            ) > 0:
-                fundTotals[fundType].totGeoVal += Decimal(value)
-            if fund.maturity:
+                fundOverview.alpha3Yr
+                + fundOverview.beta3Yr
+                + fundOverview.sharpe3Yr
+                + fundOverview.stdDev3Yr
+                > 0
+            ):
+                fundTotals[fundType].totRiskVal += Decimal(value)
+            if (
+                fundOverview.cyclical + fundOverview.defensive + fundOverview.sensitive
+                > 0
+            ):
+                fundTotals[fundType].totDivVal += Decimal(value)
+            if fundOverview.maturity:
                 fundTotals[fundType].totMatVal += Decimal(value)
         else:
-            # Assume a share stock
-            fundTotals[FundType.SHARE].totalValue += Decimal(value)
-            fundTotals[FundType.SHARE].uk += (
-                100 * value
-            )  # Assume all shares are UK based
-            fundTotals[FundType.SHARE].totGeoVal += Decimal(value)
-            fundTotals[FundType.SHARE].totalInvested += details.totalInvested
-            fundTotals[FundType.SHARE].actualReturn += (
-                details.avgGainPerYearPerc() * value
-            )
+            #Raise an error
+            raise ValueError(f"Missing fundOverview for fund {details.isin}")
+            # # Assume a share stock
+            # fundTotals[FundType.SHARE].totalValue += Decimal(value)
+            # fundTotals[FundType.SHARE].uk += (
+            #     100 * value
+            # )  # Assume all shares are UK based
+            # fundTotals[FundType.SHARE].totGeoVal += Decimal(value)
+            # fundTotals[FundType.SHARE].totalInvested += details.totalInvested
+            # fundTotals[FundType.SHARE].actualReturn += (
+            #     details.avgGainPerYearPerc() * value
+            # )
 
         totalMarketValue += details.marketValue()
         # totalCashInvested += details.cashInvested
@@ -139,7 +136,7 @@ def summarisePerformance(
             totalDealingCostsByYear[year] = (
                 totalDealingCostsByYear.get(year, Decimal(0.0)) + costs
             )
-        if fund and fund.isBondType():
+        if fundOverview and fundOverview.isBondType():
             # A bond payment is treated as income for tax reasons
             for year, inc in details.dividendsByYear.items():
                 totalIncome[year] = totalIncome.get(year, Decimal(0.0)) + inc
@@ -152,7 +149,7 @@ def summarisePerformance(
                     accountSummary.incomeTxnsByYear[year] = details.dividendTxnsByYear[
                         year
                     ].copy()
-        elif fund and fund.isCashType():
+        elif fundOverview and fundOverview.isCashType():
             # Savings interest
             for year, inc in details.dividendsByYear.items():
                 totalInterest[year] = totalInterest.get(year, Decimal(0.0)) + inc
@@ -197,27 +194,29 @@ def summarisePerformance(
     # If a cash account, add in to CASH type
 
     if accountSummary.name in funds.keys():
-        fund = funds[accountSummary.name]
-        fundType = fund.fundType
+        fundOverview = funds[accountSummary.name]
+        fundType = fundOverview.fundType
         for year, divi in totalDivi.items():
             totalInterest[year] = totalInterest.get(year, Decimal(0.0)) + divi
         totalDivi = (
             dict()
         )  # Reset dividends to zero as all txns classified as dividends are interest payments
-        if totalByInstitution.get(fund.institution, None):
-            totalByInstitution[fund.institution] += Decimal(
+        if totalByInstitution.get(fundOverview.institution, None):
+            totalByInstitution[fundOverview.institution] += Decimal(
                 accountSummary.cashBalance[STERLING]
             )
         else:
-            totalByInstitution[fund.institution] = Decimal(
+            totalByInstitution[fundOverview.institution] = Decimal(
                 accountSummary.cashBalance[STERLING]
             )
         fundTotals[fundType].totalValue += accountSummary.cashBalance[STERLING]
         fundTotals[fundType].totalInvested += accountSummary.totalCashInvested()
-        fundTotals[fundType].uk += 100 * float(
+        # Assume Cash account is UK based
+        fundTotals[fundType].valueByRegion[Regions.UK] = fundTotals[
+            fundType
+        ].valueByRegion.get(Regions.UK, 0.0) + float(
             accountSummary.cashBalance[STERLING]
-        )  # Assume UK based
-        fundTotals[fundType].totGeoVal += accountSummary.cashBalance[STERLING]
+        )
         fundTotals[fundType].actualReturn += 100 * float(
             accountSummary.cashBalance[STERLING] - accountSummary.totalCashInvested()
         )  # This is a %
@@ -227,9 +226,12 @@ def summarisePerformance(
         # Add any cash balance of account to Cash fund
         fundType = FundType.CASH
         fundTotals[fundType].totalValue += accountSummary.cashBalance[STERLING]
-        fundTotals[fundType].uk += 100 * float(
+        # Assume Fund is UK based
+        fundTotals[fundType].valueByRegion[Regions.UK] = fundTotals[
+            fundType
+        ].valueByRegion.get(Regions.UK, 0.0) + float(
             accountSummary.cashBalance[STERLING]
-        )  # Assume UK based
+        )
         fundTotals[fundType].totGeoVal += accountSummary.cashBalance[STERLING]
 
     totalGain += accountSummary.totalInterest()
@@ -237,59 +239,56 @@ def summarisePerformance(
     historic3yrReturn = 0.0
     historic5yrReturn = 0.0
 
-    for typ, fund in fundTotals.items():
-        value = float(fund.totalValue)
+    for typ, fundTypeTotal in fundTotals.items():
+        value = float(fundTypeTotal.totalValue)
         if value == 0:
             continue
-        fund.alpha3Yr = (
-            fund.alpha3Yr / float(fund.totRiskVal) if fund.totRiskVal != 0 else 0.0
-        )
-        fund.americas = (
-            fund.americas / float(fund.totGeoVal) if fund.totGeoVal != 0 else 0.0
-        )
-        fund.americasEmerging = (
-            fund.americasEmerging / float(fund.totGeoVal)
-            if fund.totGeoVal != 0
+        fundTypeTotal.alpha3Yr = (
+            fundTypeTotal.alpha3Yr / float(fundTypeTotal.totRiskVal)
+            if fundTypeTotal.totRiskVal != 0
             else 0.0
         )
-        fund.asia = fund.asia / float(fund.totGeoVal) if fund.totGeoVal != 0 else 0.0
-        fund.asiaEmerging = (
-            fund.asiaEmerging / float(fund.totGeoVal) if fund.totGeoVal != 0 else 0.0
+        fundTypeTotal.beta3Yr = (
+            fundTypeTotal.beta3Yr / float(fundTypeTotal.totRiskVal)
+            if fundTypeTotal.totRiskVal != 0
+            else 0.0
         )
-        fund.beta3Yr = (
-            fund.beta3Yr / float(fund.totRiskVal) if fund.totRiskVal != 0 else 0.0
+        fundTypeTotal.cyclical = (
+            fundTypeTotal.cyclical / float(fundTypeTotal.totDivVal)
+            if fundTypeTotal.totDivVal != 0
+            else 0.0
         )
-        fund.cyclical = (
-            fund.cyclical / float(fund.totDivVal) if fund.totDivVal != 0 else 0.0
+        fundTypeTotal.defensive = (
+            fundTypeTotal.defensive / float(fundTypeTotal.totDivVal)
+            if fundTypeTotal.totDivVal != 0
+            else 0.0
         )
-        fund.defensive = (
-            fund.defensive / float(fund.totDivVal) if fund.totDivVal != 0 else 0.0
+        fundTypeTotal.fees = fundTypeTotal.fees / value
+        fundTypeTotal.maturity = (
+            fundTypeTotal.maturity / float(fundTypeTotal.totMatVal)
+            if fundTypeTotal.totMatVal != 0
+            else 0.0
         )
-        fund.uk = fund.uk / float(fund.totGeoVal) if fund.totGeoVal != 0 else 0.0
-        fund.europe = (
-            fund.europe / float(fund.totGeoVal) if fund.totGeoVal != 0 else 0.0
+        historic3yrReturn += fundTypeTotal.return3Yr
+        historic5yrReturn += fundTypeTotal.return5Yr
+        fundTypeTotal.return3Yr = fundTypeTotal.return3Yr / value
+        fundTypeTotal.return5Yr = fundTypeTotal.return5Yr / value
+        fundTypeTotal.sensitive = (
+            fundTypeTotal.sensitive / float(fundTypeTotal.totDivVal)
+            if fundTypeTotal.totDivVal != 0
+            else 0.0
         )
-        fund.europeEmerging = (
-            fund.europeEmerging / float(fund.totGeoVal) if fund.totGeoVal != 0 else 0.0
+        fundTypeTotal.sharpe3Yr = (
+            fundTypeTotal.sharpe3Yr / float(fundTypeTotal.totRiskVal)
+            if fundTypeTotal.totRiskVal != 0
+            else 0.0
         )
-        fund.fees = fund.fees / value
-        fund.maturity = (
-            fund.maturity / float(fund.totMatVal) if fund.totMatVal != 0 else 0.0
+        fundTypeTotal.stdDev3Yr = (
+            fundTypeTotal.stdDev3Yr / float(fundTypeTotal.totRiskVal)
+            if fundTypeTotal.totRiskVal != 0
+            else 0.0
         )
-        historic3yrReturn += fund.return3Yr
-        historic5yrReturn += fund.return5Yr
-        fund.return3Yr = fund.return3Yr / value
-        fund.return5Yr = fund.return5Yr / value
-        fund.sensitive = (
-            fund.sensitive / float(fund.totDivVal) if fund.totDivVal != 0 else 0.0
-        )
-        fund.sharpe3Yr = (
-            fund.sharpe3Yr / float(fund.totRiskVal) if fund.totRiskVal != 0 else 0.0
-        )
-        fund.stdDev3Yr = (
-            fund.stdDev3Yr / float(fund.totRiskVal) if fund.totRiskVal != 0 else 0.0
-        )
-        fund.actualReturn = fund.actualReturn / value
+        fundTypeTotal.actualReturn = fundTypeTotal.actualReturn / value
 
     startYear = accountSummary.dateOpened
     endYear = datetime.now(timezone.utc) + timedelta(
@@ -755,33 +754,13 @@ def getFundOverviews(config):
                 grade = row["Bond-Grade"].strip()
                 if grade != "":
                     fund.bondGrade = BondGrade[grade]
-                fund.americas = (
-                    float(row["Americas"])
-                    if row["Americas"].strip() != ""
-                    else float(0.0)
-                )
-                fund.americasEmerging = (
-                    float(row["Americas-Emerging"])
-                    if row["Americas-Emerging"].strip() != ""
-                    else float(0.0)
-                )
-                fund.uk = float(row["UK"]) if row["UK"].strip() != "" else float(0.0)
-                fund.europe = (
-                    float(row["Europe"]) if row["Europe"].strip() != "" else float(0.0)
-                )
-                fund.europeEmerging = (
-                    float(row["Euro-Emerging"])
-                    if row["Euro-Emerging"].strip() != ""
-                    else float(0.0)
-                )
-                fund.asia = (
-                    float(row["Asia"]) if row["Asia"].strip() != "" else float(0.0)
-                )
-                fund.asiaEmerging = (
-                    float(row["Asia-Emerging"])
-                    if row["Asia-Emerging"].strip() != ""
-                    else float(0.0)
-                )
+                for region in Regions:
+                    fund.valueByRegion[region] = (
+                        float(row[region.value])
+                        if row[region.value].strip() != ""
+                        else float(0.0)
+                    )
+
                 fund.cyclical = (
                     float(row["Cyclical"])
                     if row["Cyclical"].strip() != ""

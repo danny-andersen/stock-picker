@@ -34,6 +34,7 @@ from transactionDefs import (
     CapitalGain,
     convertCurrencyToStr,
     printCurrency,
+    Regions,
 )
 
 
@@ -720,6 +721,7 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
     dom.appendChild(h3("Portfolio Percentages and guardrails"))
     fs = table()
     percByType: dict[str, float] = dict()
+    idealPercByType: dict[str, float] = dict()
     fs.appendChild(
         tr(
             th("Type"),
@@ -728,7 +730,7 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
             th("  Min%  "),
             th("  Ideal%"),
             th("  Max%"),
-            th("  Buy / (Sell)  "),
+            th("  Diff from Ideal "),
         )
     )
     stocksPerc = 100 * totStocks / totalAccountValue
@@ -736,16 +738,13 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
     smin = int(portPerc["stocks_min"])
     smax = int(portPerc["stocks_max"])
     ideal = int(portPerc["stocks_ideal"])
-    buy = ""
-    cls = "positive"
-    if stocksPerc <= smin:
-        buy = f"£{(ideal-stocksPerc)*totalAccountValue/100:,.0f}"
+    idealPercByType["Stocks"] = ideal
+    # Show row in green if in guardrails or red if not
+    if stocksPerc <= smin or stocksPerc >= smax:
         cls = "negative"
-    elif stocksPerc >= smax:
-        buy = f"(£{(stocksPerc-ideal)*totalAccountValue/100:,.0f})"
-        cls = "negative"
-    # if stocksPerc <= ideal:
-    #     if smin smin(smin * 0.05)
+    else:
+        cls = "positive"
+    diff = f"£{(stocksPerc-ideal)*totalAccountValue/100:,.0f}"
     fs.appendChild(
         tr(
             td("Stocks"),
@@ -754,7 +753,7 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
             td(f"{smin:0.01f}%"),
             td(f"{ideal:0.01f}%"),
             td(f"{smax:0.01f}%"),
-            td(buy),
+            td(diff),
             _class=cls,
         )
     )
@@ -763,11 +762,13 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
     smin = int(portPerc["bonds_min"])
     smax = int(portPerc["bonds_max"])
     ideal = int(portPerc["bonds_ideal"])
-    buy = ""
-    if bondsPerc <= smin:
-        buy = f"£{(ideal-bondsPerc)*totalAccountValue/100:,.0f}"
-    elif bondsPerc >= smax:
-        buy = f"(£{(bondsPerc-ideal)*totalAccountValue/100:,.0f})"
+    idealPercByType["Bonds"] = ideal
+    # Show row in green if in guardrails or red if not
+    if bondsPerc <= smin or bondsPerc >= smax:
+        cls = "negative"
+    else:
+        cls = "positive"
+    diff = f"£{(bondsPerc-ideal)*totalAccountValue/100:,.0f}"
     fs.appendChild(
         tr(
             td("Bonds"),
@@ -776,7 +777,8 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
             td(f"{smin:0.01f}%"),
             td(f"{ideal:0.01f}%"),
             td(f"{smax:0.01f}%"),
-            td(buy),
+            td(diff),
+            _class=cls,
         )
     )
     cashPerc = 100 * totCash / totalAccountValue
@@ -784,11 +786,13 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
     smin = int(portPerc["cash_min"])
     smax = int(portPerc["cash_max"])
     ideal = int(portPerc["cash_ideal"])
-    buy = ""
-    if cashPerc <= smin:
-        buy = f"£{(ideal-cashPerc)*totalAccountValue/100:,.0f}"
-    elif cashPerc >= smax:
-        buy = f"(£{(cashPerc-ideal)*totalAccountValue/100:,.0f})"
+    idealPercByType["Cash"] = ideal
+    # Show row in green if in guardrails or red if not
+    if cashPerc <= smin or cashPerc >= smax:
+        cls = "negative"
+    else:
+        cls = "positive"
+    diff = f"£{(cashPerc-ideal)*totalAccountValue/100:,.0f}"
     fs.appendChild(
         tr(
             td("Cash"),
@@ -797,7 +801,8 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
             td(f"{smin:0.01f}%"),
             td(f"{ideal:0.01f}%"),
             td(f"{smax:0.01f}%"),
-            td(buy),
+            td(diff),
+            _class=cls,
         )
     )
     goldPerc = 100 * totGold / totalAccountValue
@@ -805,11 +810,13 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
     smin = int(portPerc["gold_min"])
     smax = int(portPerc["gold_max"])
     ideal = int(portPerc["gold_ideal"])
-    buy = ""
-    if goldPerc <= smin:
-        buy = f"£{(ideal-goldPerc)*totalAccountValue/100:,.0f}"
-    elif cashPerc >= smax:
-        buy = f"(£{(goldPerc-ideal)*totalAccountValue/100:,.0f})"
+    idealPercByType["Gold"] = ideal
+    # Show row in green if in guardrails or red if not
+    if goldPerc <= smin or goldPerc >= smax:
+        cls = "negative"
+    else:
+        cls = "positive"
+    diff = f"£{(goldPerc-ideal)*totalAccountValue/100:,.0f}"
     fs.appendChild(
         tr(
             td("Gold"),
@@ -818,7 +825,8 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
             td(f"{smin:0.01f}%"),
             td(f"{ideal:0.01f}%"),
             td(f"{smax:0.01f}%"),
-            td(buy),
+            td(diff),
+            _class=cls,
         )
     )
     fs.appendChild(
@@ -828,6 +836,14 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
             td(f"{goldPerc+cashPerc+bondsPerc+stocksPerc:0.02f}%"),
         )
     )
+    pieTable = table()
+    pieTable.appendChild(
+        tr(
+            th("Actual Portfolio % spread by type"),
+            th("Ideal Portfolio % spread by type"),
+        )
+    )
+    row = tr()
     fig = px.pie(names=percByType.keys(), values=percByType.values())
     fig.update_traces(textposition="inside", textinfo="percent+label")
     fig.update_layout(
@@ -835,7 +851,17 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
             xref="paper", orientation="h", x=0.4
         ),  # Position legend horizontally and adjust 'y' to position it
     )
-    dom.appendChild(fig.to_html())
+    row.appendChild(td(fig.to_html()))
+    fig = px.pie(names=idealPercByType.keys(), values=idealPercByType.values())
+    fig.update_traces(textposition="inside", textinfo="percent+label")
+    fig.update_layout(
+        legend=dict(
+            xref="paper", orientation="h", x=0.4
+        ),  # Position legend horizontally and adjust 'y' to position it
+    )
+    row.appendChild(td(fig.to_html()))
+    pieTable.appendChild(row)
+    dom.appendChild(pieTable)
     # Show table below
     dom.appendChild(fs)
 
@@ -937,94 +963,96 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
     dom.appendChild(fr)
     dom.appendChild(h3("Geographical Spread"))
     fr = table()
-    fr.appendChild(
-        tr(
-            th("Type"),
-            th("Americas"),
-            th("Americas-Emerging"),
-            th("Asia"),
-            th("Asia-Emerging"),
-            th("UK"),
-            th("Europe"),
-            th("Europe-Emerging"),
-            th("Total"),
-        )
-    )
-    totamer = 0.0
-    totamerem = 0.0
-    totasia = 0.0
-    totasiaem = 0.0
-    totuk = 0.0
-    toteuro = 0.0
-    toteuroem = 0.0
+    headerRow = tr()
+    headerRow.appendChild(th("Type"))
+    for region in Regions:
+        headerRow.appendChild(th(region.value))
+    fr.appendChild(headerRow)
+    totalsByRegion: dict[Regions, float] = dict()
+    stocksTotalsByRegion: dict[Regions, float] = dict()
+    bondTotalsByRegion: dict[Regions, float] = dict()
+    for region in Regions:
+        stocksTotalsByRegion[region] = 0.0
+        bondTotalsByRegion[region] = 0.0
     totVal = 0.0
+    stockTotal = 0.0
+    bondTotal = 0.0
     for typ, fund in funds.items():
-        totPerc = (
-            fund.americas
-            + fund.americasEmerging
-            + fund.asia
-            + fund.asiaEmerging
-            + fund.uk
-            + fund.europe
-            + fund.europeEmerging
-        )
-        fr.appendChild(
-            tr(
-                td(typ.name),
-                td(f"{fund.americas:0.02f}%"),
-                td(f"{fund.americasEmerging:0.02f}%"),
-                td(f"{fund.asia:0.02f}%"),
-                td(f"{fund.asiaEmerging:0.02f}%"),
-                td(f"{fund.uk:0.02f}%"),
-                td(f"{fund.europe:0.02f}%"),
-                td(f"{fund.europeEmerging:0.02f}%"),
-                td(f"{totPerc:0.02f}%"),
-            )
-        )
-        if totPerc != 0:
-            val = float(fund.totalValue)
-            totamer += fund.americas * val
-            totamerem += fund.americasEmerging * val
-            totasia += fund.asia * val
-            totasiaem += fund.asiaEmerging * val
-            totuk += fund.uk * val
-            toteuro += fund.europe * val
-            toteuroem += fund.europeEmerging * val
-            totVal += val
-    totVal = totVal if totVal else 1.0
-    totPerc = (
-        totamer + totamerem + totasia + totasiaem + totuk + toteuro + toteuroem
-    ) / totVal
-    fr.appendChild(
-        tr(
-            td("Overall"),
-            td(f"{totamer/totVal:0.02f}%"),
-            td(f"{totamerem/totVal:0.02f}%"),
-            td(f"{totasia/totVal:0.02f}%"),
-            td(f"{totasiaem/totVal:0.02f}%"),
-            td(f"{totuk/totVal:0.02f}%"),
-            td(f"{toteuro/totVal:0.02f}%"),
-            td(f"{toteuroem/totVal:0.02f}%"),
-            td(f"{totPerc:0.02f}%"),
-        )
+        row = tr(td(typ.name))
+        val = float(fund.totalValue)
+        if fund.isStockType():
+            stockTotal += val
+        elif fund.isBondType:
+            bondTotal += val
+        for region in Regions:
+            if val != 0:
+                regionVal = fund.valueByRegion.get(region, 0.0)
+                row.appendChild(td(f"{100.0*regionVal/val:0.02f}%"))
+                totalsByRegion[region] = totalsByRegion.get(region, 0.0) + regionVal
+                if fund.isStockType():
+                    stocksTotalsByRegion[region] = (
+                        stocksTotalsByRegion.get(region, 0.0) + regionVal
+                    )
+                elif fund.isBondType():
+                    bondTotalsByRegion[region] = (
+                        bondTotalsByRegion.get(region, 0.0) + regionVal
+                    )
+            else:
+                row.appendChild(td("0.00%"))
+        fr.appendChild(tr(row))
+        totVal += val
+    if totVal > 0:
+        row = tr(td("Overall"))
+        for region in Regions:
+            row.appendChild(td(f"{100.0*totalsByRegion[region]/totVal:0.02f}%"))
+        fr.appendChild(tr(row))
+
+    pieTable = table()
+    pieTable.appendChild(
+        tr(th("Total % by region"), th("Stocks % by region"), th("Bonds % by region"))
     )
-    fig = px.pie(
-        names=("Americas", "Asia", "UK", "Europe exUK"),
-        values=(
-            (totamer + totamerem) / totVal,
-            (totasia + totasiaem) / totVal,
-            totuk / totVal,
-            (toteuro + toteuroem) / totVal,
-        ),
-    )
-    fig.update_traces(textposition="inside", textinfo="percent+label")
-    fig.update_layout(
-        showlegend=True,  # Show legend
-        legend=dict(
-            xref="paper", orientation="h", x=0.4
-        ),  # Position legend horizontally and adjust 'y' to position it
-    )
-    dom.appendChild(fig.to_html())
+    row = tr()
+    if totVal > 0:
+        fig = px.pie(
+            names=[region.value for region in Regions],
+            values=[100.0 * val / totVal for val in totalsByRegion.values()],
+        )
+        fig.update_traces(textposition="inside", textinfo="percent+label")
+        fig.update_layout(
+            showlegend=True,  # Show legend
+            legend=dict(
+                xref="paper", orientation="h", x=0.4
+            ),  # Position legend horizontally and adjust 'y' to position it
+        )
+        row.appendChild(td(fig.to_html()))
+    if stockTotal > 0:
+        fig = px.pie(
+            names=[region.value for region in Regions],
+            values=[100.0 * val / stockTotal for val in stocksTotalsByRegion.values()],
+        )
+        fig.update_traces(textposition="inside", textinfo="percent+label")
+        fig.update_layout(
+            showlegend=True,  # Show legend
+            legend=dict(
+                xref="paper", orientation="h", x=0.4
+            ),  # Position legend horizontally and adjust 'y' to position it
+        )
+        row.appendChild(td(fig.to_html()))
+    if bondTotal > 0:
+        fig = px.pie(
+            names=[region.value for region in Regions],
+            values=[100.0 * val / bondTotal for val in bondTotalsByRegion.values()],
+        )
+        fig.update_traces(textposition="inside", textinfo="percent+label")
+        fig.update_layout(
+            showlegend=True,  # Show legend
+            legend=dict(
+                xref="paper", orientation="h", x=0.4
+            ),  # Position legend horizontally and adjust 'y' to position it
+        )
+        row.appendChild(td(fig.to_html()))
+    pieTable.appendChild(tr(row))
+    dom.appendChild(pieTable)
     # Show table below chart
     dom.appendChild(fr)
 
