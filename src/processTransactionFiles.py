@@ -67,8 +67,6 @@ def summarisePerformance(
         value = float(details.marketValue())
         fundOverview = details.fundOverview
         if fundOverview:
-            if value == 0:
-                value = float(details.totalInvested)
             fundType = fundOverview.fundType
             if totalByInstitution.get(fundOverview.institution, None):
                 totalByInstitution[fundOverview.institution] += Decimal(value)
@@ -109,7 +107,7 @@ def summarisePerformance(
             if fundOverview.maturity:
                 fundTotals[fundType].totMatVal += Decimal(value)
         else:
-            #Raise an error
+            # Raise an error
             raise ValueError(f"Missing fundOverview for fund {details.isin}")
             # # Assume a share stock
             # fundTotals[FundType.SHARE].totalValue += Decimal(value)
