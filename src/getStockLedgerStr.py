@@ -24,6 +24,7 @@ from domonic.html import (
     style,
     head,
     script,
+    button,
 )
 
 from transactionDefs import (
@@ -83,6 +84,18 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
             ),
             script(
                 """
+		function toggleTable(button, tableIds, tableDesc) {
+            tableIds.forEach(id => {
+                let table = document.getElementById(id);
+                if (table.hidden) {
+                    table.hidden = null;
+                    button.innerText = "Hide " + tableDesc;
+                } else {
+                    table.hidden = "hidden";
+                    button.innerText = "Show " + tableDesc;
+                }
+            });
+		}
         function sortTable(tableID, columnIndex) {
 			var table, rows, switching, i, x, y, shouldSwitch, direction, switchcount = 0;
 			table = document.getElementById(tableID);
@@ -316,178 +329,9 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
     )
     dom.appendChild(smry)
 
-    dom.appendChild(h2("Tax liability"))
-    currentTaxYear = getTaxYear(datetime.now())
-    lastTaxYear = getTaxYear(datetime.now() - timedelta(weeks=52))
-    if len(accountSummary.mergedAccounts) == 0:
-        # Single account
-        accounts = [accountSummary]
-    else:
-        accounts = accountSummary.mergedAccounts
-    for yr in [lastTaxYear, currentTaxYear]:
-        dom.appendChild(h3(f"Tax Year {yr}"))
-        tx = table()
-        tx.appendChild(
-            tr(
-                th(" Account "),
-                th(" Capital Gain "),
-                th(" Taxable CG "),
-                th(" CG Tax "),
-                th(" CGT Rem Allowance "),
-                th(" Divi "),
-                th(" Taxable Divi "),
-                th(" Divi Tax "),
-                th(" Divi All Rem "),
-                th(" Income "),
-                th(" Income Tax "),
-            )
-        )
-        totalCG = Decimal(0.0)
-        totalTaxableCG = Decimal(0.0)
-        totalCGT = Decimal(0.0)
-        totalDivi = Decimal(0.0)
-        totalTaxableDivi = Decimal(0.0)
-        totalDiviTax = Decimal(0.0)
-        totalIncome = Decimal(0.0)
-        totalIncomeTax = Decimal(0.0)
-        for account in accounts:
-            band = account.taxBandByYear.get(yr, "lower")
-            cg = (
-                account.realisedGainForTaxByYear.get(yr, Decimal(0.0))
-                if len(account.realisedGainForTaxByYear) > 0
-                else Decimal(0.0)
-            )
-            totalCG += cg
-            taxablecg = account.taxableCG(yr)
-            totalTaxableCG += taxablecg
-            cgt = account.calcCGT(band, yr)
-            totalCGT += cgt
-            divi = account.dividendsByYear.get(yr, Decimal(0.0))
-            totalDivi += divi
-            taxableDivi = account.taxableDivi(yr)
-            totalTaxableDivi += taxableDivi
-            diviTax = account.calcDividendTax(band, yr)
-            totalDiviTax += diviTax
-            income = account.totalIncomeByYear(yr)
-            totalIncome += income
-            incomeTax = account.calcIncomeTax(band, yr)
-            totalIncomeTax += incomeTax
-            accountLocation = f"./{account.name}-Summary.html#Tax%20Liability"
-            tx.appendChild(
-                tr(
-                    td(a(f"{account.name}", _href=accountLocation)),
-                    td(f"£{cg:,.0f}"),
-                    td(f"£{taxablecg:,.0f}"),
-                    td(
-                        f"£{cgt:,.0f}",
-                        _class="positive" if cgt == 0 else "negative",
-                    ),
-                    td("-"),
-                    td(f"£{divi:,.0f}"),
-                    td(f"£{taxableDivi:,.0f}"),
-                    td(
-                        f"£{diviTax:,.0f}",
-                        _class="positive" if diviTax == 0 else "negative",
-                    ),
-                    td("-"),
-                    td(f"£{income:,.0f}"),
-                    td(
-                        f"£{incomeTax:,.0f}",
-                        _class="positive" if incomeTax == 0 else "negative",
-                    ),
-                )
-            )
-        # Note: Use last account processed to get remaining allowance info
-        tx.appendChild(
-            tr(
-                td("Total"),
-                td(f"£{totalCG:,.0f}"),
-                td(f"£{totalTaxableCG:,.0f}"),
-                td(
-                    f"£{totalCGT:,.0f}",
-                    _class="positive" if totalCGT == 0 else "negative",
-                ),
-                td(f"£{account.getRemainingCGTAllowance(totalTaxableCG):,.0f}"),
-                td(f"£{totalDivi:,.0f}"),
-                td(f"£{totalTaxableDivi:,.0f}"),
-                td(
-                    f"£{totalDiviTax:,.0f}",
-                    _class="positive" if totalDiviTax == 0 else "negative",
-                ),
-                td(f"£{account.getRemainingDiviAllowance(totalTaxableDivi):,.0f}"),
-                td(f"£{totalIncome:,.0f}"),
-                td(
-                    f"£{totalIncomeTax:,.0f}",
-                    _class="positive" if totalIncomeTax == 0 else "negative",
-                ),
-                _style="font-weight: bold;",
-            )
-        )
-        dom.appendChild(tx)
-        dom.appendChild(h3("Taxable Capital Gain Transactions"))
-        tx = table()
-        tx.appendChild(
-            tr(
-                th(" Account "),
-                th(" Date "),
-                th(" Stock "),
-                th(" Qty "),
-                th(" Avg Buy Price "),
-                th(" Sell Price "),
-                th(" Capital Gain "),
-            )
-        )
-        totalTaxableCG = Decimal(0.0)
-        cgtxns: list[(AccountSummary, SecurityDetails, CapitalGain)] = []
-        for account in accounts:
-            accountLocation = f"./{account.name}-Summary.html#Tax%20Liability"
-            cgRealised = account.realisedGainForTaxByYear.get(yr, 0)
-            if cgRealised > 0 and Decimal(account.taxRates["capitalgainlowertax"]) > 0:
-                # Have some CGT for this year for this account - go through each stock to get the CG transactions for that tax year - this will include all historic stocks
-                for stock in account.stocks:
-                    txns = stock.cgtransactionsByYear.get(yr, [])
-                    for details in stock.historicHoldings:
-                        txns.extend(details.cgtransactionsByYear.get(yr, []))
-                    for txn in txns:
-                        cgtxns.append((account, stock, txn))
-        cgtxns = sorted(cgtxns, key=lambda txn: txn[-1].date, reverse=False)
-        for cgtxn in cgtxns:
-            (account, stock, cg) = cgtxn
-            capGain = Decimal(cg.qty) * (cg.price - cg.avgBuyPrice)
-            totalTaxableCG += capGain
-            tx.appendChild(
-                tr(
-                    td(a(f"{account.name}", _href=accountLocation)),
-                    td(f"{cg.date.date()}"),
-                    td(
-                        a(
-                            f"{stock.symbol}",
-                            _href=f"./{account.name}/{stock.symbol}.txt",
-                        )
-                    ),
-                    td(f"{cg.qty:,.0f}"),
-                    td(f"£{cg.avgBuyPrice:,.2f}"),
-                    td(f"£{cg.price:,.2f}"),
-                    td(f"£{capGain:,.2f}"),
-                )
-            )
-        tx.appendChild(
-            tr(
-                td("Total"),
-                td("-"),
-                td("-"),
-                td("-"),
-                td("-"),
-                td("-"),
-                td(f"£{totalTaxableCG:,.0f}"),
-                _style="font-weight: bold;",
-            )
-        )
-
-        dom.appendChild(tx)
-
     if len(accountSummary.historicValue) > 0:
         dom.appendChild(h2("Historic value and return"))
+
         fundTypes = [
             FundType.FUND,
             FundType.SHARE,
@@ -496,9 +340,16 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
         ]
         gainDict: dict[str, list] = {"Date": list()}
         gainDict["Total"] = list()
+        gainDict["Zero line"] = list()
         for ft in fundTypes:
             gainDict[ft.name] = list()
-        fs = table()
+        historicTableID = "historicTable"
+        btn = button(
+            "Show Historic Values",
+            onclick=f"toggleTable(this,['{historicTableID}'], 'Historic Values')",
+        )
+        dom.appendChild(btn)
+        fs = table(id=historicTableID, hidden="hidden")
         fs.appendChild(
             tr(
                 th("Date"),
@@ -548,6 +399,7 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
                         / ftv.get(ftyp, (1, 1))[1]
                     )
                 )
+            gainDict["Zero line"].append(0)
             fs.appendChild(
                 tr(
                     td(f"{dt.date()}"),
@@ -868,7 +720,13 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
     percByInstitute = dict()
     if len(accountSummary.totalByInstitution) > 0:
         dom.appendChild(h3("Value by Institution and % split"))
-        fi = table()
+        tableID = "instituteTable"
+        btn = button(
+            "Show Values by Institute",
+            onclick=f"toggleTable(this,['{tableID}'], 'Values by Institute')",
+        )
+        dom.appendChild(btn)
+        fi = table(id=tableID, hidden="hidden")
         totVal = Decimal(0.0)
         val = Decimal(0.0)
         fi.appendChild(tr(th("Institution"), th("Value"), th("Total Account %")))
@@ -962,7 +820,12 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
     )
     dom.appendChild(fr)
     dom.appendChild(h3("Geographical Spread"))
-    fr = table()
+    tableID = "geoTable"
+    btn = button(
+        "Show Values By Region",
+        onclick=f"toggleTable(this,['{tableID}'], 'Values By Region')",
+    )
+    fr = table(id=tableID, hidden="hidden")
     headerRow = tr()
     headerRow.appendChild(th("Type"))
     for region in Regions:
@@ -1054,6 +917,7 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
     pieTable.appendChild(tr(row))
     dom.appendChild(pieTable)
     # Show table below chart
+    dom.appendChild(btn)
     dom.appendChild(fr)
 
     dom.appendChild(h3("Fund Diversity"))
@@ -1096,14 +960,22 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
     )
     dom.appendChild(fr)
 
+    getSecurityStrs(accountSummary, allAccounts, dom, retStrs)
+
     startYear = accountSummary.dateOpened
     endYear = datetime.now(timezone.utc) + timedelta(
         days=365
     )  # Make sure we have this tax year
     # endYear = datetime.now(timezone.utc)
     procYear = startYear
-    dom.appendChild(h2("Yearly breakdown"))
-    byYear = table()
+    dom.appendChild(h2("Yearly cashflow breakdown"))
+    tableID = "breakdownTable"
+    btn = button(
+        "Show Yearly Cashflow Table",
+        onclick=f"toggleTable(this,['{tableID}'], 'Yearly Cashflow Table')",
+    )
+    dom.appendChild(btn)
+    byYear = table(id=tableID, hidden="hidden")
     byYear.appendChild(
         tr(
             th("Year"),
@@ -1117,6 +989,12 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
             th("Fees"),
         )
     )
+    # Things only start getting interesting after 2017
+    plotStartYear = datetime(year=2017, month=5, day=1, tzinfo=timezone.utc)
+    valDict: dict[str, list] = {"Date": list()}
+    valDict["Total Invested"] = list()
+    valDict["Cash In"] = list()
+    valDict["Cash Out"] = list()
     while procYear < endYear:
         taxYear = getTaxYear(procYear)
         yearRow = tr()
@@ -1148,13 +1026,39 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
             td(f"£{accountSummary.feesByYear.get(taxYear, Decimal(0.0)):,.0f}")
         )
         byYear.appendChild(yearRow)
+        if procYear > plotStartYear:
+            valDict["Total Invested"].append(
+                accountSummary.aggInvestedByYear.get(taxYear, Decimal(0.0))
+            )
+            valDict["Cash In"].append(
+                accountSummary.cashInByYear.get(taxYear, Decimal(0.0))
+            )
+            valDict["Cash Out"].append(
+                accountSummary.cashOutByYear.get(taxYear, Decimal(0.0))
+            )
+            valDict["Date"].append(taxYear)
         procYear += timedelta(days=365)
+    df = DataFrame(valDict)
+    fig = px.line(
+        df,
+        x="Date",
+        y=df.columns,
+        hover_data={"Date": "|%B %d, %Y"},
+        title="Yearly Cashflow",
+        labels={"value": "£"},
+    )
+    fig.update_xaxes(dtick="M1", tickformat="%b\n%Y")
+    dom.appendChild(fig.to_html())
     dom.append(byYear)
 
-    getSecurityStrs(accountSummary, allAccounts, dom, retStrs)
-
     dom.appendChild(h2("Monthly Income (exc Interest)"))
-    incTable = table()
+    tableID = "incomeTable"
+    btn = button(
+        "Show Income Table",
+        onclick=f"toggleTable(this,['{tableID}'], 'Income Table')",
+    )
+    dom.appendChild(btn)
+    incTable = table(id=tableID, hidden="hidden")
     if allAccounts:
         otherAccounts = accountSummary.mergedAccounts
         row = tr()
@@ -1199,11 +1103,196 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
             incTable.appendChild(row)
     dom.appendChild(incTable)
 
+    dom.appendChild(h1("Tax"))
+    dom.appendChild(h2("Tax liability by Tax Year"))
+    currentTaxYear = getTaxYear(datetime.now())
+    lastTaxYear = getTaxYear(datetime.now() - timedelta(weeks=52))
+    if len(accountSummary.mergedAccounts) == 0:
+        # Single account
+        accounts = [accountSummary]
+    else:
+        accounts = accountSummary.mergedAccounts
+    for yr in [lastTaxYear, currentTaxYear]:
+        dom.appendChild(h3(f"Tax Year {yr}"))
+        tableID = f"taxTable{yr}"
+        cgtableID = f"cgtaxTable{yr}"
+        btn = button(
+            f"Show Tax Year {yr} Table",
+            onclick=f"toggleTable(this,['{tableID}', '{cgtableID}'], 'Tax Year {yr} Table')",
+        )
+        dom.appendChild(btn)
+        tx = table(id=tableID, hidden="hidden")
+        tx.appendChild(
+            tr(
+                th(" Account "),
+                th(" Capital Gain "),
+                th(" Taxable CG "),
+                th(" CG Tax "),
+                th(" CGT Rem Allowance "),
+                th(" Divi "),
+                th(" Taxable Divi "),
+                th(" Divi Tax "),
+                th(" Divi All Rem "),
+                th(" Income "),
+                th(" Income Tax "),
+            )
+        )
+        totalCG = Decimal(0.0)
+        totalTaxableCG = Decimal(0.0)
+        totalCGT = Decimal(0.0)
+        totalDivi = Decimal(0.0)
+        totalTaxableDivi = Decimal(0.0)
+        totalDiviTax = Decimal(0.0)
+        totalIncome = Decimal(0.0)
+        totalIncomeTax = Decimal(0.0)
+        for account in accounts:
+            band = account.taxBandByYear.get(yr, "lower")
+            cg = (
+                account.realisedGainForTaxByYear.get(yr, Decimal(0.0))
+                if len(account.realisedGainForTaxByYear) > 0
+                else Decimal(0.0)
+            )
+            totalCG += cg
+            taxablecg = account.taxableCG(yr)
+            totalTaxableCG += taxablecg
+            cgt = account.calcCGT(band, yr)
+            totalCGT += cgt
+            divi = account.dividendsByYear.get(yr, Decimal(0.0))
+            totalDivi += divi
+            taxableDivi = account.taxableDivi(yr)
+            totalTaxableDivi += taxableDivi
+            diviTax = account.calcDividendTax(band, yr)
+            totalDiviTax += diviTax
+            income = account.totalIncomeByYear(yr)
+            totalIncome += income
+            incomeTax = account.calcIncomeTax(band, yr)
+            totalIncomeTax += incomeTax
+            accountLocation = f"./{account.name}-Summary.html#Tax%20Liability"
+            tx.appendChild(
+                tr(
+                    td(a(f"{account.name}", _href=accountLocation)),
+                    td(f"£{cg:,.0f}"),
+                    td(f"£{taxablecg:,.0f}"),
+                    td(
+                        f"£{cgt:,.0f}",
+                        _class="positive" if cgt == 0 else "negative",
+                    ),
+                    td("-"),
+                    td(f"£{divi:,.0f}"),
+                    td(f"£{taxableDivi:,.0f}"),
+                    td(
+                        f"£{diviTax:,.0f}",
+                        _class="positive" if diviTax == 0 else "negative",
+                    ),
+                    td("-"),
+                    td(f"£{income:,.0f}"),
+                    td(
+                        f"£{incomeTax:,.0f}",
+                        _class="positive" if incomeTax == 0 else "negative",
+                    ),
+                )
+            )
+        # Note: Use last account processed to get remaining allowance info
+        tx.appendChild(
+            tr(
+                td("Total"),
+                td(f"£{totalCG:,.0f}"),
+                td(f"£{totalTaxableCG:,.0f}"),
+                td(
+                    f"£{totalCGT:,.0f}",
+                    _class="positive" if totalCGT == 0 else "negative",
+                ),
+                td(f"£{account.getRemainingCGTAllowance(totalTaxableCG):,.0f}"),
+                td(f"£{totalDivi:,.0f}"),
+                td(f"£{totalTaxableDivi:,.0f}"),
+                td(
+                    f"£{totalDiviTax:,.0f}",
+                    _class="positive" if totalDiviTax == 0 else "negative",
+                ),
+                td(f"£{account.getRemainingDiviAllowance(totalTaxableDivi):,.0f}"),
+                td(f"£{totalIncome:,.0f}"),
+                td(
+                    f"£{totalIncomeTax:,.0f}",
+                    _class="positive" if totalIncomeTax == 0 else "negative",
+                ),
+                _style="font-weight: bold;",
+            )
+        )
+        dom.appendChild(tx)
+        dom.appendChild(h3("Taxable Capital Gain Transactions"))
+        tx = table(id=cgtableID, hidden="hidden")
+        tx.appendChild(
+            tr(
+                th(" Account "),
+                th(" Date "),
+                th(" Stock "),
+                th(" Qty "),
+                th(" Avg Buy Price "),
+                th(" Sell Price "),
+                th(" Capital Gain "),
+            )
+        )
+        totalTaxableCG = Decimal(0.0)
+        cgtxns: list[(AccountSummary, SecurityDetails, CapitalGain)] = []
+        for account in accounts:
+            accountLocation = f"./{account.name}-Summary.html#Tax%20Liability"
+            cgRealised = account.realisedGainForTaxByYear.get(yr, 0)
+            if cgRealised > 0 and Decimal(account.taxRates["capitalgainlowertax"]) > 0:
+                # Have some CGT for this year for this account - go through each stock to get the CG transactions for that tax year - this will include all historic stocks
+                for stock in account.stocks:
+                    txns = stock.cgtransactionsByYear.get(yr, [])
+                    for details in stock.historicHoldings:
+                        txns.extend(details.cgtransactionsByYear.get(yr, []))
+                    for txn in txns:
+                        cgtxns.append((account, stock, txn))
+        cgtxns = sorted(cgtxns, key=lambda txn: txn[-1].date, reverse=False)
+        for cgtxn in cgtxns:
+            (account, stock, cg) = cgtxn
+            capGain = Decimal(cg.qty) * (cg.price - cg.avgBuyPrice)
+            totalTaxableCG += capGain
+            tx.appendChild(
+                tr(
+                    td(a(f"{account.name}", _href=accountLocation)),
+                    td(f"{cg.date.date()}"),
+                    td(
+                        a(
+                            f"{stock.symbol}",
+                            _href=f"./{account.name}/{stock.symbol}.txt",
+                        )
+                    ),
+                    td(f"{cg.qty:,.0f}"),
+                    td(f"£{cg.avgBuyPrice:,.2f}"),
+                    td(f"£{cg.price:,.2f}"),
+                    td(f"£{capGain:,.2f}"),
+                )
+            )
+        tx.appendChild(
+            tr(
+                td("Total"),
+                td("-"),
+                td("-"),
+                td("-"),
+                td("-"),
+                td("-"),
+                td(f"£{totalTaxableCG:,.0f}"),
+                _style="font-weight: bold;",
+            )
+        )
+
+        dom.appendChild(tx)
+
     dom.appendChild(h2("Payments by Tax Year"))
     for yr in [lastTaxYear, currentTaxYear]:
         dom.appendChild(h3(f"Tax Year {yr}"))
+        divitableID = f"diviTable{yr}"
+        inctableID = f"incometaxTable{yr}"
+        btn = button(
+            f"Show Tax Year {yr} Table",
+            onclick=f"toggleTable(this,['{divitableID}', '{inctableID}'], 'Tax Year {yr} Table')",
+        )
+        dom.appendChild(btn)
+        txnTable = table(id=divitableID, hidden="hidden")
         dom.appendChild(h3("Dividend Payments"))
-        txnTable = table()
         if allAccounts:
             txnTable.appendChild(
                 tr(th("Account"), th("Date"), th("Txn Type"), th("Desc"), th("Amount"))
@@ -1240,7 +1329,7 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
         txnTable.appendChild(tr(td(" "), td("Total"), td(" "), td(f"£{total:,.0f}")))
         dom.append(txnTable)
         dom.appendChild(h3("Income Payments"))
-        txnTable = table()
+        txnTable = table(id=inctableID, hidden="hidden")
         if allAccounts:
             txnTable.appendChild(
                 tr(th("Account"), th("Date"), th("Txn Type"), th("Desc"), th("Amount"))
@@ -1278,7 +1367,13 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
         dom.append(txnTable)
 
     dom.append(h2("Account transactions"))
-    txnTable = table()
+    tableID = "txbTable"
+    btn = button(
+        "Show Transactions",
+        onclick=f"toggleTable(this,['{tableID}'], 'Transactions')",
+    )
+    dom.appendChild(btn)
+    txnTable = table(id=tableID, hidden="hidden")
     if allAccounts:
         txnTable.appendChild(
             tr(
@@ -1335,7 +1430,7 @@ def getSecurityStrs(
     fileStrs: dict[str, str],
 ):
     historicStocks: list[SecurityDetails] = list()
-    dom.append(h2("Security Summary"))
+    dom.appendChild(h2("Security Summary"))
     securityTableId = "security-summary"
     stockTable = table(id=securityTableId)
     headings = ["Security"]
@@ -1458,7 +1553,7 @@ def getSecurityStrs(
                 stockRow.appendChild(td(f"{fund.sharpe3Yr:0.02f}"))
 
             stockTable.appendChild(stockRow)
-    dom.append(stockTable)
+    dom.appendChild(stockTable)
 
     if csvOut:
         for stockDetails in accountSummary.stocks:
@@ -1506,8 +1601,14 @@ def getSecurityStrs(
     historicStocks = sorted(
         historicStocks, key=lambda stock: stock.endDate, reverse=True
     )
-    dom.append(h2("Previous Security Holdings"))
-    stockTable = table()
+    dom.appendChild(h2("Previous Security Holdings"))
+    tableID = "previousTable"
+    btn = button(
+        "Show Previous Holdings",
+        onclick=f"toggleTable(this,['{tableID}'], 'Previous Holdings')",
+    )
+    dom.appendChild(btn)
+    stockTable = table(id=tableID, hidden="hidden")
     headings = ["Security"]
     if allAccounts:
         headings.append("Account")
