@@ -1506,18 +1506,34 @@ def getSecurityStrs(
                     symbol = symbol + "L"
                 elif len(symbol) < 6 and not symbol.endswith(".L"):
                     symbol = symbol + ".L"
+            # Need to allow for when a stock is in more than one account as the account is a comma delimited string
+            stockAccounts = stockDetails.account.split(",")
+            cell = td()
             if allAccounts:
-                detailLocation = f"./{stockDetails.account}/{symbol}.txt"
+                for acc in stockAccounts:
+                    detailLocation = f"./{acc}/{symbol}.txt"
+                    cell.appendChild(
+                        (
+                            a(
+                                (
+                                    f"{acc}: {symbol}"
+                                    if len(stockAccounts) > 1
+                                    else f"{symbol}"
+                                ),
+                                _href=detailLocation,
+                            )
+                        )
+                    )
             else:
                 detailLocation = f"./{accountSummary.name}/{symbol}.txt"
-            stockRow.appendChild(td(a(f"{symbol}", _href=detailLocation)))
+                cell.appendChild((a(f"{symbol}", _href=detailLocation)))
+            stockRow.appendChild(cell)
             if allAccounts:
-                accountLocation = (
-                    f"./{stockDetails.account}-Summary.html#Stock%20Summary"
-                )
-                stockRow.appendChild(
-                    td(a(f"{stockDetails.account}", _href=accountLocation))
-                )
+                cell = td()
+                for acc in stockAccounts:
+                    accountLocation = f"./{acc}-Summary.html#Stock%20Summary"
+                    cell.appendChild(a(f"{acc}", _href=accountLocation))
+                stockRow.appendChild(cell)
             ft = (
                 stockDetails.fundOverview.fundType.name
                 if stockDetails.fundOverview
@@ -1630,8 +1646,10 @@ def getSecurityStrs(
         ]
     )
     headrow = tr()
+    col = 0
     for hd in headings:
-        headrow.appendChild(th(hd))
+        headrow.appendChild(th(hd, onclick=f"sortTable('{tableID}', {col})"))
+        col += 1
     stockTable.appendChild(headrow)
     if len(historicStocks) > 0:
         secIO = io.StringIO()
@@ -1644,19 +1662,35 @@ def getSecurityStrs(
             _class="positive" if stockDetails.totalGain() > 0 else "negative",
         )
         csvRow = {title: "" for title in headings}
-        if allAccounts:
-            detailLocation = f"./{stockDetails.account}/{stockDetails.symbol}.txt"
-        else:
-            detailLocation = f"./{accountSummary.name}/{stockDetails.symbol}.txt"
-        detailLocation = f"./{stockDetails.account}/{stockDetails.symbol}.txt"
-        stockRow.appendChild(td(a(f"{stockDetails.symbol}", _href=detailLocation)))
         csvRow["Security"] = stockDetails.symbol
+        # Need to allow for when a stock is in more than one account as the account is a comma delimited string
+        stockAccounts = stockDetails.account.split(",")
+        cell = td()
         if allAccounts:
-            accountLocation = f"./{stockDetails.account}-Summary.html#Stock%20Summary"
-            stockRow.appendChild(
-                td(a(f"{stockDetails.account}", _href=accountLocation))
-            )
-            csvRow["Account"] = stockDetails.account
+            for acc in stockAccounts:
+                detailLocation = f"./{acc}/{stockDetails.symbol}.txt"
+                cell.appendChild(
+                    (
+                        a(
+                            (
+                                f"{acc}: {stockDetails.symbol}"
+                                if len(stockAccounts) > 1
+                                else f"{stockDetails.symbol}"
+                            ),
+                            _href=detailLocation,
+                        )
+                    )
+                )
+        else:
+            detailLocation = f"./{stockDetails.account}/{stockDetails.symbol}.txt"
+            cell.appendChild((a(f"{stockDetails.symbol}", _href=detailLocation)))
+        stockRow.appendChild(cell)
+        if allAccounts:
+            cell = td()
+            for acc in stockAccounts:
+                accountLocation = f"./{acc}-Summary.html#Stock%20Summary"
+                cell.appendChild(a(f"{acc}", _href=accountLocation))
+            stockRow.appendChild(cell)
         ft = (
             stockDetails.fundOverview.fundType.name
             if stockDetails.fundOverview
