@@ -784,6 +784,56 @@ class AccountSummary:
         else:
             return 0
 
+    def countOfCurrentStocks(self):
+        # Dedupe active stocks (as maybe a merged account) via a set and then count
+        count = (
+            0
+            if len(self.stocks) == 0
+            else (
+                len(
+                    set(
+                        map(
+                            lambda stock: stock.isin if stock.totalInvested > 0 else "",
+                            self.stocks,
+                        )
+                    )
+                )
+                - 1
+            )
+        )
+        return count
+
+    def getValueSplitByFundType(self):
+        totStocks = Decimal(0.0)
+        totBonds = Decimal(0.0)
+        totCash = Decimal(0.0)
+        totGold = Decimal(0.0)
+
+        for fund in self.fundTotals.values():
+            if fund.isStockType():
+                totStocks += fund.totalValue
+            elif fund.isBondType():
+                totBonds += fund.totalValue
+            elif fund.isCashType():
+                totCash += fund.totalValue
+            elif fund.isGoldType():
+                totGold += fund.totalValue
+        return (totStocks, totBonds, totCash, totGold)
+
+    def getPercSplitByFundType(self):
+        (totStocks, totBonds, totCash, totGold) = self.getValueSplitByFundType()
+        total = float(self.totalValue())
+        return (
+            100 * float(totStocks) / total,
+            100 * float(totBonds) / total,
+            100 * float(totCash) / total,
+            100 * float(totGold) / total,
+        )
+
+    def getPercSplitByFundTypeStr(self):
+        (totStocks, totBonds, totCash, totGold) = self.getPercSplitByFundType()
+        return f"{totStocks:0.1f}%/{totBonds:0.1f}%/{totCash:0.1f}%/{totGold:0.1f}%"
+
     # Sum of all realised gains
     def totalRealisedGain(self):
         return (
@@ -815,12 +865,26 @@ class AccountSummary:
             + self.totalIncome()
         )
 
+    def totalReturnByYear(self, taxYear):
+        return (
+            self.realisedGainForTaxByYear.get(taxYear, Decimal(0.0))
+            + self.dividendsByYear.get(taxYear, Decimal(0.0))
+            + self.incomeByYear.get(taxYear, Decimal(0.0))
+            + self.interestByYear.get(taxYear, Decimal(0.0))
+        )
+
+    def totalGainPerc(self):
+        if self.totalInvestedInSecurities > 0:
+            return 100 * float(self.totalGain()) / float(self.totalInvestedInSecurities)
+        else:
+            return 0
+
     def totalGainLessFees(self):
         return (
             self.totalGain() - self.totalFees()
         )  # Dealing costs are wrapped up in stock price received
 
-    def totalGainPerc(self):
+    def totalGainLessFeesPerc(self):
         if self.totalInvestedInSecurities > 0:
             return (
                 100

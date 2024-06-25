@@ -36,6 +36,7 @@ from transactionDefs import (
     convertCurrencyToStr,
     printCurrency,
     Regions,
+    STERLING,
 )
 
 
@@ -108,6 +109,10 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
 
 				for (i = 1; i < (rows.length - 1); i++) {
 					shouldSwitch = false;
+                    //Never switch last row if a summary row
+                    if (i == rows.length - 2 && rows[i + 1].getElementsByTagName("TD")[0].innerHTML == 'Overall') {
+                        break;
+                    }
 					x = rows[i].getElementsByTagName("TD")[columnIndex];
 					y = rows[i + 1].getElementsByTagName("TD")[columnIndex];
 
@@ -329,6 +334,90 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
     )
     dom.appendChild(smry)
 
+    if allAccounts:
+        dom.appendChild(h2("Account values and returns"))
+        fundTableId = "fundTable"
+        fs = table(id=fundTableId)
+        funds = accountSummary.fundTotals
+        isTotalAcc = len(accountSummary.mergedAccounts) > 0
+        totalAccountValue = accountSummary.totalValue()
+        if totalAccountValue == 0:
+            totalAccountValue = Decimal(1.0)
+        headings = [
+            "Account",
+            "Total Invested",
+            "Total Cash",
+            "Total Value",
+            "% of Total",
+            "Last year total income (%)",
+            "Current Capital Gain (%)",
+            "Total Historic Gain (%)",
+            "Stocks/Bonds/Cash/Gold %",
+            "Number of Securities held",
+        ]
+        headrow = tr()
+        col = 0
+        for hd in headings:
+            headrow.appendChild(th(hd, onclick=f"sortTable('{fundTableId}', {col})"))
+            col += 1
+        fs.appendChild(headrow)
+
+        lastTaxYear = getTaxYear(datetime.now() - timedelta(weeks=52))
+        for acc in accountSummary.mergedAccounts:
+            row = tr(
+                _class=("positive" if acc.totalPaperGainForTax >= 0 else "negative")
+            )
+            row.appendChild(td(a(f"{acc.name}", _href=f"./{acc.name}-Summary.html")))
+            row.appendChild(td(f"£{acc.totalInvestedInSecurities:,.0f}"))
+            row.appendChild(td(f"£{acc.cashBalance.get(STERLING, 0):,.0f}"))
+            row.appendChild(td(f"£{acc.totalValue():,.0f}"))
+            row.appendChild(
+                td(f"{100*acc.totalValue()/accountSummary.totalValue():.1f}%")
+            )
+            row.appendChild(
+                td(
+                    f"£{acc.totalReturnByYear(lastTaxYear):,.0f} ({100*acc.totalReturnByYear(lastTaxYear)/acc.totalValue():.1f}%)"
+                )
+            )
+            row.appendChild(
+                td(
+                    f"£{acc.totalPaperGainForTax:,.0f} ({100*float(acc.totalPaperGainForTax)/float(acc.totalInvestedInSecurities) if acc.totalInvestedInSecurities != 0 else 0:.1f}%)"
+                )
+            )
+            row.appendChild(
+                td(
+                    f"£{acc.totalGainLessFees():,.0f} ({acc.totalGainLessFeesPerc():.1f}%)"
+                )
+            )
+            row.appendChild(td(f"{acc.getPercSplitByFundTypeStr()}"))
+            row.appendChild(td(f"{acc.countOfCurrentStocks()}"))
+            fs.append(row)
+        row = tr()
+        row.appendChild(td("Total"))
+        row.appendChild(td(f"£{accountSummary.totalInvestedInSecurities:,.0f}"))
+        row.appendChild(td(f"£{accountSummary.cashBalance.get(STERLING, 0):,.0f}"))
+        row.appendChild(td(f"£{accountSummary.totalValue():,.0f}"))
+        row.appendChild(td("100%"))
+        row.appendChild(
+            td(
+                f"£{accountSummary.totalReturnByYear(lastTaxYear):,.0f} ({100*float(accountSummary.totalReturnByYear(lastTaxYear))/float(accountSummary.totalValue()):.1f}%)"
+            )
+        )
+        row.appendChild(
+            td(
+                f"£{accountSummary.totalPaperGainForTax:,.0f} ({100*float(accountSummary.totalPaperGainForTax)/float(accountSummary.totalInvestedInSecurities):.1f}%)"
+            )
+        )
+        row.appendChild(
+            td(
+                f"£{accountSummary.totalGainLessFees():,.0f} ({accountSummary.totalGainLessFeesPerc():.1f}%)"
+            )
+        )
+        row.appendChild(td(f"{accountSummary.getPercSplitByFundTypeStr()}"))
+        row.appendChild(td(f"{accountSummary.countOfCurrentStocks()}"))
+        fs.appendChild(row)
+        dom.appendChild(fs)
+
     if len(accountSummary.historicValue) > 0:
         dom.appendChild(h2("Historic value and return"))
 
@@ -436,55 +525,49 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
         dom.appendChild(fig.to_html())
 
     dom.appendChild(h2("Statistics By Investment Type"))
-    dom.appendChild(h3("Fund values and returns (including other accounts)"))
-    fs = table()
+    statsTableId = "statsTable"
+    fs = table(id=statsTableId)
     funds = accountSummary.fundTotals
     isTotalAcc = len(accountSummary.mergedAccounts) > 0
     totalAccountValue = accountSummary.totalValue()
     if totalAccountValue == 0:
         totalAccountValue = Decimal(1.0)
-    if isTotalAcc:
-        fs.appendChild(
-            tr(
-                th("Type"),
-                th("Total Invested"),
-                th("Total Market Value"),
-                th("%Account"),
-                "".join(
-                    [
-                        f'{th(a(acc.name, _href="./"+acc.name+"-Summary.html#Statistics%20By%20Investment%20Type"))}'
-                        for acc in accountSummary.mergedAccounts
-                    ]
-                ),
-                th("Avg Fees"),
-                th("Avg Ret"),
-                th("3yr Ret"),
-                th("5yr Ret"),
+    headings = [
+        "Type",
+        "Total Invested",
+        "Total Market Value",
+        "%Account",
+        "Avg Fees",
+        "Avg Ret",
+        "3yr Ret",
+        "5yr Ret",
+    ]
+    headrow = tr()
+    col = 0
+    for hd in headings:
+        headrow.appendChild(th(hd, onclick=f"sortTable('{statsTableId}', {col})"))
+        col += 1
+    if allAccounts:
+        for acc in accountSummary.mergedAccounts:
+            h = th(" [Sort] ", onclick=f"sortTable('{statsTableId}', {col})")
+            col += 1
+            h.appendChild(
+                a(
+                    acc.name,
+                    _href="./"
+                    + acc.name
+                    + "-Summary.html#Statistics%20By%20Investment%20Type",
+                )
             )
-        )
-    else:
-        fs.appendChild(
-            tr(
-                th("Type"),
-                th("Total Invested"),
-                th("Total Market Value"),
-                th("%Account"),
-                th("Avg Fees"),
-                th("Avg Ret"),
-                th("3yr Ret"),
-                th("5yr Ret"),
-            )
-        )
+            headrow.appendChild(h)
+    fs.appendChild(headrow)
+
     totInvested = Decimal(0.0)
     totValue = Decimal(0.0)
     totfees = 0.0
     totRet = 0.0
     tot3yrRet = 0.0
     tot5yrRet = 0.0
-    totStocks = Decimal(0.0)
-    totBonds = Decimal(0.0)
-    totCash = Decimal(0.0)
-    totGold = Decimal(0.0)
     portPerc = accountSummary.portfolioPerc
     for typ, fund in funds.items():
         if isTotalAcc:
@@ -498,11 +581,11 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
                     td(f"£{fund.totalInvested:,.0f}"),
                     td(f"£{fund.totalValue:,.0f}"),
                     td(f"{100*fund.totalValue/totalAccountValue:0.2f}%"),
-                    "".join([f"{td(acc)}" for acc in accFunds]),
                     td(f"{fund.fees:0.2f}%"),
                     td(f"{fund.actualReturn:0.2f}%"),
                     td(f"{fund.return3Yr:0.2f}%"),
                     td(f"{fund.return5Yr:0.2f}%"),
+                    "".join([f"{td(acc)}" for acc in accFunds]),
                     _class="positive" if fund.actualReturn > 0 else "negative",
                 )
             )
@@ -527,14 +610,7 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
         totRet += fund.actualReturn * val
         tot3yrRet += fund.return3Yr * val
         tot5yrRet += fund.return5Yr * val
-        if fund.isStockType():
-            totStocks += fund.totalValue
-        elif fund.isBondType():
-            totBonds += fund.totalValue
-        elif fund.isCashType():
-            totCash += fund.totalValue
-        elif fund.isGoldType():
-            totGold += fund.totalValue
+    (totStocks, totBonds, totCash, totGold) = accountSummary.getValueSplitByFundType()
     totValue = totValue if totValue else Decimal(1.0)
     tot = float(totValue)
     if isTotalAcc:
@@ -545,11 +621,11 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
                 td(f"£{totInvested:,.0f}"),
                 td(f"£{totValue:,.0f}"),
                 td(f"{100*totValue/totalAccountValue:0.02f}%"),
-                "".join([f"{td(accTot)}" for accTot in accTots]),
                 td(f"{totfees/tot:0.02f}%"),
                 td(f"{totRet/tot:0.02f}%"),
                 td(f"{tot3yrRet/tot:0.02f}%"),
                 td(f"{tot5yrRet/tot:0.02f}%"),
+                "".join([f"{td(accTot)}" for accTot in accTots]),
                 _class="positive" if totRet > 0 else "negative",
                 _style="font-weight: bold;",
             )
