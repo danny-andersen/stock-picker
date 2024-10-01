@@ -1,0 +1,8 @@
+hdfs
+python-dateutil
+tabulate
+dropbox
+dataclasses-json
+plotly
+pandas
+domonic
