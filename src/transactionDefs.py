@@ -88,7 +88,7 @@ class FundOverview:
     symbol: str
     name: str
     fundType: FundType
-    institution: str = None
+    institution: str = ""
     income: bool = False
     fees: float = 0.0
     risk: Risk = Risk.MED
@@ -522,13 +522,13 @@ class AccountSummary:
     totalByInstitution: dict[str, Decimal] = field(default_factory=dict)
     transactions: list[Transaction] = field(default_factory=list)
     stocks: list[SecurityDetails] = field(default_factory=list)
-    taxRates: dict = field(default_factory=dict)
+    taxRates: dict[str, float] = field(default_factory=dict)
     taxBandByYear: dict[str, str] = field(default_factory=dict)
     mergedAccounts: list = field(default_factory=list)
-    historicValue: dict[float, (Decimal, Decimal)] = field(
+    historicValue: dict[float, tuple[Decimal, Decimal]] = field(
         default_factory=dict
     )  # (market value, book cost)
-    historicValueByType: dict[float, dict[str, (float, float)]] = field(
+    historicValueByType: dict[float, dict[str, tuple[float, float]]] = field(
         default_factory=dict
     )  # (market value, book cost)
 
