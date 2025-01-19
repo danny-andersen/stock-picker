@@ -471,7 +471,8 @@ def processLatestTxnFiles(config, stockListByAcc, isinBySymbol):
     isinMapping = config["isinmappings"]
     configStore = config["store"]
     owner = config["owner"]["accountowner"]
-    transDir = f"{owner}/{config['files']['transactionsLocation']}"
+    homeDir = config["files"]["investmentHistoryHome"]
+    transDir = f"{homeDir}{owner}/{config['files']['transactionsLocation']}"
     changedStockTxnsByAcc = (
         dict()
     )  # Dict keyed by account with Set of stocks whose transactions have been appended to and so need to be saved back to HDFS
@@ -717,7 +718,8 @@ def processLatestTxnFiles(config, stockListByAcc, isinBySymbol):
 
 
 def getFundOverviews(config):
-    fundsFile = config["files"]["fundsOverview"]
+    homeDir = config["files"]["investmentHistoryHome"]
+    fundsFile = f'{homeDir}{config["files"]["fundsOverview"]}'
 
     fundOverviews: dict[str, FundOverview] = dict()
     isinBySymbol: dict[str, str] = dict()
@@ -809,6 +811,7 @@ def getFundOverviews(config):
 def processTransactions(config):
     configStore = config["store"]
     owner = config["owner"]["accountowner"]
+    homeDir = config["files"]["investmentHistoryHome"]
 
     # Get Fund overview stats
     fundOverviews: dict[str, FundOverview]
@@ -822,7 +825,7 @@ def processTransactions(config):
     )
     # Get Latest Account Portfolio positions
     portfolioDir = (
-        f"{config['owner']['accountowner']}/{config['files']['portfoliosLocation']}"
+        f"{homeDir}{config['owner']['accountowner']}/{config['files']['portfoliosLocation']}"
     )
     print(f"{datetime.now()}: Processing latest portfolio files", flush=True)
     # Top directory should only have one set of portfolio files, all with the same date
@@ -831,7 +834,7 @@ def processTransactions(config):
     )
     # Get historic Account portolio positions
     print(f"{datetime.now()}: Processing historic portfolio files", flush=True)
-    portfolioDir = f"{config['owner']['accountowner']}/{config['files']['portfoliosLocation']}/Archive"
+    portfolioDir = f"{homeDir}{config['owner']['accountowner']}/{config['files']['portfoliosLocation']}/Archive"
     historicPortfolioByDateByAccount = getPortfolioOverviews(
         portfolioDir, isinBySymbol, fundOverviews
     )
