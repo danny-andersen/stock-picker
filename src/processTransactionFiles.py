@@ -914,6 +914,7 @@ def processTransactions(config):
     totalSummary.interestTxnsByYear = dict()
     totalSummary.dividendTxnsByYear = dict()
     totalSummary.incomeTxnsByYear = dict()
+    totalSummary.historicCashBalance = dict()
     lastTaxYear = getTaxYear(datetime.now() - timedelta(weeks=52))
     for summary in allAccounts:
         currentTaxableIncome += summary.taxableIncome(currentTaxYear)
@@ -971,6 +972,10 @@ def processTransactions(config):
     otherAccounts.cashInByYear["total"] = total
     otherAccounts.totalInvestedInSecurities = totalInvested
     otherAccounts.cashBalance = {STERLING: totalCash}
+    otherAccounts.historicCashBalance = {
+        totalSummary.portfolioValueDate.timestamp(): {STERLING: totalCash}
+    }
+    otherAccounts.totalCashInvested = totalCash
     otherAccounts.totalMarketValue = total
     otherAccounts.totalByInstitution["Other"] = total
     totalSummary.mergeInAccountSummary(otherAccounts)

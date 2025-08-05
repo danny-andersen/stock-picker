@@ -434,8 +434,8 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
             gainDict[ft.name] = list()
         historicTableID = "historicTable"
         btn = button(
-            "Show Historic Values",
-            onclick=f"toggleTable(this,['{historicTableID}'], 'Historic Values')",
+            "Show Historic Investment Values",
+            onclick=f"toggleTable(this,['{historicTableID}'], 'Historic Investment Values')",
         )
         dom.appendChild(btn)
         fs = table(id=historicTableID, hidden="hidden")
@@ -523,6 +523,67 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
         fig.update_xaxes(dtick="M1", tickformat="%b\n%Y")
         # fig.show()
         dom.appendChild(fig.to_html())
+
+        ## Show historic total values
+
+        valDict: dict[str, list] = {"Date": list()}
+        valDict["Total"] = list()
+        valDict["Investments"] = list()
+        valDict["Cash"] = list()
+        historicValueTableID = "historicValueTable"
+        btn = button(
+            "Show Historic Total Value",
+            onclick=f"toggleTable(this,['{historicValueTableID}'], 'Show Historic Total Value')",
+        )
+        dom.appendChild(btn)
+        fs = table(id=historicValueTableID, hidden="hidden")
+        fs.appendChild(
+            tr(
+                th("Date"),
+                th("Total Value"),
+                th("Total Investments"),
+                th("Total Cash"),
+            )
+        )
+        dtime: datetime
+        totalValue: Decimal
+        totalInvestments: Decimal
+        totalCash: Decimal
+        dateList = list(accountSummary.historicValue)
+        dateList.sort()
+        for dtime in dateList:
+            (marketValue, bookCost) = accountSummary.historicValue[dtime]
+            dt = datetime.fromtimestamp(dtime)
+            totalInvestments = marketValue
+            totalCash = accountSummary.getCashBalanceAtDate(dtime).get(STERLING, Decimal(0.0))
+            totalValue = marketValue + totalCash
+            valDict["Date"].append(dt)
+            valDict["Total"].append(totalValue)
+            valDict["Investments"].append(totalInvestments)
+            valDict["Cash"].append(totalCash)
+            lastElem = len(valDict["Date"]) - 1
+            fs.appendChild(
+                tr(
+                    td(f"{dt.date()}"),
+                    td(f"£{totalValue:,.0f}"),
+                    td(f"£{totalInvestments:,.0f}"),
+                    td(f"£{totalCash:0.0f}"),
+                    _class="positive")
+            )
+        dom.appendChild(fs)
+        df = DataFrame(valDict)
+        fig = px.line(
+            df,
+            x="Date",
+            y=df.columns,
+            hover_data={"Date": "|%B %d, %Y"},
+            title="Total Value",
+            labels={"value": "£"},
+        )
+        fig.update_xaxes(dtick="M1", tickformat="%b\n%Y")
+        # fig.show()
+        dom.appendChild(fig.to_html())
+
 
     dom.appendChild(h2("Statistics By Investment Type"))
     statsTableId = "statsTable"

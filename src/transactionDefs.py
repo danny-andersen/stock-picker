@@ -528,6 +528,7 @@ class AccountSummary:
     historicValue: dict[float, tuple[Decimal, Decimal]] = field(
         default_factory=dict
     )  # (market value, book cost)
+    historicCashBalance: dict[float, dict[str, Decimal]] = field(default_factory=dict)
     historicValueByType: dict[float, dict[str, tuple[float, float]]] = field(
         default_factory=dict
     )  # (market value, book cost)
@@ -730,6 +731,39 @@ class AccountSummary:
             if dt not in self.historicValue:
                 self.historicValue[dt] = summary.historicValue[dt]
 
+        # Merge historic cash balance by first merging the balance dates into an ordered list of dates
+        dates = set(self.historicCashBalance.keys())
+        dates.update(summary.historicCashBalance.keys())
+        dates = sorted(dates)
+        newHistoricCashBalance = dict()
+        earliestDate = datetime(2019, 1, 1, tzinfo=timezone.utc).timestamp()
+        # Now iterate through the dates and merge the cash balances for each date
+        # We only want to keep dates after the earliest date, so we can ignore any dates
+        # before that date
+        for dt in dates:
+            if dt < earliestDate:
+                continue
+            # Now merge the cash balances for each date by calculating the sum of the balances for each account at that date
+            cashBalance = self.getCashBalanceAtDate(dt)
+            cashBalanceSummary = summary.getCashBalanceAtDate(dt)
+            # Historic cash balance is a dict of dicts, so we need to merge the inner dicts
+            newHistoricCashBalance[dt] = {}
+            for currency, val in cashBalanceSummary.items():
+                newHistoricCashBalance[dt][currency] = (
+                    cashBalance.get(currency, Decimal(0.0)) + val
+                )
+            for currency, val in cashBalance.items():
+                newHistoricCashBalance[dt][currency] = (
+                    cashBalanceSummary.get(currency, Decimal(0.0)) + val
+                )
+        # Remove any entries with no or zero cash balance
+        for dt in list(newHistoricCashBalance.keys()):  # Use list to avoid modifying dict while iterating
+            if not newHistoricCashBalance[dt] or newHistoricCashBalance[dt] == {
+                'STERLING': Decimal(0.0)
+            }:
+                del newHistoricCashBalance[dt]
+        self.historicCashBalance = newHistoricCashBalance
+
         for dt, hvdt in self.historicValueByType.items():
             summaryhvdt = summary.historicValueByType.get(dt, dict())
             for ft in hvdt:
@@ -841,6 +875,18 @@ class AccountSummary:
             if len(self.realisedGainForTaxByYear) > 0
             else Decimal(0.0)
         )
+
+    def getCashBalanceAtDate(self, date):
+        # Get the cash balance at a given date (as a float)
+        if date in self.historicCashBalance:
+            return self.historicCashBalance[date]
+        else:
+            # Find the latest date before the given date
+            for d in sorted(self.historicCashBalance.keys(), reverse=True):
+                if d <= date:
+                    return self.historicCashBalance[d]
+            # If no date found, return a zero
+            return {"STERLING": Decimal(0.0)}
 
     # Paper gain based on current market value less cash coming into the account
     def totalGainFromInvestments(self):

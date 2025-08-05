@@ -85,6 +85,7 @@ def processAccountTxns(
             )
         # Capture running balance in transaction
         txn.accountBalance = deepcopy(account.cashBalance)
+        account.historicCashBalance[txn.date.timestamp()] = deepcopy(account.cashBalance)
     account.dateOpened = dateOpened
     account.cashInByYear = cashInByYear
     account.cashOutByYear = cashOutByYear
