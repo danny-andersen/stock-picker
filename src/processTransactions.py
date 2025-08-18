@@ -141,13 +141,14 @@ def processStockTxns(
                 details.symbol = txn.symbol
             elif txn.sedol:
                 details.symbol = txn.sedol
-        if not details.name:
-            details.name = txn.desc
         if not details.sedol:
             details.sedol = txn.sedol
         if not details.isin:
             details.isin = txn.isin
             details.fundOverview = funds.get(details.isin, None)
+            details.name = details.fundOverview.name if details.fundOverview else None
+        if not details.name:
+            details.name = txn.desc
         if not details.startDate:
             details.startDate = txn.date
         if txn_type == BUY:
