@@ -3,8 +3,8 @@ if [ $? != 0 ]
 then
        echo "pi4desktop not up - powering up cluster"
        scp cluster_on.txt thermostat-host:control_station/relay_command.txt
-       echo "Waiting 60 seconds for cluster to power up"
-       sleep 60
+       echo "Waiting 90 seconds for cluster to power up"
+       sleep 90
 fi
 ssh pi4desktop sudo -u hdfs -i hdfs dfsadmin -report |  grep '^Live\|^DFS Used%\|^Name'
 if [ $? != 0 ]

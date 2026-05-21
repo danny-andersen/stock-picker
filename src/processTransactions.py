@@ -181,7 +181,7 @@ def processStockTxns(
                     qty=float(txn.qty),
                     price=priceIncCosts,
                     transaction=BUY,
-                    avgBuyPrice=priceIncCosts,
+                    avgBuyPrice=details.avgSharePrice,
                 )
             )
         elif txn_type in [SELL, REDEMPTION]:

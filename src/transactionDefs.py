@@ -385,7 +385,7 @@ class SecurityDetails:
         cashInv = 0
         for inv in self.investmentHistory:
             if inv.transaction == BUY:
-                cashInv += inv.avgBuyPrice * Decimal(inv.qty)
+                cashInv += inv.price * Decimal(inv.qty)
         return cashInv
 
     def historicCashDivested(self):
