@@ -249,7 +249,7 @@ def calculate_drawdown(
                         elif currentAccs["trading"] > 0:
                             currentAccs["isa"] += currentAccs["trading"]
                             currentAccs["trading"] = 0
-                            isaAllowance -= currentAccs["sipp"]
+                            isaAllowance -= int(currentAccs["sipp"])
                 currentAccs[TOTAL] = (
                     currentAccs["trading"] + currentAccs["isa"] + currentAccs["sipp"]
                 )
