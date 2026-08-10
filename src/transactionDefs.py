@@ -104,6 +104,7 @@ class FundOverview:
     stdDev3Yr: float = 0.0
     return3Yr: float = 0.0
     return5Yr: float = 0.0
+    historicYield: float = 0.0
     totalValue: Decimal = Decimal(0.0)
     totalInvested: Decimal = Decimal(0.0)
     actualReturn: float = 0.0
@@ -111,6 +112,7 @@ class FundOverview:
     totGeoVal: Decimal = Decimal(0.0)
     totDivVal: Decimal = Decimal(0.0)
     totMatVal: Decimal = Decimal(0.0)
+    
 
     def getStr(self):
         retStr = "Fund overview:\n"
@@ -131,6 +133,7 @@ class FundOverview:
         retStr += " ".join(regionStrs)
         retStr += f"3 year Stats: Alpha {self.alpha3Yr} Beta {self.beta3Yr} Sharpe {self.sharpe3Yr} Standard Dev {self.stdDev3Yr}\n"
         retStr += f"3 year Return: {self.return3Yr}% 5 year Return: {self.return5Yr}%\n"
+        retStr += f"Historic Yield: {self.historicYield}%\n"
         return retStr
 
     def isBondType(self):
@@ -1085,6 +1088,13 @@ class AccountSummary:
                 if len(self.dividendsByYear) > 0
                 else Decimal(0.0)
             )
+            # Also add in nominal dividend for ACC funds (e.g. Vanguard LifeStrategy) - this is the dividend that is reinvested and not paid out
+            # To get true tax liability picture
+            for stock in self.stocks:
+                fund = stock.fundOverview
+                if fund.historicYield > 0:
+                    totalValue = stock.currentSharePrice * Decimal(stock.qtyHeld)
+                    divi += totalValue * Decimal(fund.historicYield) / 100
         return divi
 
     def calcDividendTax(self, taxBand, taxYear):

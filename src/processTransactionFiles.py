@@ -801,7 +801,12 @@ def getFundOverviews(config):
                 )
                 fund.return5Yr = (
                     float(row["5yr-Ret"])
-                    if row["3yr-Ret"].strip() != ""
+                    if row["5yr-Ret"].strip() != ""
+                    else float(0.0)
+                )
+                fund.historicYield = (
+                    float(row["Hist-Yield"])
+                    if row["Hist-Yield"].strip() != ""
                     else float(0.0)
                 )
 
