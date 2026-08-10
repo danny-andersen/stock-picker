@@ -1,4 +1,5 @@
 import io
+import configparser
 import csv
 from datetime import timedelta, datetime, timezone
 import calendar
@@ -40,7 +41,7 @@ from transactionDefs import (
 )
 
 
-def getAccountSummaryStrs(accountSummary: AccountSummary):
+def getAccountSummaryStrs(config: configparser.ConfigParser, accountSummary: AccountSummary):
     retStrs = dict()
     ht = html(meta(_charset="UTF-8"))
     ht.appendChild(
@@ -1252,10 +1253,12 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
     for yr in [lastTaxYear, currentTaxYear]:
         dom.appendChild(h3(f"Tax Year {yr}"))
         tableID = f"taxTable{yr}"
+        taxLiabilityTableID = f"taxLiabilityTable{yr}"
+        taxIncomeTableID = f"taxIncomeTable{yr}"
         cgtableID = f"cgtaxTable{yr}"
         btn = button(
             f"Show Tax Year {yr} Table",
-            onclick=f"toggleTable(this,['{tableID}', '{cgtableID}'], 'Tax Year {yr} Table')",
+            onclick=f"toggleTable(this,['{tableID}', '{taxLiabilityTableID}', '{taxIncomeTableID}', '{cgtableID}'], 'Tax Year {yr} Table')",
         )
         dom.appendChild(btn)
         tx = table(id=tableID, hidden="hidden")
@@ -1281,7 +1284,10 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
         totalTaxableDivi = Decimal(0.0)
         totalDiviTax = Decimal(0.0)
         totalIncome = Decimal(0.0)
+        sippIncome = Decimal(0.0)
         totalIncomeTax = Decimal(0.0)
+        totalIncomeTaxable = Decimal(0.0)
+        totalDividendsTaxable = Decimal(0.0)
         for account in accounts:
             band = account.taxBandByYear.get(yr, "lower")
             cg = (
@@ -1300,10 +1306,19 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
             totalTaxableDivi += taxableDivi
             diviTax = account.calcDividendTax(band, yr)
             totalDiviTax += diviTax
+            if diviTax > 0:
+                totalDividendsTaxable += taxableDivi
             income = account.totalIncomeByYear(yr)
             totalIncome += income
+            #If income is feom a SIPP withdrawal, separate this out
+            cashOutTax = float(account.taxRates.get("withdrawllowertax", 0))
+            if cashOutTax != 0:
+                # Cash out or withdrawl of funds is treated as income (i.e. a SIPP)
+                sippIncome += account.cashOutByYear.get(yr, Decimal(0))
             incomeTax = account.calcIncomeTax(band, yr)
             totalIncomeTax += incomeTax
+            if incomeTax > 0:
+                totalIncomeTaxable += income
             accountLocation = f"./{account.name}-Summary.html#Tax%20Liability"
             tx.appendChild(
                 tr(
@@ -1356,6 +1371,48 @@ def getAccountSummaryStrs(accountSummary: AccountSummary):
             )
         )
         dom.appendChild(tx)
+        dom.appendChild(h3("Tax Liability Summary"))
+        tx = table(id=taxIncomeTableID, hidden="hidden")
+        tx.appendChild(
+            tr(
+                th(" Taxable income type "),
+                th(" Amount "),
+            ))
+        tx.appendChild(tr(td("Interest from UK banks and building societies"), td(f"£{totalIncomeTaxable-sippIncome:,.0f}")))
+        tx.appendChild(tr(td("Dividends from UK companies"), td(f"£{totalDividendsTaxable:,.0f}")))
+        pensionConfig = config["pension_model"] 
+        taxAllowance = int(config["tax_thresholds"]["incomeTaxAllowance"])
+        cgtaxAllowance = int(config["tax_thresholds"]["capitalGainTaxAllowance"])
+        cgtaxRate = int(config["trading_tax_rates"]["capitalGainLowerTax"])
+        lowerTaxRate = int(config["sipp_tax_rates"]["withdrawlLowerTax"])
+        incomeUpperThreshold = int(config["tax_thresholds"]["incomeUpperThreshold"])
+        upperTaxRate = int(config["sipp_tax_rates"]["withdrawlUpperTax"])
+        maxTaxableIncome = int(config["tax_thresholds"]["incomeUpperThreshold"])
+        # annualDBIncome = int(pensionConfig[f"{accountSummary.owner}_finalSalaryPension"]) + int(pensionConfig[f"{accountSummary.owner}_statePensionPerMonth"]) * 12
+        annualDBIncome = int(pensionConfig[f"{accountSummary.owner}_finalSalaryPension"])
+        totalTaxableIncome = annualDBIncome + totalIncomeTaxable + totalDividendsTaxable
+        tx.appendChild(tr(td("UK Pensions and state benefits"), td(f"£{annualDBIncome+sippIncome:,.0f}")))
+        tx.appendChild(tr(td("Total Income received"), td(f"£{totalTaxableIncome:,.0f}")))
+        tx.appendChild(tr(td("minus personal allowance"), td(f"£{taxAllowance:,.0f}")))
+        taxableIncome = totalTaxableIncome - taxAllowance
+        tx.appendChild(tr(td("Total income on which tax is due"), td(f"£{taxableIncome:,.0f}")))
+        dom.appendChild(tx)
+        tx = table(id=taxLiabilityTableID, hidden="hidden")
+        tx.appendChild(
+            tr(
+                th(" Income tax liability "),
+                th(" Amount "),
+                th(" Percentage "),
+                th(" Total "),
+            ))
+        tx.appendChild(tr(td("Pay, pensions etc."), ))
+        if totalTaxableIncome <= incomeUpperThreshold:
+            tx.appendChild(tr(td("Basic rate"), td(f"£{taxableIncome:,.0f}"), td(f"{lowerTaxRate:,.0f}%"), td(f"£{taxableIncome*lowerTaxRate/100:,.0f}")))
+        else:
+            tx.appendChild(tr(td("Basic rate"), td(f"£{incomeUpperThreshold-taxAllowance:,.0f}"), td(f"{lowerTaxRate:,.0f}%"), td(f"£{(incomeUpperThreshold-taxAllowance)*lowerTaxRate/100:,.0f}")))
+            tx.appendChild(tr(td("Higher rate"), td(f"£{taxableIncome-incomeUpperThreshold:,.0f}"), td(f"{upperTaxRate:,.0f}%"), td(f"£{(taxableIncome-incomeUpperThreshold)*upperTaxRate/100:,.0f}")))
+        dom.appendChild(tx)
+
         dom.appendChild(h3("Taxable Capital Gain Transactions"))
         tx = table(id=cgtableID, hidden="hidden")
         tx.appendChild(

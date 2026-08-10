@@ -27,10 +27,10 @@ def saveStockLedger(config, accountSummary: AccountSummary):
 def saveAccountSummary(config, accountSummary: AccountSummary):
     # accSummaryTxt = getAccountSummaryStr(accountSummary)
     # saveStringToDropbox(config, f"/performance/{accountSummary.name}-Summary.txt", accSummaryTxt)
-    filesAndStrs: dict[str, str] = getAccountSummaryStrs(accountSummary)
+    filesAndStrs: dict[str, str] = getAccountSummaryStrs(config, accountSummary)
     for fileName, outStr in filesAndStrs.items():
         saveStringToDropbox(
-            config, f"/{accountSummary.owner}-performance/{fileName}", outStr
+            config["store"], f"/{accountSummary.owner}-performance/{fileName}", outStr
         )
 
 
@@ -608,6 +608,7 @@ def processLatestTxnFiles(config, stockListByAcc, isinBySymbol):
                     or desc.startswith("to ")
                     or "transfer" in desc
                     or "faster payment" in desc
+                    or "one-off income payment" in desc
                     or "tax relief" in desc
                     or "cashback" in desc
                     or ("payment" in desc and "andersen" in desc)
@@ -623,7 +624,7 @@ def processLatestTxnFiles(config, stockListByAcc, isinBySymbol):
                     txn.type = EQUALISATION
                 elif (
                     "fee" in desc
-                    or ("payment" in desc and "andersen" not in desc)
+                    or ("payment" in desc and "andersen" not in desc and "income" not in desc)
                     and txn.debit != 0
                 ):
                     txn.type = FEES
@@ -934,15 +935,18 @@ def processTransactions(config):
         otherIncome["pension_last"]
     )
     # Based on total income, calculate the taxband
-    totalSummary.taxBandByYear[currentTaxYear] = calcTaxBand(
-        taxAllowances, currentTaxableIncome
-    )
-    totalSummary.taxBandByYear[lastTaxYear] = calcTaxBand(
-        taxAllowances, lastTaxableIncome
-    )
+    # totalSummary.taxBandByYear[currentTaxYear] = calcTaxBand(
+    #     taxAllowances, currentTaxableIncome
+    # )
+    # totalSummary.taxBandByYear[lastTaxYear] = calcTaxBand(
+    #     taxAllowances, lastTaxableIncome
+    # )
+    #Force tax band to lower as upper tax due is calculated separately based on total income
+    totalSummary.taxBandByYear[currentTaxYear] = "lower"
+    totalSummary.taxBandByYear[lastTaxYear] = "lower"
     for summary in allAccounts:
         summary.taxBandByYear = totalSummary.taxBandByYear
-        saveAccountSummary(configStore, summary)  # Create overall summary of account
+        saveAccountSummary(config, summary)  # Create overall summary of account
 
     # Add in other account totals that are outside of the scope of these calcs
     # NOTE: If these have a (significant) impact on taxable earnings, they need to be brought into scope and account created for them
@@ -985,7 +989,7 @@ def processTransactions(config):
     otherAccounts.totalByInstitution["Other"] = total
     totalSummary.mergeInAccountSummary(otherAccounts)
     print(f"{datetime.now()}:Saving and generating summary", flush=True)
-    saveAccountSummary(configStore, totalSummary)  # Create overall summary
+    saveAccountSummary(config, totalSummary)  # Create overall summary
     # Run drawdown model
     print(
         f"{datetime.now()}:Running drawdown model based on latest account details",

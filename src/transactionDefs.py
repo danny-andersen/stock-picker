@@ -6,6 +6,7 @@ from copy import deepcopy
 from statistics import mean
 from dataclasses import dataclass, field
 from dataclasses_json import dataclass_json, Undefined
+from dropbox import account
 
 CASH_IN = "Cash in"
 CASH_OUT = "Cash out"
@@ -975,10 +976,10 @@ class AccountSummary:
     def totalIncomeByYear(self, year):
         inc = self.incomeByYear.get(year, Decimal(0))
         inc += self.interestByYear.get(year, Decimal(0))
-        # cashOutTax = float(self.taxRates.get("withdrawllowertax", 0))
-        # if cashOutTax != 0:
-        #     # Cash out or withdrawl of funds is treated as income (e.g. a SIPP)
-        #     inc += self.cashOutByYear.get(year, Decimal(0))
+        cashOutTax = float(self.taxRates.get("withdrawllowertax", 0))
+        if cashOutTax != 0:
+            # Cash out or withdrawl of funds is treated as income (e.g. a SIPP)
+            inc += self.cashOutByYear.get(year, Decimal(0))
         return inc
 
     def totalInterest(self):
@@ -1065,10 +1066,10 @@ class AccountSummary:
         # For a pension (SIPP) cash out is treated as income
         cashOutTax = Decimal(self.taxRates["withdrawl" + taxBand + "tax"])
         if cashOutTax != 0:
-            income = self.cashOutByYear.get(
+            cashOut = self.cashOutByYear.get(
                 taxYear, Decimal(0.0)
             ) - self.taxfreeCashOutByYear.get(taxYear, Decimal(0.0))
-            tax += cashOutTax * income / 100
+            tax += cashOut * cashOutTax / 100
         return tax
 
     def getInterestAllowance(self, taxBand):

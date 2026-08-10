@@ -40,6 +40,12 @@ def processAccountTxns(
                 account.taxfreeCashOutByYear[taxYear] = (
                     account.taxfreeCashOutByYear.get(taxYear, Decimal(0.0)) + txn.debit
                 )
+            if int(account.taxRates["withdrawllowertax"]) > 0:
+                # If we have a tax rate for withdrawls, then we need to capture the cash out for tax purposes
+                if taxYear in account.incomeTxnsByYear:
+                    account.incomeTxnsByYear[taxYear].add(txn)
+                else:
+                    account.incomeTxnsByYear[taxYear] = {txn}
         elif txn_type == FEES:
             feesByYear[taxYear] = feesByYear.get(taxYear, Decimal(0.0)) + txn.debit
             account.cashBalance[STERLING] = (
@@ -70,15 +76,14 @@ def processAccountTxns(
             account.cashBalance[txn.creditCurrency] = (
                 account.cashBalance.get(txn.creditCurrency, Decimal(0.0)) + txn.credit
             )
-            yr = getTaxYear(txn.date)
             # Interest is account level and so add transaction to account
-            account.interestByYear[yr] = account.interestByYear.get(
-                yr, Decimal(0.0)
+            account.interestByYear[taxYear] = account.interestByYear.get(
+                taxYear, Decimal(0.0)
             ) + convertToSterling(stocks.get(txn.creditCurrency, None), txn, txn.credit)
-            if yr in account.interestTxnsByYear:
-                account.interestTxnsByYear[yr].add(txn)
+            if taxYear in account.interestTxnsByYear:
+                account.interestTxnsByYear[taxYear].add(txn)
             else:
-                account.interestTxnsByYear[yr] = {txn}
+                account.interestTxnsByYear[taxYear] = {txn}
         else:
             print(
                 f"Got a transaction type '{txn_type}' that isn't recognised for {account.name}: Detail: {txn}\n"
