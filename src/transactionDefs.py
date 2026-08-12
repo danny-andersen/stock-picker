@@ -7,6 +7,7 @@ from statistics import mean
 from dataclasses import dataclass, field
 from dataclasses_json import dataclass_json, Undefined
 from dropbox import account
+from numpy import isin
 
 CASH_IN = "Cash in"
 CASH_OUT = "Cash out"
@@ -240,11 +241,11 @@ class Transaction:
     accountName: str
     qty: float = 0.0
     price: Decimal = Decimal(0.0)
-    priceCurrency: str = "£"
+    priceCurrency: str = "STERLING"
     debit: Decimal = Decimal(0.0)
-    debitCurrency: str = "£"
+    debitCurrency: str = "STERLING"
     credit: Decimal = Decimal(0.0)
-    creditCurrency: str = "£"
+    creditCurrency: str = "STERLING"
     type: str = "Unknown"
     accountBalance: dict[str, Decimal] = field(default_factory=dict)
 
@@ -1079,6 +1080,44 @@ class AccountSummary:
             allowance = Decimal(self.taxRates["interestupperallowance"])
         return allowance
 
+    def getDividendTxnsFromACCFunds(self, taxYear):
+        #Returns nominal dividend transactions for accumulation funds (e.g. Vanguard LifeStrategy) for a given tax year
+        txns = []
+        for stock in self.stocks:
+            fund = stock.fundOverview
+            if fund.historicYield > 0 and fund.fundType in [ FundType.STOCK_ETF, FundType.SHARE, FundType.FUND ]:
+                totalValue = stock.currentSharePrice * Decimal(stock.qtyHeld)
+                yrIncome = totalValue * Decimal(fund.historicYield) / 100
+                calYear = int(getCalYear(taxYear, stock.startDate.month))
+                endYear = int(getCalYear(taxYear, 3))
+                if calYear == stock.startDate.year:
+                    # Only include the income for the part of the year that the stock was held
+                    daysHeld = (date(year=endYear, month=3, day=31) - stock.startDate.date()).days
+                    yrIncome = yrIncome * Decimal(daysHeld) / Decimal(365)
+                elif calYear < stock.startDate.year:
+                    yrIncome = Decimal(0.0)
+                    # Include the full year income for stocks held for the full year
+                if yrIncome > 0:
+                    # Create a transaction for the income
+                    txn = Transaction(
+                        date=datetime(year=endYear, month=3, day=31, tzinfo=timezone(timedelta(hours=0))),
+                        desc=f"Nominal dividend for accumulation fund {fund.name} ({fund.isin})",
+                        ref ="",
+                        symbol=stock.symbol,
+                        sedol=stock.sedol,
+                        isin=fund.isin,
+                        accountName = self.name,
+                        credit=yrIncome,
+                        debit=Decimal(0.0),
+                        qty=Decimal(0.0),
+                        currency='STERLING',
+                        pricePerShare=Decimal(0.0),
+                        fundType=fund.fundType,
+                        startDate=stock.startDate,
+                    )
+                    txns.append(txn)
+        return txns
+    
     def taxableDivi(self, taxYear):
         rate = Decimal(self.taxRates["dividendlowertax"])
         if rate == 0:
@@ -1091,11 +1130,9 @@ class AccountSummary:
             )
             # Also add in nominal dividend for ACC funds (e.g. Vanguard LifeStrategy) - this is the dividend that is reinvested and not paid out
             # To get true tax liability picture
-            for stock in self.stocks:
-                fund = stock.fundOverview
-                if fund.historicYield > 0:
-                    totalValue = stock.currentSharePrice * Decimal(stock.qtyHeld)
-                    divi += totalValue * Decimal(fund.historicYield) / 100
+            txns = self.getDividendTxnsFromACCFunds(taxYear)
+            for txn in txns:
+                divi += txn.credit
         return divi
 
     def calcDividendTax(self, taxBand, taxYear):
@@ -1121,10 +1158,49 @@ class AccountSummary:
             + self.calcDividendTax(taxBand, taxYear)
             + self.calcIncomeTax(taxBand, taxYear)
         )
+        
+    def getIncomeTxnsFromACCFunds(self, taxYear):
+        txns = []
+        for stock in self.stocks:
+            fund = stock.fundOverview
+            if fund.historicYield > 0 and stock.qtyHeld > 0 and fund.fundType in [ FundType.CASH, FundType.BOND_ETF, FundType.LONG_GILT, FundType.SHORT_GILT, FundType.CORP_BOND ]:
+                totalValue = stock.currentSharePrice * Decimal(stock.qtyHeld)
+                yrIncome = totalValue * Decimal(fund.historicYield) / 100
+                calYear = int(getCalYear(taxYear, stock.startDate.month))
+                endYear = int(getCalYear(taxYear, 3))
+                if calYear == stock.startDate.year:
+                    # Only include the income for the part of the year that the stock was held
+                    daysHeld = (date(year=endYear, month=3, day=31) - stock.startDate.date()).days
+                    yrIncome = yrIncome * Decimal(daysHeld) / Decimal(365)
+                elif calYear < stock.startDate.year:
+                    yrIncome = Decimal(0.0)
+                    # Include the full year income for stocks held for the full year
+                if yrIncome > 0:
+                    # Create a transaction for the income
+                    txn = Transaction(
+                        date=datetime(year=endYear, month=3, day=31, tzinfo=timezone(timedelta(hours=0))),
+                        desc=f"Nominal interest for accumulation fund {fund.name} ({fund.isin})",
+                        ref ="",
+                        symbol=stock.symbol,
+                        sedol=stock.sedol,
+                        isin=fund.isin,
+                        accountName = self.name,
+                        credit=yrIncome,
+                        debit=Decimal(0.0),
+                        qty=Decimal(0.0),
+                        currency='STERLING',
+                        pricePerShare=Decimal(0.0),
+                        fundType=fund.fundType,
+                        startDate=stock.startDate,
+                    )
+                    txns.append(txn)
+        return txns
+
+        
 
     def taxableIncome(self, taxYear):
         income = Decimal(0.0)
-        if self.taxRates["withdrawllowertax"] != 0:
+        if float(self.taxRates["withdrawllowertax"]) != 0:
             # Add in any withdrawals liable to tax for the tax year
             income += (
                 self.cashOutByYear.get(taxYear, Decimal(0.0))
@@ -1137,7 +1213,7 @@ class AccountSummary:
                 if len(self.taxfreeCashOutByYear) > 0
                 else Decimal(0.0)
             )
-        if self.taxRates["incomelowertax"] != 0:
+        if float(self.taxRates["incomelowertax"]) != 0:
             # Add in any bond income for the tax year
             income += (
                 self.incomeByYear.get(taxYear, Decimal(0.0))
@@ -1150,9 +1226,11 @@ class AccountSummary:
                 if len(self.interestByYear) > 0
                 else Decimal(0.0)
             )
-
+            # Add any in income from cash funds (e.g. Vanguard Money Market Fund) - this is the interest that is reinvested and not paid out
+            txns = self.getIncomeTxnsFromACCFunds(taxYear)
+            for txn in txns:
+                income += txn.credit
         return income
-
 
 def getTaxYear(inDate):
     d = date(year=2020, month=inDate.month, day=inDate.day)
@@ -1165,7 +1243,7 @@ def getTaxYear(inDate):
 
 def getCalYear(taxYrStr: str, mon: int):
     yrs = taxYrStr.split("-")
-    if mon in range(1, 3):
+    if mon in range(1, 4):
         calYear = yrs[1]
     else:
         calYear = yrs[0]

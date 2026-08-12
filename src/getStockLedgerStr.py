@@ -20,6 +20,7 @@ from domonic.html import (
     h1,
     h2,
     h3,
+    h4,
     html,
     meta,
     style,
@@ -38,6 +39,7 @@ from transactionDefs import (
     printCurrency,
     Regions,
     STERLING,
+    Transaction,
 )
 
 
@@ -1240,240 +1242,368 @@ def getAccountSummaryStrs(config: configparser.ConfigParser, accountSummary: Acc
             row.appendChild(td(totals[accountSummary.name]))
             incTable.appendChild(row)
     dom.appendChild(incTable)
-
-    dom.appendChild(h1("Tax"))
-    dom.appendChild(h2("Tax liability by Tax Year"))
     currentTaxYear = getTaxYear(datetime.now())
     lastTaxYear = getTaxYear(datetime.now() - timedelta(weeks=52))
-    if len(accountSummary.mergedAccounts) == 0:
-        # Single account
-        accounts = [accountSummary]
-    else:
+
+    if len(accountSummary.mergedAccounts) != 0:
+        #Only show tax summary if we have multiple accounts to summarise
         accounts = accountSummary.mergedAccounts
-    for yr in [lastTaxYear, currentTaxYear]:
-        dom.appendChild(h3(f"Tax Year {yr}"))
-        tableID = f"taxTable{yr}"
-        taxLiabilityTableID = f"taxLiabilityTable{yr}"
-        taxIncomeTableID = f"taxIncomeTable{yr}"
-        cgtableID = f"cgtaxTable{yr}"
-        btn = button(
-            f"Show Tax Year {yr} Table",
-            onclick=f"toggleTable(this,['{tableID}', '{taxLiabilityTableID}', '{taxIncomeTableID}', '{cgtableID}'], 'Tax Year {yr} Table')",
-        )
-        dom.appendChild(btn)
-        tx = table(id=tableID, hidden="hidden")
-        tx.appendChild(
-            tr(
-                th(" Account "),
-                th(" Capital Gain "),
-                th(" Taxable CG "),
-                th(" CG Tax "),
-                th(" CGT Rem Allowance "),
-                th(" Divi "),
-                th(" Taxable Divi "),
-                th(" Divi Tax "),
-                th(" Divi All Rem "),
-                th(" Income "),
-                th(" Income Tax "),
+        dom.appendChild(h1("Tax"))
+        dom.appendChild(h2("Tax liability by Tax Year"))
+        for yr in [lastTaxYear, currentTaxYear]:
+            dom.appendChild(h3(f"Tax Year {yr}"))
+            tableID = f"taxTable{yr}"
+            taxLiabilityTableID = f"taxLiabilityTable{yr}"
+            taxIncomeTableID = f"taxIncomeTable{yr}"
+            cgtableID = f"cgtaxTable{yr}"
+            incTxnTableID = f"incTxnTable{yr}"
+            divTxnTableID = f"divTxnTable{yr}"
+            btn = button(
+                f"Show Tax Year {yr} Table",
+                onclick=f"toggleTable(this,['{tableID}', '{taxLiabilityTableID}', '{taxIncomeTableID}', '{cgtableID}', '{incTxnTableID}', '{divTxnTableID}'], 'Tax Year {yr} Table')",
             )
-        )
-        totalCG = Decimal(0.0)
-        totalTaxableCG = Decimal(0.0)
-        totalCGT = Decimal(0.0)
-        totalDivi = Decimal(0.0)
-        totalTaxableDivi = Decimal(0.0)
-        totalDiviTax = Decimal(0.0)
-        totalIncome = Decimal(0.0)
-        sippIncome = Decimal(0.0)
-        totalIncomeTax = Decimal(0.0)
-        totalIncomeTaxable = Decimal(0.0)
-        totalDividendsTaxable = Decimal(0.0)
-        for account in accounts:
-            band = account.taxBandByYear.get(yr, "lower")
-            cg = (
-                account.realisedGainForTaxByYear.get(yr, Decimal(0.0))
-                if len(account.realisedGainForTaxByYear) > 0
-                else Decimal(0.0)
-            )
-            totalCG += cg
-            taxablecg = account.taxableCG(yr)
-            totalTaxableCG += taxablecg
-            cgt = account.calcCGT(band, yr)
-            totalCGT += cgt
-            divi = account.dividendsByYear.get(yr, Decimal(0.0))
-            totalDivi += divi
-            taxableDivi = account.taxableDivi(yr)
-            totalTaxableDivi += taxableDivi
-            diviTax = account.calcDividendTax(band, yr)
-            totalDiviTax += diviTax
-            if diviTax > 0:
-                totalDividendsTaxable += taxableDivi
-            income = account.totalIncomeByYear(yr)
-            totalIncome += income
-            #If income is feom a SIPP withdrawal, separate this out
-            cashOutTax = float(account.taxRates.get("withdrawllowertax", 0))
-            if cashOutTax != 0:
-                # Cash out or withdrawl of funds is treated as income (i.e. a SIPP)
-                sippIncome += account.cashOutByYear.get(yr, Decimal(0))
-            incomeTax = account.calcIncomeTax(band, yr)
-            totalIncomeTax += incomeTax
-            if incomeTax > 0:
-                totalIncomeTaxable += income
-            accountLocation = f"./{account.name}-Summary.html#Tax%20Liability"
+            dom.appendChild(btn)
+            tx = table(id=tableID, hidden="hidden")
             tx.appendChild(
                 tr(
-                    td(a(f"{account.name}", _href=accountLocation)),
-                    td(f"£{cg:,.0f}"),
-                    td(f"£{taxablecg:,.0f}"),
-                    td(
-                        f"£{cgt:,.0f}",
-                        _class="positive" if cgt == 0 else "negative",
-                    ),
-                    td("-"),
-                    td(f"£{divi:,.0f}"),
-                    td(f"£{taxableDivi:,.0f}"),
-                    td(
-                        f"£{diviTax:,.0f}",
-                        _class="positive" if diviTax == 0 else "negative",
-                    ),
-                    td("-"),
-                    td(f"£{income:,.0f}"),
-                    td(
-                        f"£{incomeTax:,.0f}",
-                        _class="positive" if incomeTax == 0 else "negative",
-                    ),
+                    th(" Account "),
+                    th(" Capital Gain "),
+                    th(" Taxable CG "),
+                    th(" CG Tax "),
+                    th(" CGT Rem Allowance "),
+                    th(" Divi "),
+                    th(" Taxable Divi "),
+                    th(" Divi Tax "),
+                    th(" Divi All Rem "),
+                    th(" Income "),
+                    th(" Income Tax "),
                 )
             )
-        # Note: Use last account processed to get remaining allowance info
-        tx.appendChild(
-            tr(
-                td("Total"),
-                td(f"£{totalCG:,.0f}"),
-                td(f"£{totalTaxableCG:,.0f}"),
-                td(
-                    f"£{totalCGT:,.0f}",
-                    _class="positive" if totalCGT == 0 else "negative",
-                ),
-                td(f"£{account.getRemainingCGTAllowance(totalTaxableCG):,.0f}"),
-                td(f"£{totalDivi:,.0f}"),
-                td(f"£{totalTaxableDivi:,.0f}"),
-                td(
-                    f"£{totalDiviTax:,.0f}",
-                    _class="positive" if totalDiviTax == 0 else "negative",
-                ),
-                td(f"£{account.getRemainingDiviAllowance(totalTaxableDivi):,.0f}"),
-                td(f"£{totalIncome:,.0f}"),
-                td(
-                    f"£{totalIncomeTax:,.0f}",
-                    _class="positive" if totalIncomeTax == 0 else "negative",
-                ),
-                _style="font-weight: bold;",
-            )
-        )
-        dom.appendChild(tx)
-        dom.appendChild(h3("Tax Liability Summary"))
-        tx = table(id=taxIncomeTableID, hidden="hidden")
-        tx.appendChild(
-            tr(
-                th(" Taxable income type "),
-                th(" Amount "),
-            ))
-        tx.appendChild(tr(td("Interest from UK banks and building societies"), td(f"£{totalIncomeTaxable-sippIncome:,.0f}")))
-        tx.appendChild(tr(td("Dividends from UK companies"), td(f"£{totalDividendsTaxable:,.0f}")))
-        pensionConfig = config["pension_model"] 
-        taxAllowance = int(config["tax_thresholds"]["incomeTaxAllowance"])
-        cgtaxAllowance = int(config["tax_thresholds"]["capitalGainTaxAllowance"])
-        cgtaxRate = int(config["trading_tax_rates"]["capitalGainLowerTax"])
-        lowerTaxRate = int(config["sipp_tax_rates"]["withdrawlLowerTax"])
-        incomeUpperThreshold = int(config["tax_thresholds"]["incomeUpperThreshold"])
-        upperTaxRate = int(config["sipp_tax_rates"]["withdrawlUpperTax"])
-        maxTaxableIncome = int(config["tax_thresholds"]["incomeUpperThreshold"])
-        # annualDBIncome = int(pensionConfig[f"{accountSummary.owner}_finalSalaryPension"]) + int(pensionConfig[f"{accountSummary.owner}_statePensionPerMonth"]) * 12
-        annualDBIncome = int(pensionConfig[f"{accountSummary.owner}_finalSalaryPension"])
-        totalTaxableIncome = annualDBIncome + totalIncomeTaxable + totalDividendsTaxable
-        tx.appendChild(tr(td("UK Pensions and state benefits"), td(f"£{annualDBIncome+sippIncome:,.0f}")))
-        tx.appendChild(tr(td("Total Income received"), td(f"£{totalTaxableIncome:,.0f}")))
-        tx.appendChild(tr(td("minus personal allowance"), td(f"£{taxAllowance:,.0f}")))
-        taxableIncome = totalTaxableIncome - taxAllowance
-        tx.appendChild(tr(td("Total income on which tax is due"), td(f"£{taxableIncome:,.0f}")))
-        dom.appendChild(tx)
-        tx = table(id=taxLiabilityTableID, hidden="hidden")
-        tx.appendChild(
-            tr(
-                th(" Income tax liability "),
-                th(" Amount "),
-                th(" Percentage "),
-                th(" Total "),
-            ))
-        tx.appendChild(tr(td("Pay, pensions etc."), ))
-        if totalTaxableIncome <= incomeUpperThreshold:
-            tx.appendChild(tr(td("Basic rate"), td(f"£{taxableIncome:,.0f}"), td(f"{lowerTaxRate:,.0f}%"), td(f"£{taxableIncome*lowerTaxRate/100:,.0f}")))
-        else:
-            tx.appendChild(tr(td("Basic rate"), td(f"£{incomeUpperThreshold-taxAllowance:,.0f}"), td(f"{lowerTaxRate:,.0f}%"), td(f"£{(incomeUpperThreshold-taxAllowance)*lowerTaxRate/100:,.0f}")))
-            tx.appendChild(tr(td("Higher rate"), td(f"£{taxableIncome-incomeUpperThreshold:,.0f}"), td(f"{upperTaxRate:,.0f}%"), td(f"£{(taxableIncome-incomeUpperThreshold)*upperTaxRate/100:,.0f}")))
-        dom.appendChild(tx)
-
-        dom.appendChild(h3("Taxable Capital Gain Transactions"))
-        tx = table(id=cgtableID, hidden="hidden")
-        tx.appendChild(
-            tr(
-                th(" Account "),
-                th(" Date "),
-                th(" Stock "),
-                th(" Qty "),
-                th(" Avg Buy Price "),
-                th(" Sell Price "),
-                th(" Capital Gain "),
-            )
-        )
-        totalTaxableCG = Decimal(0.0)
-        cgtxns: list[(AccountSummary, SecurityDetails, CapitalGain)] = []
-        for account in accounts:
-            accountLocation = f"./{account.name}-Summary.html#Tax%20Liability"
-            cgRealised = account.realisedGainForTaxByYear.get(yr, 0)
-            if cgRealised > 0 and Decimal(account.taxRates["capitalgainlowertax"]) > 0:
-                # Have some CGT for this year for this account - go through each stock to get the CG transactions for that tax year - this will include all historic stocks
-                for stock in account.stocks:
-                    txns = stock.cgtransactionsByYear.get(yr, [])
-                    for details in stock.historicHoldings:
-                        txns.extend(details.cgtransactionsByYear.get(yr, []))
-                    for txn in txns:
-                        cgtxns.append((account, stock, txn))
-        cgtxns = sorted(cgtxns, key=lambda txn: txn[-1].date, reverse=False)
-        for cgtxn in cgtxns:
-            (account, stock, cg) = cgtxn
-            capGain = Decimal(cg.qty) * (cg.price - cg.avgBuyPrice)
-            totalTaxableCG += capGain
+            totalCG = Decimal(0.0)
+            totalTaxableCG = Decimal(0.0)
+            totalCGT = Decimal(0.0)
+            totalDivi = Decimal(0.0)
+            totalTaxableDivi = Decimal(0.0)
+            totalDiviTax = Decimal(0.0)
+            totalIncome = Decimal(0.0)
+            sippIncome = Decimal(0.0)
+            totalIncomeTax = Decimal(0.0)
+            totalInterestIncomeTaxable = Decimal(0.0)
+            totalDividendsTaxable = Decimal(0.0)
+            for acc in accounts:
+                account : AccountSummary = acc
+                band = account.taxBandByYear.get(yr, "lower")
+                cg = (
+                    account.realisedGainForTaxByYear.get(yr, Decimal(0.0))
+                    if len(account.realisedGainForTaxByYear) > 0
+                    else Decimal(0.0)
+                )
+                totalCG += cg
+                taxablecg = account.taxableCG(yr)
+                totalTaxableCG += taxablecg
+                #Force tax band to upper as always going to above the upper tax band
+                cgt = account.calcCGT("upper", yr)
+                totalCGT += cgt
+                divi = account.dividendsByYear.get(yr, Decimal(0.0))
+                totalDivi += divi
+                taxableDivi = account.taxableDivi(yr)
+                totalTaxableDivi += taxableDivi
+                diviTax = account.calcDividendTax("upper", yr)
+                totalDiviTax += diviTax
+                if diviTax > 0:
+                    totalDividendsTaxable += taxableDivi
+                income = account.totalIncomeByYear(yr)
+                totalIncome += income
+                #If income is feom a SIPP withdrawal, separate this out
+                cashOutTax = float(account.taxRates.get("withdrawllowertax", 0))
+                if cashOutTax != 0:
+                    # Cash out or withdrawl of funds is treated as income (i.e. a SIPP)
+                    sippIncome += account.cashOutByYear.get(yr, Decimal(0))
+                incomeTax = account.calcIncomeTax(band, yr)
+                totalIncomeTax += incomeTax
+                if float(account.taxRates.get("incomelowertax", 0)) != 0:
+                    totalInterestIncomeTaxable += account.taxableIncome(yr)
+                accountLocation = f"./{account.name}-Summary.html#Tax%20Liability"
+                tx.appendChild(
+                    tr(
+                        td(a(f"{account.name}", _href=accountLocation)),
+                        td(f"£{cg:,.0f}"),
+                        td(f"£{taxablecg:,.0f}"),
+                        td(
+                            f"£{cgt:,.0f}",
+                            _class="positive" if cgt == 0 else "negative",
+                        ),
+                        td("-"),
+                        td(f"£{divi:,.0f}"),
+                        td(f"£{taxableDivi:,.0f}"),
+                        td(
+                            f"£{diviTax:,.0f}",
+                            _class="positive" if diviTax == 0 else "negative",
+                        ),
+                        td("-"),
+                        td(f"£{income:,.0f}"),
+                        td(
+                            f"£{incomeTax:,.0f}",
+                            _class="positive" if incomeTax == 0 else "negative",
+                        ),
+                    )
+                )
+            # Note: Use last account processed to get remaining allowance info
             tx.appendChild(
                 tr(
-                    td(a(f"{account.name}", _href=accountLocation)),
-                    td(f"{cg.date.date()}"),
+                    td("Total"),
+                    td(f"£{totalCG:,.0f}"),
+                    td(f"£{totalTaxableCG:,.0f}"),
                     td(
-                        a(
-                            f"{stock.symbol}",
-                            _href=f"./{account.name}/{stock.symbol}.txt",
-                        )
+                        f"£{totalCGT:,.0f}",
+                        _class="positive" if totalCGT == 0 else "negative",
                     ),
-                    td(f"{cg.qty:,.0f}"),
-                    td(f"£{cg.avgBuyPrice:,.2f}"),
-                    td(f"£{cg.price:,.2f}"),
-                    td(f"£{capGain:,.2f}"),
+                    td(f"£{account.getRemainingCGTAllowance(totalTaxableCG):,.0f}"),
+                    td(f"£{totalDivi:,.0f}"),
+                    td(f"£{totalTaxableDivi:,.0f}"),
+                    td(
+                        f"£{totalDiviTax:,.0f}",
+                        _class="positive" if totalDiviTax == 0 else "negative",
+                    ),
+                    td(f"£{account.getRemainingDiviAllowance(totalTaxableDivi):,.0f}"),
+                    td(f"£{totalIncome:,.0f}"),
+                    td(
+                        f"£{totalIncomeTax:,.0f}",
+                        _class="positive" if totalIncomeTax == 0 else "negative",
+                    ),
+                    _style="font-weight: bold;",
                 )
             )
-        tx.appendChild(
-            tr(
-                td("Total"),
-                td("-"),
-                td("-"),
-                td("-"),
-                td("-"),
-                td("-"),
-                td(f"£{totalTaxableCG:,.0f}"),
-                _style="font-weight: bold;",
-            )
-        )
+            dom.appendChild(tx)
+            dom.appendChild(h3("Tax Liability Summary"))
+            pensionConfig = config["pension_model"] 
+            taxAllowance = Decimal(config["tax_thresholds"]["incomeTaxAllowance"])
+            cgtaxAllowance = Decimal(config["tax_thresholds"]["capitalGainTaxAllowance"])
+            cgtaxLowerRate = Decimal(config["trading_tax_rates"]["capitalGainLowerTax"])
+            cgtaxUpperRate = Decimal(config["trading_tax_rates"]["capitalGainUpperTax"])
+            diviLowertaxRate = Decimal(config["trading_tax_rates"]["dividendLowerTax"])
+            diviUppertaxRate = Decimal(config["trading_tax_rates"]["dividendUpperTax"])
+            lowerTaxRate = Decimal(config["sipp_tax_rates"]["withdrawlLowerTax"])
+            incomeUpperThreshold = Decimal(config["tax_thresholds"]["incomeUpperThreshold"])
+            upperTaxRate = Decimal(config["sipp_tax_rates"]["withdrawlUpperTax"])
+            # annualDBIncome = Decimal(pensionConfig[f"{accountSummary.owner}_finalSalaryPension"]) + float(pensionConfig[f"{accountSummary.owner}_statePensionPerMonth"]) * 12
+            annualDBIncome = Decimal(pensionConfig[f"{accountSummary.owner}_finalSalaryPension"])
+            tx = table(id=taxIncomeTableID, hidden="hidden")
+            tx.appendChild(
+                tr(
+                    th(" Taxable income type "),
+                    th(" Amount "),
+                ))
+            tx.appendChild(tr(td("Interest from UK banks, building societies and cash funds"), td(f"£{totalInterestIncomeTaxable:,.0f}")))
+            tx.appendChild(tr(td("Dividends from UK companies"), td(f"£{totalDividendsTaxable:,.0f}")))
+            totalTaxableIncome = annualDBIncome + sippIncome + totalInterestIncomeTaxable + totalDividendsTaxable
+            tx.appendChild(tr(td(f"UK Pensions, SIPP drawdown and state benefits (£{annualDBIncome} + £{sippIncome})"), td(f"£{annualDBIncome+sippIncome:,.0f}")))
+            tx.appendChild(tr(td("Total Income received"), td(f"£{totalTaxableIncome:,.0f}")))
+            tx.appendChild(tr(td("minus personal allowance"), td(f"£{taxAllowance:,.0f}")))
+            taxableIncome = totalTaxableIncome - taxAllowance
+            tx.appendChild(tr(td("Total income on which tax is due"), td(f"£{taxableIncome:,.0f}")))
+            dom.appendChild(tx)
+            taxPayable = Decimal(0.0)
+            tx = table(id=taxLiabilityTableID, hidden="hidden")
+            tx.appendChild(
+                tr(
+                    th(" Income tax liability "),
+                    th(" Amount "),
+                    th(" Percentage "),
+                    th(" Total "),
+                ))
+            tx.appendChild(tr(td("Pay, pensions, profit etc. (UK rate for England and Northern Ireland)"), ))
+            if totalTaxableIncome <= incomeUpperThreshold:
+                interestAllowance = Decimal(config["tax_thresholds"]["interestLowerAllowance"])
+            else:
+                interestAllowance = Decimal(config["tax_thresholds"]["interestUpperAllowance"])
+            dividendAllowance = Decimal(config["tax_thresholds"]["dividendTaxAllowance"])
+                
+            if totalInterestIncomeTaxable < interestAllowance:
+                interestAllowance = totalInterestIncomeTaxable
+            totalInterestIncomeTaxable = totalInterestIncomeTaxable - interestAllowance
+            taxableIncome -= interestAllowance
+            if totalDividendsTaxable < dividendAllowance:
+                dividendAllowance = totalDividendsTaxable
+            totalDividendsTaxable = totalDividendsTaxable - dividendAllowance
+            # Remove dividend allowance from taxable income as this is taxed separately
+            taxableIncome -= totalDividendsTaxable
+            if totalTaxableIncome <= incomeUpperThreshold:
+                taxToPay = taxableIncome*lowerTaxRate/100
+                tx.appendChild(tr(td("Basic rate"), td(f"£{taxableIncome:,.0f}"), td(f"x {lowerTaxRate:,.2f}%"), td(f"£{taxToPay:,.0f}")))
+                taxPayable += taxToPay
+            else:
+                taxToPay = (incomeUpperThreshold-taxAllowance)*lowerTaxRate/100
+                taxPayable += taxToPay
+                tx.appendChild(tr(td("Basic rate"), td(f"£{incomeUpperThreshold-taxAllowance:,.0f}"), td(f"x {lowerTaxRate:,.2f}%"), td(f"£{taxToPay:,.0f}")))
+                if taxableIncome > incomeUpperThreshold:
+                    taxToPayUpper = (taxableIncome-(incomeUpperThreshold-taxAllowance))*upperTaxRate/100
+                    taxPayable += taxToPayUpper
+                    tx.appendChild(tr(td("Higher rate"), td(f"£{taxableIncome-incomeUpperThreshold:,.0f}"), td(f"x {upperTaxRate:,.2f}%"), td(f"£{taxToPayUpper:,.0f}")))
+            tx.appendChild(tr(td("Savings interest from banks or building societies, securities etc."), ))
+            tx.appendChild(tr(td(f"{'Basic' if totalTaxableIncome <= incomeUpperThreshold else 'Higher' } rate at Nil Band"), td(f"£{interestAllowance:,.0f}"), td(f"x {0.0:,.2f}%"), td(f"£{0.0:,.0f}")))
+            tx.appendChild(tr(td("Dividends from companies etc."), ))
+            if totalTaxableIncome <= incomeUpperThreshold:
+                tx.appendChild(tr(td("Basic rate at nil rate"), td(f"£{dividendAllowance:,.0f}"), td(f"x {0.0:,.2f}%"), td(f"£{0.0:,.0f}")))
+                taxToPay = totalDividendsTaxable*diviLowertaxRate/100
+                tx.appendChild(tr(td("Basic rate"), td(f"£{totalDividendsTaxable:,.0f}"), td(f"{diviLowertaxRate:,.2f}%"), td(f"£{taxToPay:,.0f}")))
+            else:
+                tx.appendChild(tr(td("Basic rate"), td(f"£{0.0:,.0f}"), td(f"x {0.0:,.2f}%"), td(f"£{0.0:,.0f}")))
+                tx.appendChild(tr(td("Higher rate at nil rate"), td(f"£{dividendAllowance:,.0f}"), td(f"x {0.0:,.2f}%"), td(f"£{0.0:,.0f}")))
+                taxToPay = totalDividendsTaxable*diviUppertaxRate/100
+                tx.appendChild(tr(td("Higher rate"), td(f"£{totalDividendsTaxable:,.0f}"), td(f"x {diviUppertaxRate:,.2f}%"), td(f"£{taxToPay:,.0f}")))
+                taxPayable += taxToPay
+            tx.appendChild(tr(td("Income Tax due after allowances and reliefs"), td(""), td(""), td(f"£{taxPayable:,.0f}")))
+            tx.appendChild(tr(td("minus Tax deducted"), ))
+            # Tax will be paid at 20% for Defined benefit and SIPP income 
+            taxPaid = (annualDBIncome + sippIncome - taxAllowance) * lowerTaxRate / 100
+            tx.appendChild(tr(td("From all employments, UK pensions and state benefits"), td(""), td(""), td(f"£{taxPaid:,.0f}")))
+            tx.appendChild(tr(td("Total Tax Deducted"), td(""), td(""), td(f"£{taxPaid:,.0f}")))
+            taxPayable -= taxPaid
+            tx.appendChild(tr(td("Total Income Tax due"), td(""), td(""), td(f"£{taxPayable:,.0f}")))
+            tx.appendChild(tr(td("plus Capital Gains Tax"), ))
+            totalTaxableCG -= cgtaxAllowance
+            if totalTaxableCG < 0:
+                totalTaxableCG = 0
+            taxRate = cgtaxLowerRate if totalTaxableIncome <= incomeUpperThreshold else cgtaxUpperRate
+            taxToPay = totalTaxableCG*taxRate/100                
+            taxPayable += taxToPay
+            tx.appendChild(tr(td("Other gains"), td(f"£{totalTaxableCG:,.0f}"), td(f"x {taxRate:,.2f}%"), td(f"£{taxToPay:,.0f}")))
+            tx.appendChild(tr(td("Capital Gains Tax"), td(""), td(""), td(f"£{taxToPay:,.0f}")))
+            tx.appendChild(tr(td("Income and Capital Gains Tax due"), td(""), td(""), td(f"£{taxPayable:,.0f}")))
 
-        dom.appendChild(tx)
+            dom.appendChild(tx)
+
+            dom.appendChild(h3("Taxable Transactions"))
+            dom.appendChild(h4("Capital Gains Taxable Transactions"))
+            tx = table(id=cgtableID, hidden="hidden")
+            tx.appendChild(
+                tr(
+                    th(" Account "),
+                    th(" Date "),
+                    th(" Stock "),
+                    th(" Qty "),
+                    th(" Avg Buy Price "),
+                    th(" Sell Price "),
+                    th(" Capital Gain "),
+                )
+            )
+            totalTaxableCG = Decimal(0.0)
+            cgtxns: list[(AccountSummary, SecurityDetails, CapitalGain)] = []
+            for account in accounts:
+                accountLocation = f"./{account.name}-Summary.html#Tax%20Liability"
+                cgRealised = account.realisedGainForTaxByYear.get(yr, 0)
+                if cgRealised > 0 and Decimal(account.taxRates["capitalgainlowertax"]) > 0:
+                    # Have some CGT for this year for this account - go through each stock to get the CG transactions for that tax year - this will include all historic stocks
+                    for stock in account.stocks:
+                        txns = stock.cgtransactionsByYear.get(yr, [])
+                        for details in stock.historicHoldings:
+                            txns.extend(details.cgtransactionsByYear.get(yr, []))
+                        for txn in txns:
+                            cgtxns.append((account, stock, txn))
+            cgtxns = sorted(cgtxns, key=lambda txn: txn[-1].date, reverse=True)
+            for cgtxn in cgtxns:
+                (account, stock, cg) = cgtxn
+                capGain = Decimal(cg.qty) * (cg.price - cg.avgBuyPrice)
+                totalTaxableCG += capGain
+                tx.appendChild(
+                    tr(
+                        td(a(f"{account.name}", _href=accountLocation)),
+                        td(f"{cg.date.date()}"),
+                        td(
+                            a(
+                                f"{stock.symbol}",
+                                _href=f"./{account.name}/{stock.symbol}.txt",
+                            )
+                        ),
+                        td(f"{cg.qty:,.0f}"),
+                        td(f"£{cg.avgBuyPrice:,.2f}"),
+                        td(f"£{cg.price:,.2f}"),
+                        td(f"£{capGain:,.2f}"),
+                    )
+                )
+            tx.appendChild(
+                tr(
+                    td("Total"),
+                    td("-"),
+                    td("-"),
+                    td("-"),
+                    td("-"),
+                    td("-"),
+                    td(f"£{totalTaxableCG:,.0f}"),
+                    _style="font-weight: bold;",
+                )
+            )
+            dom.appendChild(tx)
+            dom.appendChild(h4("Income Taxable Transactions"))
+            txnTable = table(id=incTxnTableID, hidden="hidden")
+            txnTable.appendChild(
+                tr(
+                    th(" Date "),
+                    th(" Account "),
+                    th(" Desc "),
+                    th(" Amount "),
+                )
+            )
+            total = Decimal(0)
+            txns : set[Transaction] = set()
+            for account in accounts:
+                if float(account.taxRates["incomelowertax"]) == 0:
+                    # No income tax for this account - skip it
+                    continue
+                txns.update(account.interestTxnsByYear.get(yr, set()))
+                txns.update(account.incomeTxnsByYear.get(yr, set()))
+                txns.update(account.getIncomeTxnsFromACCFunds(yr))
+            txns = sorted(txns, key=lambda txn: txn.date, reverse=True)
+            for txn in txns:
+                row = tr()
+                row.appendChild(td(f"{txn.date}"))
+                if allAccounts:
+                    accountLocation = f"./{txn.accountName}-Summary.html#Income%20Payments"
+                    row.appendChild(td(a(f"{txn.accountName}", _href=accountLocation)))
+                row.appendChild(td(f"{txn.desc}"))
+                row.appendChild(
+                    td(
+                        f"{printCurrency(txn.creditCurrency, txn.credit, 2) if txn.credit != 0 else printCurrency(txn.debitCurrency, -txn.debit, 2)}"
+                    )
+                )
+                total += txn.credit
+                txnTable.appendChild(row)
+            txnTable.appendChild(tr(td("Total"), td(" "), td(" "), td(f"£{total:,.0f}"), _style="font-weight: bold;",
+    ))
+            dom.appendChild(txnTable)
+            dom.appendChild(h4("Dividend Taxable Transactions"))
+            txnTable = table(id=divTxnTableID, hidden="hidden")
+            txnTable.appendChild(
+                tr(th("Date"), th("Account"), th("Txn Type"), th("Symbol"), th("Desc"), th("Amount"))
+            )
+            total = Decimal(0)
+            txns : set[Transaction] = set()
+            for account in accounts:
+                if float(account.taxRates["dividendlowertax"]) == 0:
+                    # No income tax for this account - skip it
+                    continue
+                txns.update(account.dividendTxnsByYear.get(yr, set()))
+                txns.update(account.getDividendTxnsFromACCFunds(yr))
+            txns = sorted(txns, key=lambda txn: txn.date, reverse=True)
+            for txn in txns:
+                row = tr()
+                accountLocation = (
+                    f"./{txn.accountName}-Summary.html#Dividend%20Payments"
+                )
+                row.appendChild(td(f"{txn.date}"))
+                row.appendChild(td(a(f"{txn.accountName}", _href=accountLocation)))
+                row.appendChild(td(f"{txn.type}"))
+                detailLocation = f"./{txn.accountName}/{txn.symbol}.txt"
+                row.appendChild(td(a(f"{txn.symbol}", _href=detailLocation)))
+                row.appendChild(td(f"{txn.desc}"))
+                row.appendChild(
+                    td(f"£{txn.credit if txn.credit != 0 else -txn.debit:0.2f}")
+                )
+                total += txn.credit
+                txnTable.appendChild(row)
+            txnTable.appendChild(tr(td("Total"), td(" "), td(" "), td(" "), td(" "), td(f"£{total:,.0f}"), _style="font-weight: bold;"))
+            dom.append(txnTable)
 
     dom.appendChild(h2("Payments by Tax Year"))
     for yr in [lastTaxYear, currentTaxYear]:
@@ -1647,6 +1777,7 @@ def getSecurityStrs(
             "Alpha",
             "Beta",
             "Sharpe",
+            "ACC Yield"
         ]
     )
     headrow = tr()
@@ -1761,6 +1892,7 @@ def getSecurityStrs(
                 stockRow.appendChild(td(f"{fund.alpha3Yr:0.02f}"))
                 stockRow.appendChild(td(f"{fund.beta3Yr:0.02f}"))
                 stockRow.appendChild(td(f"{fund.sharpe3Yr:0.02f}"))
+                stockRow.appendChild(td(f"{fund.historicYield:0.02f}"))
 
             stockTable.appendChild(stockRow)
     dom.appendChild(stockTable)
