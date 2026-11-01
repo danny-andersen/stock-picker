@@ -725,18 +725,18 @@ def getAccountSummaryStrs(config: configparser.ConfigParser, accountSummary: Acc
             th("  Diff from Ideal "),
         )
     )
-    stocksPerc = 100 * totStocks / totalAccountValue
+    stocksPerc = 100.0 * float(totStocks / totalAccountValue)
     percByType["Stocks"] = stocksPerc
-    smin = int(portPerc["stocks_min"])
-    smax = int(portPerc["stocks_max"])
-    ideal = int(portPerc["stocks_ideal"])
+    smin = float(portPerc["stocks_min"])
+    smax = float(portPerc["stocks_max"])
+    ideal = float(portPerc["stocks_ideal"])
     idealPercByType["Stocks"] = ideal
     # Show row in green if in guardrails or red if not
     if stocksPerc <= smin or stocksPerc >= smax:
         cls = "negative"
     else:
         cls = "positive"
-    diff = f"£{(stocksPerc-ideal)*totalAccountValue/100:,.0f}"
+    diff = f"£{(stocksPerc-ideal)*float(totalAccountValue)/100.0:,.0f}"
     fs.appendChild(
         tr(
             td("Stocks"),
@@ -749,18 +749,18 @@ def getAccountSummaryStrs(config: configparser.ConfigParser, accountSummary: Acc
             _class=cls,
         )
     )
-    bondsPerc = 100 * totBonds / totalAccountValue
+    bondsPerc = 100.0 * float(totBonds / totalAccountValue)
     percByType["Bonds"] = bondsPerc
-    smin = int(portPerc["bonds_min"])
-    smax = int(portPerc["bonds_max"])
-    ideal = int(portPerc["bonds_ideal"])
+    smin = float(portPerc["bonds_min"])
+    smax = float(portPerc["bonds_max"])
+    ideal = float(portPerc["bonds_ideal"])
     idealPercByType["Bonds"] = ideal
     # Show row in green if in guardrails or red if not
     if bondsPerc <= smin or bondsPerc >= smax:
         cls = "negative"
     else:
         cls = "positive"
-    diff = f"£{(bondsPerc-ideal)*totalAccountValue/100:,.0f}"
+    diff = f"£{(bondsPerc-ideal)*float(totalAccountValue)/100.0:,.0f}"
     fs.appendChild(
         tr(
             td("Bonds"),
@@ -773,18 +773,18 @@ def getAccountSummaryStrs(config: configparser.ConfigParser, accountSummary: Acc
             _class=cls,
         )
     )
-    cashPerc = 100 * totCash / totalAccountValue
+    cashPerc = 100.0 * float(totCash / totalAccountValue)
     percByType["Cash"] = cashPerc
-    smin = int(portPerc["cash_min"])
-    smax = int(portPerc["cash_max"])
-    ideal = int(portPerc["cash_ideal"])
+    smin = float(portPerc["cash_min"])
+    smax = float(portPerc["cash_max"])
+    ideal = float(portPerc["cash_ideal"])
     idealPercByType["Cash"] = ideal
     # Show row in green if in guardrails or red if not
     if cashPerc <= smin or cashPerc >= smax:
         cls = "negative"
     else:
         cls = "positive"
-    diff = f"£{(cashPerc-ideal)*totalAccountValue/100:,.0f}"
+    diff = f"£{(cashPerc-ideal)*float(totalAccountValue)/100.0:,.0f}"
     fs.appendChild(
         tr(
             td("Cash"),
@@ -797,18 +797,18 @@ def getAccountSummaryStrs(config: configparser.ConfigParser, accountSummary: Acc
             _class=cls,
         )
     )
-    goldPerc = 100 * totGold / totalAccountValue
+    goldPerc = 100 * float(totGold / totalAccountValue)
     percByType["Gold"] = goldPerc
-    smin = int(portPerc["gold_min"])
-    smax = int(portPerc["gold_max"])
-    ideal = int(portPerc["gold_ideal"])
+    smin = float(portPerc["gold_min"])
+    smax = float(portPerc["gold_max"])
+    ideal = float(portPerc["gold_ideal"])
     idealPercByType["Gold"] = ideal
     # Show row in green if in guardrails or red if not
     if goldPerc <= smin or goldPerc >= smax:
         cls = "negative"
     else:
         cls = "positive"
-    diff = f"£{(goldPerc-ideal)*totalAccountValue/100:,.0f}"
+    diff = f"£{(goldPerc-ideal)*float(totalAccountValue)/100.0:,.0f}"
     fs.appendChild(
         tr(
             td("Gold"),
